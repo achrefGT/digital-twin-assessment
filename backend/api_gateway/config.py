@@ -1,0 +1,95 @@
+import os
+from typing import List, Union
+from pydantic import field_validator
+from pydantic_settings import BaseSettings, SettingsConfigDict
+
+from shared.kafka_utils import KafkaConfig
+from shared.database import get_database_url
+
+
+class Settings(BaseSettings):
+    """Application settings - Simplified for development"""
+    
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        case_sensitive=False
+    )
+    
+    # Database - Use shared database config utility
+    database_pool_size: int = 10
+    database_max_overflow: int = 20
+    
+    # Kafka - Use shared config as defaults but allow overrides
+    kafka_bootstrap_servers: str = KafkaConfig.BOOTSTRAP_SERVERS
+    kafka_retry_backoff_ms: int = KafkaConfig.RETRY_BACKOFF
+    kafka_request_timeout_ms: int = KafkaConfig.REQUEST_TIMEOUT
+    kafka_consumer_group_id: str = "api-gateway"
+
+    # Kafka topics
+    resilience_scores_topic: str = KafkaConfig.RESILIENCE_SCORES_TOPIC
+    elca_scores_topic: str = KafkaConfig.ELCA_SCORES_TOPIC
+    lcc_scores_topic: str = KafkaConfig.LCC_SCORES_TOPIC
+    slca_scores_topic: str = KafkaConfig.SLCA_SCORES_TOPIC
+    human_centricity_scores_topic: str = KafkaConfig.HUMAN_CENTRICITY_SCORES_TOPIC
+    final_results_topic: str = KafkaConfig.FINAL_RESULT_TOPIC
+    
+    # Producer topics
+    resilience_submission_topic: str = KafkaConfig.RESILIENCE_SUBMISSION_TOPIC
+    elca_submission_topic: str = KafkaConfig.ELCA_SUBMISSION_TOPIC
+    lcc_submission_topic: str = KafkaConfig.LCC_SUBMISSION_TOPIC
+    slca_submission_topic: str = KafkaConfig.SLCA_SUBMISSION_TOPIC
+    human_centricity_submission_topic: str = KafkaConfig.HUMAN_CENTRICITY_SUBMISSION_TOPIC
+    assessment_status_topic: str = KafkaConfig.ASSESSEMENT_STATUS_TOPIC
+    error_events_topic: str = KafkaConfig.ERROR_EVENTS_TOPIC
+
+    # API
+    api_host: str = "0.0.0.0"
+    api_port: int = 8000
+    api_workers: int = 1
+    
+    # CORS - Allow all for development (use Union to handle different input types)
+    cors_origins: Union[List[str], str] = "*"  # Allow all origins for now
+    cors_allow_credentials: bool = False  # No credentials needed
+    
+    # Rate limiting - Disabled for development
+    rate_limit_per_minute: int = 0  # 0 = disabled
+    
+    # Logging
+    log_level: str = "INFO"
+    service_name: str = "api-gateway"
+        
+    @field_validator('cors_origins', mode='before')
+    @classmethod
+    def parse_cors_origins(cls, v):
+        # Handle None or empty values
+        if v is None or v == "":
+            return ["*"]
+        
+        # Handle string values
+        if isinstance(v, str):
+            # Handle wildcard
+            if v.strip() == "*":
+                return ["*"]
+            # Handle empty string
+            if not v.strip():
+                return ["*"]
+            # Handle comma-separated values
+            try:
+                return [origin.strip() for origin in v.split(',') if origin.strip()]
+            except Exception:
+                return ["*"]
+        
+        # Handle list values (already parsed)
+        if isinstance(v, list):
+            return [str(origin).strip() for origin in v if str(origin).strip()]
+        
+        # Fallback to wildcard
+        return ["*"]
+    
+    @property
+    def database_url(self) -> str:
+        """Get database URL using shared utility"""
+        return get_database_url("api_gateway")
+
+
+settings = Settings()
