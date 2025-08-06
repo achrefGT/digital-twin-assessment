@@ -43,7 +43,7 @@ class HumanCentricitySettings(BaseSettings):
     
     # API configuration
     api_host: str = "0.0.0.0"
-    api_port: int = 8001
+    api_port: int = 8002
     api_workers: int = 1
     
     # CORS settings (use Union to handle different input types)
@@ -66,6 +66,11 @@ class HumanCentricitySettings(BaseSettings):
     health_check_timeout_seconds: int = 5
     kafka_health_check_enabled: bool = True
     database_health_check_enabled: bool = True
+
+    # Human Centricity Scoring Constants
+    max_time_minutes: float = 30.0      # minutes (expected maximum)
+    max_errors: int = 10                # errors per task
+    max_help_requests: int = 5          # help requests
     
     # Feature flags
     enable_detailed_metrics: bool = True

@@ -16,39 +16,49 @@ Base = declarative_base()
 
 def make_json_serializable(obj):
     """Convert Pydantic models and other objects to JSON-serializable format"""
-    if hasattr(obj, 'dict'):
-        # Pydantic model - use .dict() method
-        return obj.dict()
-    elif hasattr(obj, '__dict__'):
-        # Regular object with __dict__ - convert to dict
+    if obj is None:
+        return None
+    
+    # Handle datetime objects first
+    if isinstance(obj, datetime):
+        return obj.isoformat()
+    
+    # Handle Pydantic models
+    if hasattr(obj, 'dict') and callable(getattr(obj, 'dict')):
+        pydantic_dict = obj.dict()
+        # Recursively process to handle nested datetime objects
+        return make_json_serializable(pydantic_dict)
+    
+    # Handle dictionaries
+    if isinstance(obj, dict):
+        return {k: make_json_serializable(v) for k, v in obj.items()}
+    
+    # Handle lists and tuples  
+    if isinstance(obj, (list, tuple)):
+        return [make_json_serializable(item) for item in obj]
+    
+    # Handle enums
+    if hasattr(obj, 'value'):
+        return obj.value
+    
+    # Handle basic types
+    if isinstance(obj, (str, int, float, bool, type(None))):
+        return obj
+    
+    # Handle objects with __dict__
+    if hasattr(obj, '__dict__'):
         result = {}
         for key, value in obj.__dict__.items():
-            if not key.startswith('_'):  # Skip private attributes
+            if not key.startswith('_'):
                 result[key] = make_json_serializable(value)
         return result
-    elif isinstance(obj, dict):
-        # Recursively handle nested dictionaries
-        return {k: make_json_serializable(v) for k, v in obj.items()}
-    elif isinstance(obj, (list, tuple)):
-        # Recursively handle lists and tuples
-        return [make_json_serializable(item) for item in obj]
-    elif hasattr(obj, 'value'):
-        # Enum objects - use .value attribute
-        return obj.value
-    elif isinstance(obj, (str, int, float, bool, type(None))):
-        # Basic JSON-serializable types
-        return obj
-    elif isinstance(obj, datetime):
-        # Convert datetime to ISO string
-        return obj.isoformat()
-    else:
-        # Fallback: try to convert to string
-        try:
-            return str(obj)
-        except Exception:
-            logger.warning(f"Could not serialize object of type {type(obj)}: {obj}")
-            return None
-
+    
+    # Fallback
+    try:
+        return str(obj)
+    except Exception:
+        logger.warning(f"Could not serialize object of type {type(obj)}: {obj}")
+        return None
 
 class HumanCentricityAssessment(Base):
     __tablename__ = "human_centricity_assessments"
@@ -119,19 +129,29 @@ class DatabaseManager:
         """Save human centricity assessment to database"""
         db = self.get_session()
         try:
-            # Convert all data to JSON-serializable format
-            json_safe_data = make_json_serializable(assessment_data)
+            # Keep original datetime objects for database fields
+            original_submitted_at = assessment_data.get("submitted_at")
+            
+            # Use datetime object or current time if None
+            if not isinstance(original_submitted_at, datetime):
+                original_submitted_at = datetime.utcnow()
+            
+            # Convert data that goes into JSON columns to JSON-serializable format
+            json_safe_domain_scores = make_json_serializable(assessment_data.get("domain_scores"))
+            json_safe_detailed_metrics = make_json_serializable(assessment_data.get("detailed_metrics"))
+            json_safe_raw_assessments = make_json_serializable(assessment_data.get("raw_assessments"))
+            json_safe_metadata = make_json_serializable(assessment_data.get("metadata", {}))
             
             db_assessment = HumanCentricityAssessment(
-                assessment_id=json_safe_data["assessment_id"],
-                user_id=json_safe_data.get("user_id"),
-                system_name=json_safe_data.get("system_name"),
-                overall_score=json_safe_data["overall_score"],
-                domain_scores=json_safe_data["domain_scores"],
-                detailed_metrics=json_safe_data["detailed_metrics"],
-                raw_assessments=json_safe_data["raw_assessments"],
-                meta_data=json_safe_data.get("metadata", {}),
-                submitted_at=json_safe_data["submitted_at"],
+                assessment_id=assessment_data["assessment_id"],
+                user_id=assessment_data.get("user_id"),
+                system_name=assessment_data.get("system_name"),
+                overall_score=assessment_data["overall_score"],
+                domain_scores=json_safe_domain_scores,
+                detailed_metrics=json_safe_detailed_metrics,
+                raw_assessments=json_safe_raw_assessments,
+                meta_data=json_safe_metadata,
+                submitted_at=original_submitted_at,  # Keep as datetime object
                 processed_at=datetime.utcnow()
             )
             
@@ -140,14 +160,14 @@ class DatabaseManager:
             db.refresh(db_assessment)
             logger.info(f"Saved assessment {assessment_data['assessment_id']} to database")
             return db_assessment
-            
+        
         except Exception as e:
             db.rollback()
             logger.error(f"Failed to save assessment {assessment_data.get('assessment_id')}: {e}")
             raise DatabaseConnectionException(f"Failed to save assessment: {e}")
         finally:
             db.close()
-    
+
     def get_assessment(self, assessment_id: str) -> Optional[HumanCentricityAssessment]:
         """Get assessment by ID"""
         db = self.get_session()
