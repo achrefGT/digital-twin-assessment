@@ -1,5 +1,5 @@
 # DigitalTwinCosts, DigitalTwinBenefits, IndustryType
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Tuple, Any
 from dataclasses import dataclass
 from enum import Enum
 from datetime import datetime
@@ -54,7 +54,6 @@ class LCCInput(BaseModel):
     analysisId: Optional[str] = Field(None, description="Unique identifier for the analysis")
     userId: Optional[str] = Field(None, description="User identifier")
     systemName: Optional[str] = Field(None, description="Name of the system being analyzed")
-    projectName: Optional[str] = Field(None, description="Project name")
     industry: IndustryType = Field(IndustryType.MANUFACTURING, description="Industry type")
     capex: float = Field(..., description="Capital expenditure", gt=0)
     costs: CostStructure = Field(..., description="Cost structure")
@@ -63,7 +62,7 @@ class LCCInput(BaseModel):
     start_year: int = Field(2025, description="Analysis start year", ge=2020, le=2050)
     roi_bounds: tuple[float, float] = Field((0.0, 1.5), description="ROI normalization bounds")
     submittedAt: Optional[datetime] = Field(None, description="Timestamp when analysis was submitted")
-    metadata: Optional[Dict[str, any]] = Field(default_factory=dict, description="Additional metadata")
+    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
 
 
 class LCCResult(BaseModel):

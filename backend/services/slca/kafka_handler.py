@@ -284,7 +284,6 @@ class SLCAKafkaHandler:
                     analysisId=form_submission.assessment_id,
                     userId=form_submission.user_id,
                     systemName=form_submission.system_name,
-                    projectName=form_data.get('projectName'),
                     stakeholderGroup=stakeholder_group,
                     years=years,
                     indicators=social_indicators,

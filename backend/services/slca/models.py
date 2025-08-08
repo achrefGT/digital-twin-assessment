@@ -42,7 +42,6 @@ class SLCAInput(BaseModel):
     analysisId: Optional[str] = Field(None, description="Unique identifier for the analysis")
     userId: Optional[str] = Field(None, description="User identifier")
     systemName: Optional[str] = Field(None, description="Name of the system being analyzed")
-    projectName: Optional[str] = Field(None, description="Project name")
     stakeholderGroup: StakeholderGroup = Field(StakeholderGroup.WORKERS, description="Primary stakeholder group")
     years: int = Field(..., description="Number of years in assessment", ge=1, le=50)
     indicators: SocialIndicators = Field(..., description="Social sustainability indicators")
