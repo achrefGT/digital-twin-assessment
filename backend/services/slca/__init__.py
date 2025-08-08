@@ -1,33 +1,31 @@
 """
-Life Cycle Cost (LCC) Assessment Service
+Social Life Cycle Assessment (S-LCA) Service
 
-This service processes Life Cycle Cost assessments for digital twins,
-calculating comprehensive economic sustainability scores based on costs, benefits,
-and industry-specific factors.
+This service processes social sustainability assessments for digital twins,
+calculating scores based on safety, worker satisfaction, community engagement,
+job creation, and other social indicators across multiple stakeholder groups.
 """
 
 from .models import (
-    DigitalTwinCosts,
-    DigitalTwinBenefits,
-    IndustryType,
-    LCCInput,
-    LCCResult,
-    CostStructure,
-    BenefitStructure
+    SLCAInput,
+    SLCAResult,
+    SocialIndicators,
+    StakeholderGroup,
+    STAKEHOLDER_DESCRIPTIONS,
+    DEFAULT_WEIGHTINGS
 )
 
-from .score import calculate_lcc_score
+from .score import calculate_slca_score
 from .config import settings
 
 __version__ = "1.0.0"
 __all__ = [
-    "DigitalTwinCosts", 
-    "DigitalTwinBenefits",
-    "IndustryType",
-    "LCCInput",
-    "LCCResult",
-    "CostStructure",
-    "BenefitStructure",
-    "calculate_lcc_score",
+    "SLCAInput",
+    "SLCAResult",
+    "SocialIndicators",
+    "StakeholderGroup",
+    "STAKEHOLDER_DESCRIPTIONS",
+    "DEFAULT_WEIGHTINGS",
+    "calculate_slca_score",
     "settings"
 ]
