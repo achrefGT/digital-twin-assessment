@@ -407,7 +407,9 @@ def _can_submit_domain(progress: AssessmentProgress, domain: str) -> bool:
     """Check if a domain can be submitted based on current progress"""
     domain_map = {
         "resilience": not progress.resilience_submitted,
-        "sustainability": not progress.sustainability_submitted,
+        "slca": not progress.slca_submitted,
+        "lcc": not progress.lcc_submitted,
+        "elca": not progress.elca_submitted,
         "human_centricity": not progress.human_centricity_submitted
     }
     return domain_map.get(domain, False)
@@ -417,8 +419,12 @@ def _mark_domain_complete(progress: AssessmentProgress, domain: str) -> Assessme
     """Mark a domain as complete and update progress status"""
     if domain == "resilience":
         progress.resilience_submitted = True
-    elif domain == "sustainability":
-        progress.sustainability_submitted = True
+    elif domain == "slca":
+        progress.slca_submitted = True
+    elif domain == "elca":
+        progress.elca_submitted = True
+    elif domain == "lcc":
+        progress.lcc_submitted = True
     elif domain == "human_centricity":
         progress.human_centricity_submitted = True
     
@@ -431,12 +437,16 @@ def _mark_domain_complete(progress: AssessmentProgress, domain: str) -> Assessme
 
 def _calculate_status(progress: AssessmentProgress) -> AssessmentStatus:
     """Calculate assessment status based on domain completion"""
-    if progress.resilience_submitted and progress.sustainability_submitted and progress.human_centricity_submitted:
+    if progress.resilience_submitted and progress.slca_submitted and progress.lcc_submitted and progress.elca_submitted and progress.human_centricity_submitted:
         return AssessmentStatus.ALL_COMPLETE
     elif progress.human_centricity_submitted:
         return AssessmentStatus.HUMAN_CENTRICITY_COMPLETE
-    elif progress.sustainability_submitted:
-        return AssessmentStatus.SUSTAINABILITY_COMPLETE
+    elif progress.slca_submitted:
+        return AssessmentStatus.SLCA_COMPLETE
+    elif progress.elca_submitted:
+        return AssessmentStatus.ELCA_COMPLETE
+    elif progress.lcc_submitted:
+        return AssessmentStatus.LCC_COMPLETE
     elif progress.resilience_submitted:
         return AssessmentStatus.RESILIENCE_COMPLETE
     else:
@@ -449,19 +459,35 @@ def _is_valid_status_transition(current: AssessmentStatus, new: AssessmentStatus
     valid_transitions = {
         AssessmentStatus.STARTED: [
             AssessmentStatus.RESILIENCE_COMPLETE,
-            AssessmentStatus.SUSTAINABILITY_COMPLETE,
+            AssessmentStatus.SLCA_COMPLETE,
+            AssessmentStatus.ELCA_COMPLETE,
+            AssessmentStatus.LCC_COMPLETE,
             AssessmentStatus.HUMAN_CENTRICITY_COMPLETE,
             AssessmentStatus.PROCESSING,
             AssessmentStatus.FAILED
         ],
         AssessmentStatus.RESILIENCE_COMPLETE: [
-            AssessmentStatus.SUSTAINABILITY_COMPLETE,
+            AssessmentStatus.SLCA_COMPLETE,
+            AssessmentStatus.ELCA_COMPLETE,
+            AssessmentStatus.LCC_COMPLETE,
             AssessmentStatus.HUMAN_CENTRICITY_COMPLETE,
             AssessmentStatus.ALL_COMPLETE,
             AssessmentStatus.PROCESSING,
             AssessmentStatus.FAILED
         ],
-        AssessmentStatus.SUSTAINABILITY_COMPLETE: [
+        AssessmentStatus.ELCA_COMPLETE: [
+            AssessmentStatus.HUMAN_CENTRICITY_COMPLETE,
+            AssessmentStatus.ALL_COMPLETE,
+            AssessmentStatus.PROCESSING,
+            AssessmentStatus.FAILED
+        ],
+        AssessmentStatus.SLCA_COMPLETE: [
+            AssessmentStatus.HUMAN_CENTRICITY_COMPLETE,
+            AssessmentStatus.ALL_COMPLETE,
+            AssessmentStatus.PROCESSING,
+            AssessmentStatus.FAILED
+        ],
+        AssessmentStatus.LCC_COMPLETE: [
             AssessmentStatus.HUMAN_CENTRICITY_COMPLETE,
             AssessmentStatus.ALL_COMPLETE,
             AssessmentStatus.PROCESSING,

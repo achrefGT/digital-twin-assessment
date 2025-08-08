@@ -168,6 +168,73 @@ services:
     volumes:
       - ./logs:/app/logs
 
+  slca-service:
+    build:
+      context: .
+      dockerfile: backend/services/slca/Dockerfile
+    container_name: slca-service
+    ports:
+      - "${SLCA_SERVICE_PORT:-8003}:8003"
+    env_file:
+      - ./backend/.env
+    environment:
+      - PORT=8003
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - SLCA_API_HOST=0.0.0.0
+      - SLCA_API_PORT=8003
+      - SLCA_LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - digital-twin-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8003/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    volumes:
+      - ./logs:/app/logs
+
+  lcc-service:
+    build:
+      context: .
+      dockerfile: backend/services/lcc/Dockerfile
+    container_name: lcc-service
+    ports:
+      - "${LCC_SERVICE_PORT:-8004}:8004"
+    env_file:
+      - ./backend/.env
+    environment:
+      - PORT=8004
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - LCC_API_HOST=0.0.0.0
+      - LCC_API_PORT=8004
+      - LCC_LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - digital-twin-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    volumes:
+      - ./logs:/app/logs
 
 
   # Optional: Kafka UI for monitoring

@@ -1,4 +1,4 @@
-# Resilience Assessment Service
+# Human Centricity Assessment Service
 
 Microservice for processing human-centricity domain assessments.
 

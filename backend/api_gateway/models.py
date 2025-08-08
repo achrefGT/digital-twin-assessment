@@ -26,7 +26,9 @@ class Assessment(Base):
     # Progress tracking - using shared enum
     status = Column(String, nullable=False, default=AssessmentStatus.STARTED.value)
     resilience_submitted = Column(Boolean, default=False)
-    sustainability_submitted = Column(Boolean, default=False)
+    slca_submitted = Column(Boolean, default=False)
+    lcc_submitted = Column(Boolean, default=False)
+    elca_submitted = Column(Boolean, default=False)
     human_centricity_submitted = Column(Boolean, default=False)
     
     # Results (populated when available)
@@ -49,7 +51,9 @@ class Assessment(Base):
             system_name=self.system_name,
             status=AssessmentStatus(self.status),
             resilience_submitted=self.resilience_submitted,
-            sustainability_submitted=self.sustainability_submitted,
+            slca_submitted=self.slca_submitted,
+            lcc_submitted=self.lcc_submitted,
+            elca_submitted=self.elca_submitted,
             human_centricity_submitted=self.human_centricity_submitted,
             created_at=self.created_at,
             updated_at=self.updated_at,
@@ -67,7 +71,9 @@ class Assessment(Base):
             system_name=progress.system_name,
             status=progress.status.value,
             resilience_submitted=progress.resilience_submitted,
-            sustainability_submitted=progress.sustainability_submitted,
+            elca_submitted=progress.elca_submitted,
+            lcc_submitted=progress.lcc_submitted,
+            slca_submitted=progress.slca_submitted,
             human_centricity_submitted=progress.human_centricity_submitted,
             created_at=progress.created_at,
             updated_at=progress.updated_at,
@@ -117,7 +123,9 @@ class AssessmentResponse(BaseModel):
     
     # Domain completion flags
     resilience_submitted: bool = False
-    sustainability_submitted: bool = False
+    elca_submitted: bool = False
+    lcc_submitted: bool = False
+    slca_submitted: bool = False
     human_centricity_submitted: bool = False
     
     # Timestamps
@@ -145,7 +153,9 @@ class AssessmentResponse(BaseModel):
                 system_name=progress.system_name,
                 status=progress.status,
                 resilience_submitted=progress.resilience_submitted,
-                sustainability_submitted=progress.sustainability_submitted,
+                elca_submitted=progress.elca_submitted,
+                lcc_submitted=progress.lcc_submitted,
+                slca_submitted=progress.slca_submitted,
                 human_centricity_submitted=progress.human_centricity_submitted,
                 created_at=progress.created_at,
                 updated_at=progress.updated_at,
@@ -164,7 +174,7 @@ class FormSubmission(FormSubmissionRequest):
     
     @validator('domain')
     def validate_domain(cls, v):
-        valid_domains = ["resilience", "sustainability", "human_centricity"]
+        valid_domains = ["resilience", "slca", "elca", "lcc", "human_centricity"]
         if v not in valid_domains:
             raise ValueError(f"Invalid domain. Must be one of: {valid_domains}")
         return v
@@ -204,12 +214,16 @@ class AssessmentService:
     @staticmethod
     def update_progress_status(progress: AssessmentProgress) -> AssessmentStatus:
         """Update status based on domain completion using shared logic"""
-        if progress.resilience_submitted and progress.sustainability_submitted and progress.human_centricity_submitted:
+        if progress.resilience_submitted and progress.elca_submitted and progress.lcc_submitted and progress.slca_submitted and progress.human_centricity_submitted:
             return AssessmentStatus.ALL_COMPLETE
         elif progress.human_centricity_submitted:
             return AssessmentStatus.HUMAN_CENTRICITY_COMPLETE
-        elif progress.sustainability_submitted:
-            return AssessmentStatus.SUSTAINABILITY_COMPLETE
+        elif progress.slca_submitted:
+            return AssessmentStatus.SLCA_COMPLETE
+        elif progress.elca_submitted:
+            return AssessmentStatus.ELCA_COMPLETE
+        elif progress.lcc_submitted:
+            return AssessmentStatus.LCC_COMPLETE
         elif progress.resilience_submitted:
             return AssessmentStatus.RESILIENCE_COMPLETE
         else:
@@ -220,7 +234,9 @@ class AssessmentService:
         """Check if a domain can be submitted based on current progress"""
         domain_map = {
             "resilience": not progress.resilience_submitted,
-            "sustainability": not progress.sustainability_submitted,
+            "slca": not progress.slca_submitted,
+            "elca": not progress.elca_submitted,
+            "lcc": not progress.lcc_submitted,
             "human_centricity": not progress.human_centricity_submitted
         }
         return domain_map.get(domain, False)
@@ -230,8 +246,12 @@ class AssessmentService:
         """Mark a domain as complete and update progress"""
         if domain == "resilience":
             progress.resilience_submitted = True
-        elif domain == "sustainability":
-            progress.sustainability_submitted = True
+        elif domain == "slca":
+            progress.slca_submitted = True
+        elif domain == "elca":
+            progress.elca_submitted = True
+        elif domain == "lcc":
+            progress.lcc_submitted = True
         elif domain == "human_centricity":
             progress.human_centricity_submitted = True
         

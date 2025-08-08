@@ -7,17 +7,17 @@ from shared.kafka_utils import KafkaConfig
 from shared.database import get_database_url
 
 
-class HumanCentricitySettings(BaseSettings):
-    """human_centricity service configuration settings"""
+class SLCASettings(BaseSettings):
+    """S-LCA service configuration settings"""
     
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=False,
-        env_prefix="HUMAN_CENTRICITY_"  # Environment variables prefixed with SERVICE_NAME_
+        env_prefix="SLCA_"  # Environment variables prefixed with SLCA_
     )
     
     # Service identity
-    service_name: str = "human-centricity-service"
+    service_name: str = "slca-service"
     version: str = "0.1.0"
     
     # Database configuration
@@ -30,23 +30,22 @@ class HumanCentricitySettings(BaseSettings):
     kafka_bootstrap_servers: str = KafkaConfig.BOOTSTRAP_SERVERS
     kafka_retry_backoff_ms: int = KafkaConfig.RETRY_BACKOFF
     kafka_request_timeout_ms: int = KafkaConfig.REQUEST_TIMEOUT
-    kafka_consumer_group_id: str = "human-centricity-service"
+    kafka_consumer_group_id: str = "slca-service"
     kafka_auto_offset_reset: str = "latest"
     kafka_session_timeout_ms: int = 30000
     kafka_heartbeat_interval_ms: int = 3000
     
     # Kafka topics
-    human_centricity_submission_topic: str = KafkaConfig.HUMAN_CENTRICITY_SUBMISSION_TOPIC
-    human_centricity_scores_topic: str = KafkaConfig.HUMAN_CENTRICITY_SCORES_TOPIC
+    slca_submission_topic: str = KafkaConfig.SLCA_SUBMISSION_TOPIC
+    slca_scores_topic: str = KafkaConfig.SLCA_SCORES_TOPIC
     error_events_topic: str = KafkaConfig.ERROR_EVENTS_TOPIC
-
     
     # API configuration
     api_host: str = "0.0.0.0"
-    api_port: int = 8002
+    api_port: int = 8003
     api_workers: int = 1
     
-    # CORS settings (use Union to handle different input types)
+    # CORS settings
     cors_origins: Union[List[str], str] = "*"
     cors_allow_credentials: bool = True
     cors_allow_methods: Union[List[str], str] = "*"
@@ -67,10 +66,10 @@ class HumanCentricitySettings(BaseSettings):
     kafka_health_check_enabled: bool = True
     database_health_check_enabled: bool = True
 
-    # Human Centricity Scoring Constants
-    max_time_minutes: float = 30.0      # minutes (expected maximum)
-    max_errors: int = 10                # errors per task
-    max_help_requests: int = 5          # help requests
+    # S-LCA Scoring Constants
+    max_assessment_years: int = 50
+    min_assessment_years: int = 1
+    max_jobs_per_year: int = 100  # Used for job creation normalization
     
     # Feature flags
     enable_detailed_metrics: bool = True
@@ -80,11 +79,9 @@ class HumanCentricitySettings(BaseSettings):
     @field_validator('cors_origins', mode='before')
     @classmethod
     def parse_cors_origins(cls, v):
-        # Handle None or empty values
         if v is None or v == "":
             return ["*"]
         
-        # Handle string values
         if isinstance(v, str):
             if v.strip() == "*":
                 return ["*"]
@@ -95,7 +92,6 @@ class HumanCentricitySettings(BaseSettings):
             except Exception:
                 return ["*"]
         
-        # Handle list values
         if isinstance(v, list):
             return [str(origin).strip() for origin in v if str(origin).strip()]
         
@@ -104,11 +100,9 @@ class HumanCentricitySettings(BaseSettings):
     @field_validator('cors_allow_methods', mode='before')
     @classmethod
     def parse_cors_methods(cls, v):
-        # Handle None or empty values
         if v is None or v == "":
             return ["*"]
         
-        # Handle string values
         if isinstance(v, str):
             if v.strip() == "*":
                 return ["*"]
@@ -119,7 +113,6 @@ class HumanCentricitySettings(BaseSettings):
             except Exception:
                 return ["*"]
         
-        # Handle list values
         if isinstance(v, list):
             return [str(method).strip().upper() for method in v if str(method).strip()]
         
@@ -128,11 +121,9 @@ class HumanCentricitySettings(BaseSettings):
     @field_validator('cors_allow_headers', mode='before')
     @classmethod
     def parse_cors_headers(cls, v):
-        # Handle None or empty values
         if v is None or v == "":
             return ["*"]
         
-        # Handle string values
         if isinstance(v, str):
             if v.strip() == "*":
                 return ["*"]
@@ -143,7 +134,6 @@ class HumanCentricitySettings(BaseSettings):
             except Exception:
                 return ["*"]
         
-        # Handle list values
         if isinstance(v, list):
             return [str(header).strip() for header in v if str(header).strip()]
         
@@ -160,7 +150,7 @@ class HumanCentricitySettings(BaseSettings):
     @property
     def database_url(self) -> str:
         """Get database URL using shared utility"""
-        return get_database_url("human_centricity")
+        return get_database_url("slca")
     
     @property
     def kafka_consumer_config(self) -> Dict[str, Any]:
@@ -200,11 +190,11 @@ class HumanCentricitySettings(BaseSettings):
     def get_topic_config(self) -> Dict[str, str]:
         """Get all topic configurations"""
         return {
-            "input": self.human_centricity_submission_topic,
-            "output": self.human_centricity_scores_topic,
+            "input": self.slca_submission_topic,
+            "output": self.slca_scores_topic,
             "error": self.error_events_topic,
         }
 
 
 # Global settings instance
-settings = HumanCentricitySettings()
+settings = SLCASettings()
