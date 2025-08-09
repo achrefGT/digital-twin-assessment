@@ -236,6 +236,42 @@ services:
     volumes:
       - ./logs:/app/logs
 
+  elca-service:
+    build:
+      context: .
+      dockerfile: backend/services/elca/Dockerfile
+    container_name: elca-service
+    ports:
+      - "${ELCA:-8005}:8005"
+    env_file:
+      - ./backend/.env
+    environment:
+      - PORT=8005
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - ELCA_API_HOST=0.0.0.0
+      - ELCA_API_PORT=8005
+      - ELCA_LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - BRIGHTWAY2_DIR=/tmp/brightway2_data  
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - digital-twin-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8005/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    volumes:
+      - ./logs:/app/logs
+      - elca_brightway2_data:/tmp/brightway2_data  
+
 
   # Optional: Kafka UI for monitoring
   kafka-ui:
@@ -260,6 +296,8 @@ volumes:
   kafka_data:
     driver: local
   postgres_data:
+    driver: local
+  elca_brightway2_data:
     driver: local
 
 networks:
