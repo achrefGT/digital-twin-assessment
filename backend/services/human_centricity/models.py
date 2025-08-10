@@ -64,9 +64,9 @@ class HumanCentricityStructure(BaseModel):
     scales: Dict[str, Dict[str, Any]]
 
 
-# Assessment statements configuration
+# Complete assessment statements configuration matching your Streamlit app
 ASSESSMENT_STATEMENTS = {
-    'UX_Trust': [
+    'Section1_Core_Usability_UX': [
         "I found the digital twin intuitive and easy to use.",
         "The system's functions feel well integrated and coherent.",
         "I would use this digital twin frequently in my work.",
@@ -74,15 +74,180 @@ ASSESSMENT_STATEMENTS = {
         "I feel confident and in control when using the twin.",
         "The terminology and workflows match my domain expertise.",
         "I can easily tailor views, dashboards, and alerts to my needs.",
-        "I feel comfortable with how the system collects, uses, and displays my data.",
+        "I feel comfortable with how the system collects, uses, and displays my data."
+    ],
+    'Section2_Trust_Transparency': [
         "I understand the origins and currency of the data shown.",
         "The system explains how it generated its insights or recommendations.",
         "I trust the accuracy and reliability of the digital twin's outputs.",
         "I feel confident making operational decisions based on the twin's insights."
     ],
-    'Cybersickness': [
-        "Queasiness or nausea",
-        "Dizziness or off-balance feeling",  
-        "Eye strain or visual discomfort"
+    'Section3_Workload_Metrics': {
+        'description': 'Rate each on a 0-100 scale (0 = very low, 100 = very high)',
+        'metrics': [
+            "Mental Demand",
+            "Effort Required", 
+            "Frustration Level"
+        ]
+    },
+    'Section3_Cybersickness_Symptoms': {
+        'description': 'Rate each symptom (1 = None, 5 = Severe)',
+        'symptoms': [
+            "Queasiness or nausea",
+            "Dizziness or off-balance feeling",
+            "Eye strain or visual discomfort"
+        ]
+    },
+    'Section4_Emotional_Response_SAM': {
+        'valence': {
+            'description': 'Valence (1 = Negative, 5 = Positive)',
+            'scale': [1, 2, 3, 4, 5]
+        },
+        'arousal': {
+            'description': 'Arousal (1 = Calm, 5 = Excited)', 
+            'scale': [1, 2, 3, 4, 5]
+        }
+    },
+    'Section5_Objective_Performance': {
+        'description': 'Enter actual measured values',
+        'metrics': [
+            "Task Completion Time (minutes)",
+            "Error Rate (errors per task)",
+            "Help Requests (occurrences)"
+        ]
+    }
+}
+
+# Scale definitions matching your Streamlit app
+ASSESSMENT_SCALES = {
+    'likert_7_point': {
+        'range': [1, 7],
+        'labels': {
+            1: "Strongly Disagree",
+            2: "Disagree",
+            3: "Somewhat Disagree", 
+            4: "Neutral",
+            5: "Somewhat Agree",
+            6: "Agree",
+            7: "Strongly Agree"
+        },
+        'description': 'Rate each statement on a 1–7 scale'
+    },
+    'workload_slider': {
+        'range': [0, 100],
+        'description': '0 = very low … 100 = very high'
+    },
+    'cybersickness_severity': {
+        'range': [1, 5],
+        'labels': {
+            1: "None",
+            2: "Slight",
+            3: "Moderate",
+            4: "Severe", 
+            5: "Very Severe"
+        },
+        'description': '1 = None … 5 = Severe'
+    },
+    'sam_valence': {
+        'range': [1, 5],
+        'labels': {
+            1: "Very Negative",
+            2: "Negative",
+            3: "Neutral",
+            4: "Positive",
+            5: "Very Positive"
+        },
+        'description': 'Select your current emotional state'
+    },
+    'sam_arousal': {
+        'range': [1, 5], 
+        'labels': {
+            1: "Very Calm",
+            2: "Calm",
+            3: "Neutral",
+            4: "Excited",
+            5: "Very Excited"
+        },
+        'description': 'Select your current emotional state'
+    },
+    'performance_metrics': {
+        'task_completion_time': {
+            'unit': 'minutes',
+            'min_value': 0.0,
+            'step': 0.1
+        },
+        'error_rate': {
+            'unit': 'errors per task',
+            'min_value': 0,
+            'step': 1
+        },
+        'help_requests': {
+            'unit': 'occurrences', 
+            'min_value': 0,
+            'step': 1
+        }
+    }
+}
+
+# Assessment section structure for easy frontend generation
+ASSESSMENT_STRUCTURE = {
+    'sections': [
+        {
+            'id': 'section1',
+            'title': 'Core Usability & User Experience',
+            'description': 'Rate each statement on a 1–7 scale (1 = Strongly Disagree, 7 = Strongly Agree)',
+            'type': 'likert',
+            'scale': 'likert_7_point',
+            'statements': ASSESSMENT_STATEMENTS['Section1_Core_Usability_UX']
+        },
+        {
+            'id': 'section2', 
+            'title': 'Trust & Transparency',
+            'description': 'Rate each statement on a 1–7 scale (1 = Strongly Disagree, 7 = Strongly Agree)',
+            'type': 'likert',
+            'scale': 'likert_7_point', 
+            'statements': ASSESSMENT_STATEMENTS['Section2_Trust_Transparency']
+        },
+        {
+            'id': 'section3a',
+            'title': 'Workload & Comfort - Mental Demand & Effort',
+            'description': 'Use sliders to rate each aspect',
+            'type': 'slider',
+            'scale': 'workload_slider',
+            'metrics': ASSESSMENT_STATEMENTS['Section3_Workload_Metrics']['metrics']
+        },
+        {
+            'id': 'section3b',
+            'title': 'Workload & Comfort - Cybersickness Symptoms', 
+            'description': 'Rate the severity of each symptom',
+            'type': 'cybersickness',
+            'scale': 'cybersickness_severity',
+            'symptoms': ASSESSMENT_STATEMENTS['Section3_Cybersickness_Symptoms']['symptoms']
+        },
+        {
+            'id': 'section4',
+            'title': 'Emotional Response (SAM)',
+            'description': 'Select your current emotional state',
+            'type': 'sam',
+            'components': {
+                'valence': ASSESSMENT_STATEMENTS['Section4_Emotional_Response_SAM']['valence'],
+                'arousal': ASSESSMENT_STATEMENTS['Section4_Emotional_Response_SAM']['arousal']
+            }
+        },
+        {
+            'id': 'section5',
+            'title': 'Objective Performance Metrics',
+            'description': 'Enter the measured performance values',
+            'type': 'performance',
+            'scale': 'performance_metrics',
+            'metrics': ASSESSMENT_STATEMENTS['Section5_Objective_Performance']['metrics']
+        }
     ]
+}
+
+# Constants for normalizing objective performance (matching your Streamlit app)
+PERFORMANCE_CONSTANTS = {
+    'MAX_TIME': 30.0,      # minutes (expected maximum)  
+    'MAX_ERRORS': 10,      # errors per task
+    'MAX_HELP': 5          # help requests
 }

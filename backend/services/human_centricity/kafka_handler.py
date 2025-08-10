@@ -12,7 +12,11 @@ from shared.models.exceptions import (
     KafkaConnectionException, InvalidFormDataException, 
     ScoringException, DatabaseConnectionException
 )
-from .models import HumanCentricityInput, HumanCentricityResult, LikertResponse, CybersicknessResponse
+from .models import (
+    HumanCentricityInput, HumanCentricityResult, LikertResponse, 
+    CybersicknessResponse, WorkloadMetrics, EmotionalResponse, 
+    PerformanceMetrics
+)
 from .score import calculate_human_centricity_score
 from .database import DatabaseManager
 from .config import settings
@@ -244,35 +248,75 @@ class HumanCentricityKafkaHandler:
             print(f"DEBUG: form_data type: {type(form_data)}")
             print(f"DEBUG: form_data keys: {list(form_data.keys()) if isinstance(form_data, dict) else 'Not a dict'}")
             
-            # Validate required fields
-            required_fields = ['ux_trust_responses', 'workload_metrics', 'cybersickness_responses', 
-                             'emotional_response', 'performance_metrics']
-            for field in required_fields:
-                if field not in form_data:
-                    logger.error(f"Missing '{field}' field in human centricity form data")
-                    print(f"DEBUG: ❌ Missing '{field}' field. Available keys: {list(form_data.keys()) if isinstance(form_data, dict) else 'N/A'}")
-                    raise InvalidFormDataException(f"Missing '{field}' field in human centricity form data")
+            # Updated validation for the new structure
+            # We can accept multiple naming conventions for flexibility
+            required_fields_new = ['core_usability_responses', 'trust_transparency_responses', 'workload_metrics', 
+                                 'cybersickness_responses', 'emotional_response', 'performance_metrics']
+            required_fields_alt = ['section1_responses', 'section2_responses', 'workload_metrics', 
+                                 'cybersickness_responses', 'emotional_response', 'performance_metrics']
+            required_fields_legacy = ['ux_trust_responses', 'workload_metrics', 'cybersickness_responses', 
+                                    'emotional_response', 'performance_metrics']
             
-            # Parse individual components
-            try:
-                # Parse UX/Trust responses
-                ux_trust_data = form_data['ux_trust_responses']
-                ux_trust_responses = [LikertResponse(**response) for response in ux_trust_data]
+            has_new_structure = all(field in form_data for field in required_fields_new)
+            has_alt_structure = all(field in form_data for field in required_fields_alt)
+            has_legacy_structure = all(field in form_data for field in required_fields_legacy)
+            
+            if not (has_new_structure or has_alt_structure or has_legacy_structure):
+                missing_new = [f for f in required_fields_new if f not in form_data]
+                missing_alt = [f for f in required_fields_alt if f not in form_data]
+                missing_legacy = [f for f in required_fields_legacy if f not in form_data]
                 
-                # Parse workload metrics
-                from .models import WorkloadMetrics
+                logger.error(f"Form data missing required fields. New: {missing_new}, Alt: {missing_alt}, Legacy: {missing_legacy}")
+                print(f"DEBUG: ❌ Missing fields - New: {missing_new}, Alt: {missing_alt}, Legacy: {missing_legacy}")
+                print(f"DEBUG: Available keys: {list(form_data.keys()) if isinstance(form_data, dict) else 'N/A'}")
+                raise InvalidFormDataException("Form data missing required fields for human centricity assessment")
+            
+            try:
+                # Parse UX/Trust responses - handle multiple naming conventions
+                if has_new_structure:
+                    # New structure: core_usability_responses and trust_transparency_responses
+                    core_usability_data = form_data['core_usability_responses']
+                    trust_transparency_data = form_data['trust_transparency_responses']
+                    
+                    core_usability_responses = [LikertResponse(**response) for response in core_usability_data]
+                    trust_transparency_responses = [LikertResponse(**response) for response in trust_transparency_data]
+                    
+                    # Combine for processing
+                    ux_trust_responses = core_usability_responses + trust_transparency_responses
+                    
+                    print(f"DEBUG: Parsed new structure - Core Usability: {len(core_usability_responses)}, Trust/Transparency: {len(trust_transparency_responses)}")
+                    
+                elif has_alt_structure:
+                    # Alternative structure: section1_responses and section2_responses
+                    section1_data = form_data['section1_responses']
+                    section2_data = form_data['section2_responses']
+                    
+                    section1_responses = [LikertResponse(**response) for response in section1_data]
+                    section2_responses = [LikertResponse(**response) for response in section2_data]
+                    
+                    # Combine for processing
+                    ux_trust_responses = section1_responses + section2_responses
+                    
+                    print(f"DEBUG: Parsed alt structure - Section 1: {len(section1_responses)}, Section 2: {len(section2_responses)}")
+                    
+                else:
+                    # Legacy structure: combined ux_trust_responses
+                    ux_trust_data = form_data['ux_trust_responses']
+                    ux_trust_responses = [LikertResponse(**response) for response in ux_trust_data]
+                    
+                    print(f"DEBUG: Parsed legacy structure - Combined UX/Trust: {len(ux_trust_responses)}")
+                
+                # Parse workload metrics (same for both structures)
                 workload_metrics = WorkloadMetrics(**form_data['workload_metrics'])
                 
-                # Parse cybersickness responses
+                # Parse cybersickness responses (same for both structures)
                 cybersickness_data = form_data['cybersickness_responses']
                 cybersickness_responses = [CybersicknessResponse(**response) for response in cybersickness_data]
                 
-                # Parse emotional response
-                from .models import EmotionalResponse
+                # Parse emotional response (same for both structures)
                 emotional_response = EmotionalResponse(**form_data['emotional_response'])
                 
-                # Parse performance metrics
-                from .models import PerformanceMetrics
+                # Parse performance metrics (same for both structures)
                 performance_metrics = PerformanceMetrics(**form_data['performance_metrics'])
                 
                 human_centricity_input = HumanCentricityInput(
@@ -285,8 +329,10 @@ class HumanCentricityKafkaHandler:
                     emotional_response=emotional_response,
                     performance_metrics=performance_metrics,
                     submittedAt=datetime.utcnow(),  # Use current time since we're processing now
-                    metadata=form_submission.metadata
+                    metadata=form_submission.metadata or {}
                 )
+                
+                print(f"DEBUG: Successfully created HumanCentricityInput - UX/Trust responses: {len(ux_trust_responses)}")
                 
             except Exception as e:
                 logger.error(f"Failed to parse human centricity components: {e}")

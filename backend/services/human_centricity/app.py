@@ -10,7 +10,10 @@ from fastapi.encoders import jsonable_encoder
 from shared.logging_config import setup_logging
 from shared.health import create_health_response
 from shared.models.exceptions import AssessmentNotFoundException
-from .models import HumanCentricityStructure, ASSESSMENT_STATEMENTS
+from .models import (
+    HumanCentricityStructure, ASSESSMENT_STATEMENTS, ASSESSMENT_SCALES, 
+    ASSESSMENT_STRUCTURE, PERFORMANCE_CONSTANTS
+)
 from .database import DatabaseManager, make_json_serializable
 from .kafka_handler import HumanCentricityKafkaHandler
 from .config import settings
@@ -91,60 +94,66 @@ async def health_check():
     return create_health_response(settings.service_name, additional_checks)
 
 
-@app.get("/structure", response_model=HumanCentricityStructure)
+@app.get("/structure")
 async def get_assessment_structure():
-    """Get assessment structure including statements and scales"""
+    """Get complete assessment structure including statements, scales, and section organization"""
+    return {
+        "assessment_structure": ASSESSMENT_STRUCTURE,
+        "statements": ASSESSMENT_STATEMENTS,
+        "scales": ASSESSMENT_SCALES,
+        "performance_constants": PERFORMANCE_CONSTANTS,
+        "metadata": {
+            "total_sections": len(ASSESSMENT_STRUCTURE['sections']),
+            "total_likert_statements": (
+                len(ASSESSMENT_STATEMENTS['Section1_Core_Usability_UX']) + 
+                len(ASSESSMENT_STATEMENTS['Section2_Trust_Transparency'])
+            ),
+            "workload_metrics_count": len(ASSESSMENT_STATEMENTS['Section3_Workload_Metrics']['metrics']),
+            "cybersickness_symptoms_count": len(ASSESSMENT_STATEMENTS['Section3_Cybersickness_Symptoms']['symptoms']),
+            "sam_components_count": 2,  # valence and arousal
+            "performance_metrics_count": len(ASSESSMENT_STATEMENTS['Section5_Objective_Performance']['metrics'])
+        }
+    }
+
+
+@app.get("/structure/simple", response_model=HumanCentricityStructure)
+async def get_simple_assessment_structure():
+    """Get simplified assessment structure (legacy compatibility)"""
     return HumanCentricityStructure(
         statements=ASSESSMENT_STATEMENTS,
-        scales={
-            "likert": {
-                "range": [1, 7],
-                "labels": {
-                    1: "Strongly Disagree",
-                    2: "Disagree", 
-                    3: "Somewhat Disagree",
-                    4: "Neutral",
-                    5: "Somewhat Agree",
-                    6: "Agree",
-                    7: "Strongly Agree"
-                }
-            },
-            "workload": {
-                "range": [0, 100],
-                "description": "0 = Very Low, 100 = Very High"
-            },
-            "cybersickness": {
-                "range": [1, 5],
-                "labels": {
-                    1: "None",
-                    2: "Slight",
-                    3: "Moderate", 
-                    4: "Severe",
-                    5: "Very Severe"
-                }
-            },
-            "sam_valence": {
-                "range": [1, 5],
-                "labels": {
-                    1: "Very Negative",
-                    2: "Negative",
-                    3: "Neutral",
-                    4: "Positive", 
-                    5: "Very Positive"
-                }
-            },
-            "sam_arousal": {
-                "range": [1, 5],
-                "labels": {
-                    1: "Very Calm",
-                    2: "Calm",
-                    3: "Neutral",
-                    4: "Excited",
-                    5: "Very Excited"
-                }
-            }
-        }
+        scales=ASSESSMENT_SCALES
     )
+
+
+@app.get("/sections")
+async def get_assessment_sections():
+    """Get assessment sections for dynamic form generation"""
+    return {
+        "sections": ASSESSMENT_STRUCTURE['sections'],
+        "section_count": len(ASSESSMENT_STRUCTURE['sections']),
+        "description": "Structured sections for building the human centricity assessment form"
+    }
+
+
+@app.get("/sections/{section_id}")
+async def get_assessment_section(section_id: str):
+    """Get specific assessment section details"""
+    section = next(
+        (s for s in ASSESSMENT_STRUCTURE['sections'] if s['id'] == section_id), 
+        None
+    )
+    
+    if not section:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Section '{section_id}' not found"
+        )
+    
+    # Add scale details
+    if 'scale' in section:
+        section['scale_details'] = ASSESSMENT_SCALES.get(section['scale'], {})
+    
+    return section
 
 
 @app.get("/constants")
@@ -152,15 +161,58 @@ async def get_assessment_constants():
     """Get assessment constants and limits"""
     return {
         "performance_limits": {
-            "max_time_minutes": settings.max_time_minutes,
-            "max_errors": settings.max_errors,
-            "max_help_requests": settings.max_help_requests
+            "max_time_minutes": PERFORMANCE_CONSTANTS['MAX_TIME'],
+            "max_errors": PERFORMANCE_CONSTANTS['MAX_ERRORS'], 
+            "max_help_requests": PERFORMANCE_CONSTANTS['MAX_HELP']
         },
         "scoring_info": {
             "domain_weights": "Equal weighting across all domains",
             "scale_normalization": "All scores normalized to 0-100 range",
             "performance_scoring": "Lower values (time, errors, help) result in higher scores"
+        },
+        "validation_rules": {
+            "likert_range": [1, 7],
+            "workload_range": [0, 100],
+            "cybersickness_range": [1, 5],
+            "sam_range": [1, 5],
+            "performance_minimums": {
+                "task_completion_time_min": 0.0,
+                "error_rate": 0,
+                "help_requests": 0
+            }
         }
+    }
+
+
+@app.get("/statements")
+async def get_all_statements():
+    """Get all assessment statements organized by section"""
+    return {
+        "statements": ASSESSMENT_STATEMENTS,
+        "statement_counts": {
+            "core_usability_ux": len(ASSESSMENT_STATEMENTS['Section1_Core_Usability_UX']),
+            "trust_transparency": len(ASSESSMENT_STATEMENTS['Section2_Trust_Transparency']),
+            "workload_metrics": len(ASSESSMENT_STATEMENTS['Section3_Workload_Metrics']['metrics']),
+            "cybersickness_symptoms": len(ASSESSMENT_STATEMENTS['Section3_Cybersickness_Symptoms']['symptoms']),
+            "performance_metrics": len(ASSESSMENT_STATEMENTS['Section5_Objective_Performance']['metrics'])
+        },
+        "total_statements": (
+            len(ASSESSMENT_STATEMENTS['Section1_Core_Usability_UX']) +
+            len(ASSESSMENT_STATEMENTS['Section2_Trust_Transparency']) +
+            len(ASSESSMENT_STATEMENTS['Section3_Workload_Metrics']['metrics']) +
+            len(ASSESSMENT_STATEMENTS['Section3_Cybersickness_Symptoms']['symptoms']) +
+            len(ASSESSMENT_STATEMENTS['Section5_Objective_Performance']['metrics'])
+        )
+    }
+
+
+@app.get("/scales")
+async def get_all_scales():
+    """Get all assessment scales and their definitions"""
+    return {
+        "scales": ASSESSMENT_SCALES,
+        "scale_types": list(ASSESSMENT_SCALES.keys()),
+        "description": "Scale definitions for all assessment components"
     }
 
 
@@ -205,7 +257,15 @@ async def root():
         "service": settings.service_name,
         "version": settings.version,
         "status": "running",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
+        "available_endpoints": {
+            "structure": "/structure - Complete assessment structure",
+            "sections": "/sections - Assessment sections for form generation",
+            "statements": "/statements - All assessment statements",  
+            "scales": "/scales - All scale definitions",
+            "constants": "/constants - Performance limits and validation rules",
+            "assessment": "/assessment/{id} - Get assessment results by ID"
+        }
     }
 
 

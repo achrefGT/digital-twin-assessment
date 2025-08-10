@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 
 class DigitalTwinLCC:
-    """Enhanced LCC analysis specifically for Digital Twin implementations"""
+    """Enhanced LCC analysis specifically for Digital Twin implementations with 0-100 scoring"""
     
     def __init__(self, industry_type: IndustryType = IndustryType.MANUFACTURING):
         self.industry_type = industry_type
@@ -80,7 +80,7 @@ class DigitalTwinLCC:
             roi_bounds: ROI normalization bounds
             
         Returns:
-            Dictionary with comprehensive LCC metrics
+            Dictionary with comprehensive LCC metrics (scores on 0-100 scale)
         """
         print(f"--- ENHANCED DIGITAL TWIN LCC START ---")
         print(f"Industry: {self.industry_type.value}")
@@ -117,7 +117,6 @@ class DigitalTwinLCC:
             'total_benefits_pv': sum(adjusted_benefits) / (1 + discount_rate) ** len(adjusted_benefits)
         }
         
-        print(f"--- ENHANCED DIGITAL TWIN LCC END ---\n")
         return results
     
     def _calculate_total_costs(self, costs: DigitalTwinCosts) -> List[float]:
@@ -234,13 +233,6 @@ class DigitalTwinLCC:
         capex = abs(cf_list[0])
         roi_val = (npv_val / capex) if capex else None
         
-        # Economic sustainability score
-        norm_min, norm_max = roi_bounds
-        econ_score = None
-        if roi_val is not None:
-            econ_score = (roi_val - norm_min) / (norm_max - norm_min)
-            econ_score = max(0.0, min(1.0, econ_score))
-        
         return {
             'npv': npv_val,
             'irr': irr_val,
@@ -250,9 +242,9 @@ class DigitalTwinLCC:
     
     def _calculate_dt_metrics(self, costs: DigitalTwinCosts, benefits: DigitalTwinBenefits, 
                              capex: float) -> Dict:
-        """Calculate digital twin specific metrics"""
+        """Calculate digital twin specific metrics (0-100 scale)"""
         
-        # Digital twin implementation maturity score
+        # Digital twin implementation maturity score (0-100)
         dt_cost_categories = [
             sum(costs.dt_software_license),
             sum(costs.cloud_computing),
@@ -262,7 +254,8 @@ class DigitalTwinLCC:
         ]
         
         total_dt_costs = sum(dt_cost_categories)
-        maturity_score = min(1.0, total_dt_costs / capex) if capex > 0 else 0
+        maturity_score_normalized = min(1.0, total_dt_costs / capex) if capex > 0 else 0
+        maturity_score = maturity_score_normalized * 100  # Convert to 0-100
         
         # Benefit realization score
         total_benefits = sum([
@@ -274,26 +267,30 @@ class DigitalTwinLCC:
         
         benefit_cost_ratio = total_benefits / total_dt_costs if total_dt_costs > 0 else 0
         
-        # Digital transformation readiness
+        # Digital transformation readiness (0-100)
         readiness_factors = {
             'infrastructure_readiness': min(1.0, sum(costs.networking_infra) / (capex * 0.1)),
             'data_readiness': min(1.0, sum(costs.data_management) / (capex * 0.05)),
             'organizational_readiness': min(1.0, sum(costs.training) / (capex * 0.08))
         }
         
-        transformation_readiness = np.mean(list(readiness_factors.values()))
+        transformation_readiness_normalized = np.mean(list(readiness_factors.values()))
+        transformation_readiness = transformation_readiness_normalized * 100  # Convert to 0-100
+        
+        # Convert readiness breakdown to 0-100 scale
+        readiness_breakdown_100 = {k: v * 100 for k, v in readiness_factors.items()}
         
         return {
             'dt_implementation_maturity': maturity_score,
             'benefit_cost_ratio': benefit_cost_ratio,
             'transformation_readiness': transformation_readiness,
-            'readiness_breakdown': readiness_factors
+            'readiness_breakdown': readiness_breakdown_100
         }
     
     def _calculate_economic_sustainability(self, base_metrics: Dict, dt_metrics: Dict, 
                                          capex: float, discount_rate: float, 
                                          roi_bounds: Tuple[float, float]) -> Dict:
-        """Calculate comprehensive economic sustainability score"""
+        """Calculate comprehensive economic sustainability score (0-100 scale)"""
         
         # 1. Financial Viability Score (40% weight)
         financial_score = 0.0
@@ -322,11 +319,11 @@ class DigitalTwinLCC:
         
         financial_score = (npv_score * 0.3 + irr_score * 0.3 + payback_score * 0.2 + roi_score * 0.2)
         
-        # 2. Digital Twin Readiness Score (25% weight)
-        dt_readiness = dt_metrics['transformation_readiness']
+        # 2. Digital Twin Readiness Score (25% weight) - already converted to 0-100
+        dt_readiness_normalized = dt_metrics['transformation_readiness'] / 100  # Convert back to 0-1 for calculation
         
-        # 3. Implementation Maturity Score (20% weight)
-        implementation_maturity = dt_metrics['dt_implementation_maturity']
+        # 3. Implementation Maturity Score (20% weight) - already converted to 0-100
+        implementation_maturity_normalized = dt_metrics['dt_implementation_maturity'] / 100  # Convert back to 0-1 for calculation
         
         # 4. Benefit Realization Score (15% weight)
         # Based on benefit-cost ratio
@@ -340,45 +337,49 @@ class DigitalTwinLCC:
             reg_complexity = self.industry_factors.get('regulatory_complexity', 1.0)
             industry_risk_factor = max(0.7, min(1.0, 2.0 - reg_complexity))
         
-        # Composite Economic Sustainability Score
-        composite_score = (
+        # Composite Economic Sustainability Score (0-1 scale first)
+        composite_score_normalized = (
             financial_score * 0.40 +
-            dt_readiness * 0.25 +
-            implementation_maturity * 0.20 +
+            dt_readiness_normalized * 0.25 +
+            implementation_maturity_normalized * 0.20 +
             benefit_score * 0.15
         ) * industry_risk_factor
         
+        # Convert to 0-100 scale
+        composite_score = composite_score_normalized * 100
+        
         # Risk-adjusted score categories
-        if composite_score >= 0.8:
+        if composite_score >= 80:
             sustainability_rating = "Excellent"
-        elif composite_score >= 0.6:
+        elif composite_score >= 60:
             sustainability_rating = "Good"
-        elif composite_score >= 0.4:
+        elif composite_score >= 40:
             sustainability_rating = "Moderate"
         else:
             sustainability_rating = "Poor"
         
+        # Convert all component scores to 0-100 scale
         return {
             'economic_sustainability_score': composite_score,
             'sustainability_rating': sustainability_rating,
             'score_components': {
-                'financial_viability': financial_score,
-                'dt_readiness': dt_readiness,
-                'implementation_maturity': implementation_maturity,
-                'benefit_realization': benefit_score,
-                'industry_risk_factor': industry_risk_factor
+                'financial_viability': financial_score * 100,
+                'dt_readiness': dt_metrics['transformation_readiness'],  # Already 0-100
+                'implementation_maturity': dt_metrics['dt_implementation_maturity'],  # Already 0-100
+                'benefit_realization': benefit_score * 100,
+                'industry_risk_factor': industry_risk_factor * 100
             },
             'financial_breakdown': {
-                'npv_score': npv_score,
-                'irr_score': irr_score,
-                'payback_score': payback_score,
-                'roi_score': roi_score
+                'npv_score': npv_score * 100,
+                'irr_score': irr_score * 100,
+                'payback_score': payback_score * 100,
+                'roi_score': roi_score * 100
             }
         }
 
 
 def calculate_lcc_score(lcc_input: LCCInput) -> Dict[str, Any]:
-    """Calculate LCC scores from assessment input"""
+    """Calculate LCC scores from assessment input (0-100 scale)"""
     
     try:
         logger.info(f"Starting LCC calculation for assessment {lcc_input.analysisId}")
@@ -469,7 +470,7 @@ def calculate_lcc_score(lcc_input: LCCInput) -> Dict[str, Any]:
             )
             
             logger.debug(f"LCC computation completed successfully")
-            print(f"DEBUG: LCC computation completed - Overall score: {results['economic_sustainability_score']:.3f}")
+            print(f"DEBUG: LCC computation completed - Overall score: {results['economic_sustainability_score']:.1f}/100")
             
         except Exception as e:
             logger.error(f"LCC computation failed: {e}")
@@ -487,13 +488,14 @@ def calculate_lcc_score(lcc_input: LCCInput) -> Dict[str, Any]:
             if key not in results:
                 raise ScoringException(f"Missing required result field: {key}")
         
-        # Ensure scores are within valid ranges
+        # Ensure scores are within valid ranges (0-100)
         score_fields = ['economic_sustainability_score', 'dt_implementation_maturity', 'transformation_readiness']
         for field in score_fields:
             score = results[field]
-            if not isinstance(score, (int, float)) or not (0.0 <= score <= 1.0):
-                logger.warning(f"Score {field} out of range: {score}, clamping to [0,1]")
-                results[field] = max(0.0, min(1.0, float(score)))
+            if not isinstance(score, (int, float)) or not (0.0 <= score <= 100.0):
+                logger.warning(f"Score {field} out of range: {score}, clamping to [0,100]")
+                results[field] = max(0.0, min(100.0, float(score)))
+
         
         # Add additional metadata for detailed analysis
         results['calculation_metadata'] = {
@@ -503,6 +505,7 @@ def calculate_lcc_score(lcc_input: LCCInput) -> Dict[str, Any]:
             'start_year': lcc_input.start_year,
             'roi_bounds': lcc_input.roi_bounds,
             'industry_factors_applied': settings.enable_industry_adjustments,
+            'scoring_scale': '0-100',
             'total_costs_nominal': sum([
                 sum(getattr(lcc_input.costs, field)) 
                 for field in ['dt_software_license', 'energy_costs', 'maintenance_costs', 'downtime_costs']
@@ -514,22 +517,41 @@ def calculate_lcc_score(lcc_input: LCCInput) -> Dict[str, Any]:
         }
         
         # Round numerical values for consistency
-        numerical_fields = ['npv', 'irr', 'roi', 'economic_sustainability_score', 
-                          'dt_implementation_maturity', 'benefit_cost_ratio', 'transformation_readiness']
+        # Financial metrics keep original precision
+        financial_fields = ['npv', 'irr', 'roi', 'benefit_cost_ratio']
+        # Score fields round to 1 decimal place for 0-100 scale
+        score_fields = ['economic_sustainability_score', 'dt_implementation_maturity', 'transformation_readiness']
         
-        for field in numerical_fields:
+        for field in financial_fields:
             if field in results and results[field] is not None:
                 if isinstance(results[field], (int, float)):
                     results[field] = round(float(results[field]), 4)
         
-        # Round score components
+        for field in score_fields:
+            if field in results and results[field] is not None:
+                if isinstance(results[field], (int, float)):
+                    results[field] = round(float(results[field]), 1)
+        
+        # Round score components (0-100 scale)
         if 'score_components' in results and isinstance(results['score_components'], dict):
             for key, value in results['score_components'].items():
                 if isinstance(value, (int, float)):
-                    results['score_components'][key] = round(float(value), 4)
+                    results['score_components'][key] = round(float(value), 1)
+        
+        # Round financial breakdown (0-100 scale)
+        if 'financial_breakdown' in results and isinstance(results['financial_breakdown'], dict):
+            for key, value in results['financial_breakdown'].items():
+                if isinstance(value, (int, float)):
+                    results['financial_breakdown'][key] = round(float(value), 1)
+        
+        # Round readiness breakdown (0-100 scale)
+        if 'readiness_breakdown' in results and isinstance(results['readiness_breakdown'], dict):
+            for key, value in results['readiness_breakdown'].items():
+                if isinstance(value, (int, float)):
+                    results['readiness_breakdown'][key] = round(float(value), 1)
         
         logger.info(f"Successfully calculated LCC scores for assessment {lcc_input.analysisId}: "
-                   f"sustainability_score={results['economic_sustainability_score']:.3f}, "
+                   f"sustainability_score={results['economic_sustainability_score']:.1f}/100, "
                    f"rating={results['sustainability_rating']}")
         print(f"DEBUG: ✅ LCC calculation complete for {lcc_input.analysisId}")
         

@@ -78,7 +78,7 @@ def compute_slca(
 
     return {
         'annual_scores': annual_scores,
-        'overall_score': overall_score
+        'overall_score': 100 * overall_score
     }
 
 
@@ -158,9 +158,9 @@ def generate_recommendations(
     indicators = slca_input.indicators
     
     # Performance-based recommendations
-    if overall_score < 0.4:
+    if overall_score < 40:
         recommendations.append("Immediate action required: Develop comprehensive social sustainability strategy")
-    elif overall_score < 0.6:
+    elif overall_score < 60:
         recommendations.append("Moderate improvements needed: Focus on key social impact areas")
     else:
         recommendations.append("Maintain current performance: Continue monitoring and incremental improvements")
