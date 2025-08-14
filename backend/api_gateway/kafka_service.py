@@ -422,8 +422,12 @@ class KafkaService:
 
     async def process_score_message(self, topic: str, message_data: Dict[str, Any]):
         """Enhanced score processing with WebSocket notifications and custom weighting"""
+        
         assessment_id = message_data.get('assessment_id')
         domain = message_data.get('domain')
+
+        logger.info(f"[SCORE_DEBUG] Starting to process score for assessment {assessment_id}, domain {domain}")
+        logger.info(f"[SCORE_DEBUG] WebSocket connections available: {len(connection_manager.assessment_connections.get(assessment_id, set()))}")
         
         if not assessment_id:
             logger.warning(f"Missing assessment_id in message from {topic}")
@@ -523,8 +527,12 @@ class KafkaService:
     async def _send_websocket_updates(self, assessment_id: str, domain: str, score_value: float,
                                     message_data: Dict, overall_score: Optional[float],
                                     progress: AssessmentProgress, is_complete: bool):
-        """Send WebSocket updates for score changes"""
+        """Send WebSocket updates for score changes with enhanced debugging"""
         try:
+            # Log attempt to send WebSocket message
+            logger.info(f"[WEBSOCKET_DEBUG] Preparing to send WebSocket update for assessment {assessment_id}")
+            logger.info(f"[WEBSOCKET_DEBUG] Connection manager stats: {connection_manager.get_stats()}")
+            
             # Send score update
             websocket_message = {
                 "type": "score_update",
@@ -539,7 +547,15 @@ class KafkaService:
                 "domain_scores": progress.domain_scores
             }
             
+            logger.info(f"[WEBSOCKET_DEBUG] Sending score update for assessment '{assessment_id}': "
+                    f"domain='{domain}', score_value={score_value}, "
+                    f"overall_score={overall_score}, "
+                    f"completion_percentage={self.weighting_service.get_completion_percentage(progress.domain_scores):.2f}%, "
+                    f"status='{progress.status.value}'")
+
+            # Actually send the message
             await connection_manager.send_to_assessment(assessment_id, websocket_message)
+            logger.info(f"[WEBSOCKET_DEBUG] Score update message sent successfully for assessment {assessment_id}")
             
             # If assessment is complete, send completion notification
             if is_complete:
@@ -553,23 +569,30 @@ class KafkaService:
                     "completion_percentage": 100.0,
                     "final_weights_used": self.weighting_service.weights
                 }
+                
+                logger.info(f"[WEBSOCKET_DEBUG] Sending completion message for assessment '{assessment_id}'")
                 await connection_manager.send_to_assessment(assessment_id, completion_message)
+                logger.info(f"[WEBSOCKET_DEBUG] Completion message sent successfully for assessment {assessment_id}")
+                
         except Exception as e:
-            logger.error(f"Error sending WebSocket updates: {e}")
-    
-    async def _send_error_websocket_notification(self, assessment_id: str, domain: Optional[str], error: str):
-        """Send error notification via WebSocket"""
-        try:
-            error_message = {
-                "type": "error",
-                "timestamp": datetime.utcnow().isoformat(),
-                "assessment_id": assessment_id,
-                "error": error,
-                "domain": domain
-            }
-            await connection_manager.send_to_assessment(assessment_id, error_message)
-        except Exception as e:
-            logger.debug(f"Failed to send error WebSocket notification: {e}")
+            logger.error(f"[WEBSOCKET_DEBUG] Error sending WebSocket updates for assessment {assessment_id}: {e}")
+            logger.exception("Full WebSocket error traceback:")
+
+    # Also add a debug endpoint to check WebSocket status
+    async def debug_websocket_status(self, assessment_id: str) -> Dict[str, Any]:
+        """Debug method to check WebSocket connection status"""
+        stats = connection_manager.get_stats()
+        
+        return {
+            "assessment_id": assessment_id,
+            "has_connections": assessment_id in connection_manager.assessment_connections,
+            "connection_count": len(connection_manager.assessment_connections.get(assessment_id, set())),
+            "queued_messages": len(connection_manager.message_queue.get(assessment_id, [])),
+            "total_active_connections": len(connection_manager.active_connections),
+            "connection_manager_stats": stats,
+            "currently_processing": assessment_id in self._processing_assessments
+        }
+
     
     async def _publish_domain_events(self, assessment_id: str, domain: str, score_value: float,
                                    message_data: Dict, progress: AssessmentProgress,
@@ -637,3 +660,17 @@ class KafkaService:
         base_metrics.update(self.metrics.get_stats())
         
         return base_metrics
+    
+
+    async def test_websocket_send(self, assessment_id: str):
+        """Test method to manually send a WebSocket message"""
+        test_message = {
+            "type": "test_message",
+            "timestamp": datetime.utcnow().isoformat(),
+            "assessment_id": assessment_id,
+            "message": "This is a test message"
+        }
+        
+        logger.info(f"[TEST] Sending test message to assessment {assessment_id}")
+        await connection_manager.send_to_assessment(assessment_id, test_message)
+        logger.info(f"[TEST] Test message sent")

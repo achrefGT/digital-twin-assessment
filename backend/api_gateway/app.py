@@ -203,8 +203,7 @@ async def log_requests(request: Request, call_next):
 # Include routers
 app.include_router(assessments.router)
 app.include_router(health.router)
-app.include_router(websockets.router)
-
+app.include_router(websockets.router, prefix="/api")
 
 @app.get("/")
 async def root():

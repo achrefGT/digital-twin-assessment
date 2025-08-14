@@ -1,3 +1,4 @@
+from datetime import datetime, timedelta
 import numpy as np
 from typing import Dict, Any, List
 import logging
@@ -247,7 +248,7 @@ def calculate_human_centricity_score(
             },
             'scoring_metadata': {
                 'total_sections': 5,
-                'processing_timestamp': datetime.utcnow().isoformat(),
+                'processing_timestamp': datetime.utcnow(),
                 'validation_passed': True,
                 'expected_responses': {
                     'ux_trust_total': expected_total_ux_trust,

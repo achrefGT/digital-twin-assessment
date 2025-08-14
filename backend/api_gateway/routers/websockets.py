@@ -160,3 +160,15 @@ async def websocket_health():
     except Exception as e:
         logger.error(f"Error getting WebSocket health: {e}")
         raise HTTPException(status_code=500, detail="WebSocket service unavailable")
+    
+@router.get("/ws/debug/websocket/{assessment_id}")
+async def debug_websocket_status(assessment_id: str):
+    """Debug endpoint to check WebSocket connections"""
+    stats = connection_manager.get_stats()
+    return {
+        "assessment_id": assessment_id,
+        "has_connections": assessment_id in connection_manager.assessment_connections,
+        "connection_count": len(connection_manager.assessment_connections.get(assessment_id, set())),
+        "total_active_connections": len(connection_manager.active_connections),
+        "stats": stats
+    }
