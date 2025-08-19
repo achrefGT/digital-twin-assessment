@@ -184,6 +184,7 @@ class ELCAKafkaHandler:
             print(f"DEBUG: ELCA Processing time: {processing_time}ms")
             
             # Add processing metadata
+            lca_results['assessment_id'] = assessment_id  # The UUID from form_submission
             lca_results['processing_time_ms'] = processing_time
             lca_results['submitted_at'] = datetime.utcnow().isoformat()
             lca_results['user_id'] = form_submission.user_id

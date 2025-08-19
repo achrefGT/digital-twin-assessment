@@ -139,9 +139,18 @@ class DatabaseManager:
             # Extract ELCA score details
             elca_result = json_safe_data.get("elca_scores", {}).get("recipe_2016", {})
             
+            assessment_id = json_safe_data.get("assessment_id")
+            
+            # Fallback validation - if no assessment_id at root, check other locations
+            if not assessment_id:
+                # Try to get from user_id context or other sources
+                assessment_id = json_safe_data.get("user_id", "unknown")
+                logger.warning(f"No assessment_id found in data, using fallback: {assessment_id}")
+            
             db_assessment = ELCAAssessment(
-                assessment_id=json_safe_data["configuration_summary"]["name"],
+                assessment_id=assessment_id,
                 user_id=json_safe_data.get("user_id"),
+                # System name goes in the system_name field, not assessment_id
                 system_name=json_safe_data["configuration_summary"].get("name"),
                 
                 # ELCA scores
@@ -175,12 +184,12 @@ class DatabaseManager:
             db.add(db_assessment)
             db.commit()
             db.refresh(db_assessment)
-            logger.info(f"Saved ELCA assessment {assessment_data.get('configuration_summary', {}).get('name', 'unknown')} to database")
+            logger.info(f"Saved ELCA assessment {assessment_id} to database with system name: {json_safe_data.get('configuration_summary', {}).get('name', 'unknown')}")
             return db_assessment
             
         except Exception as e:
             db.rollback()
-            logger.error(f"Failed to save ELCA assessment {assessment_data.get('configuration_summary', {}).get('name', 'unknown')}: {e}")
+            logger.error(f"Failed to save ELCA assessment {assessment_data.get('assessment_id', 'unknown')}: {e}")
             raise DatabaseConnectionException(f"Failed to save ELCA assessment: {e}")
         finally:
             db.close()
