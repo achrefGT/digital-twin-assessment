@@ -9,10 +9,10 @@ class WeightingService:
     def __init__(self):
         # Define domain weights (configurable)
         self.default_weights = {
-            "resilience": 0.20,
-            "elca": 0.20,
-            "lcc": 0.20,
-            "slca": 0.20,
+            "resilience": 0.30,
+            "elca": 0.23,
+            "lcc": 0.17,
+            "slca": 0.10,
             "human_centricity": 0.20
         }
         

@@ -84,13 +84,13 @@ def compute_slca(
 
 def get_sustainability_rating(score: float) -> str:
     """Convert numerical score to sustainability rating"""
-    if score >= 0.8:
+    if score >= 80:
         return "Excellent"
-    elif score >= 0.6:
+    elif score >= 60:
         return "Good"
-    elif score >= 0.4:
+    elif score >= 40:
         return "Fair"
-    elif score >= 0.2:
+    elif score >= 20:
         return "Poor"
     else:
         return "Critical"

@@ -65,6 +65,37 @@ services:
       retries: 5
       start_period: 30s
 
+  # Frontend Service
+  frontend:
+    build:
+      context: .
+      dockerfile: frontend/Dockerfile
+    container_name: frontend
+    ports:
+      - "${FRONTEND_PORT:-3000}:3000"
+    environment:
+      # For container-to-container communication, use service names
+      - VITE_API_BASE_URL=http://api-gateway:8000
+      - VITE_RESILIENCE_SERVICE_URL=http://resilience-service:8001
+      - VITE_HUMAN_CENTRICITY_SERVICE_URL=http://human-centricity-service:8002
+      - VITE_SLCA_SERVICE_URL=http://slca-service:8003
+      - VITE_LCC_SERVICE_URL=http://lcc-service:8004
+      - VITE_ELCA_SERVICE_URL=http://elca-service:8005
+    depends_on:
+      - api-gateway
+    networks:
+      - digital-twin-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+
   # Application Services
   api-gateway:
     build:
@@ -271,7 +302,6 @@ services:
     volumes:
       - ./logs:/app/logs
       - elca_brightway2_data:/tmp/brightway2_data  
-
 
   # Optional: Kafka UI for monitoring
   kafka-ui:

@@ -8,7 +8,7 @@ from enum import Enum
 from datetime import datetime
 from uuid import uuid4
 
-# Brightway2 imports - excellent for LCA calculations
+# Brightway2 imports
 from brightway2 import (
     projects, Database, LCA, Method,
     get_activity, databases, methods
