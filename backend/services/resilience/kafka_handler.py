@@ -145,7 +145,7 @@ class ResilienceKafkaHandler:
             print(f"DEBUG: About to parse resilience input for assessment {assessment_id}")
             resilience_input = self._parse_resilience_input(form_submission)
             
-            # Calculate resilience scores
+            # Calculate resilience scores (now simplified - no configuration needed)
             logger.debug("Calculating resilience scores")
             print(f"DEBUG: About to calculate scores for {len(resilience_input.assessments) if resilience_input.assessments else 0} assessments")
             scores = calculate_resilience_score(resilience_input.assessments)
@@ -166,7 +166,8 @@ class ResilienceKafkaHandler:
                 domainScores=scores['domain_scores'],
                 riskMetrics=scores['risk_metrics'],
                 timestamp=datetime.utcnow(),
-                processingTimeMs=processing_time
+                processingTimeMs=processing_time,
+                recommendations=scores.get('recommendations', [])
             )
             logger.debug(f"Created result: {result}")
             print(f"DEBUG: Result overall score: {result.overallScore}")
@@ -318,7 +319,6 @@ class ResilienceKafkaHandler:
             logger.debug(f"Created error event: {event}")
             print(f"DEBUG: Created error event: {event.dict()}")
             
-            # Fix: Use correct settings attribute name
             await self.producer.send(settings.error_events_topic, event.dict())
             logger.info(f"Published error event for assessment {assessment_id}: {error_type}")
             print(f"DEBUG: ✅ Successfully published error event to {settings.error_events_topic}")

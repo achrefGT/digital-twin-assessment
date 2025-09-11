@@ -4,10 +4,26 @@ import { Label } from "@/components/ui/label"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group"
+import { Progress } from "@/components/ui/progress"
+import { CheckCircle2, User, Shield, Activity, Brain, Heart, Zap } from "lucide-react"
 
+// Small utilities to keep color usage consistent (avoids dynamic tailwind tokens)
+const COLOR_CLASSES: Record<string, { bg: string; ring: string; text: string; accent: string }> = {
+  blue: { bg: 'bg-blue-600', ring: 'ring-blue-200', text: 'text-blue-600', accent: 'border-blue-500' },
+  purple: { bg: 'bg-purple-600', ring: 'ring-purple-200', text: 'text-purple-600', accent: 'border-purple-500' },
+  indigo: { bg: 'bg-indigo-600', ring: 'ring-indigo-200', text: 'text-indigo-600', accent: 'border-indigo-500' },
+  orange: { bg: 'bg-orange-600', ring: 'ring-orange-200', text: 'text-orange-600', accent: 'border-orange-500' },
+  red: { bg: 'bg-red-600', ring: 'ring-red-200', text: 'text-red-600', accent: 'border-red-500' },
+  green: { bg: 'bg-green-600', ring: 'ring-green-200', text: 'text-green-600', accent: 'border-green-500' }
+}
+
+// ------------------------------
 // Step 1: Core Usability
-const CoreUsabilityStep = ({ onSubmit, initialData }: any) => {
-  const [responses, setResponses] = useState<any[]>(initialData?.core_usability_responses || [])
+// ------------------------------
+const CoreUsabilityStep: React.FC<any> = ({ onSubmit, initialData }: any) => {
+  const [responses, setResponses] = useState<any[]>(
+    initialData?.core_usability_responses || new Array(8).fill(null).map(() => ({ rating: 4 }))
+  )
 
   const statements = [
     "I found the digital twin intuitive and easy to use.",
@@ -16,8 +32,8 @@ const CoreUsabilityStep = ({ onSubmit, initialData }: any) => {
     "Learning to operate the system was quick and straightforward.",
     "I feel confident and in control when using the twin.",
     "The terminology and workflows match my domain expertise.",
-    "I can easily tailor views, dashboards, and alerts to my needs.",
-    "I feel comfortable with how the system collects, uses, and displays my data."
+    "I can easily customize views, dashboards, and alerts to my needs.",
+    "I feel comfortable with how the system handles my data."
   ]
 
   const handleRatingChange = (index: number, rating: number) => {
@@ -30,54 +46,87 @@ const CoreUsabilityStep = ({ onSubmit, initialData }: any) => {
   }
 
   const handleSubmit = () => {
-    // Ensure all responses are filled with default rating of 4 if not set
     const completeResponses = statements.map((statement, index) => ({
-      statement,
+      statement: statement,
       rating: responses[index]?.rating || 4
     }))
     onSubmit({ core_usability_responses: completeResponses })
   }
 
+  const getProgress = () => {
+    const filledCount = responses.filter(r => r?.rating).length
+    return (filledCount / statements.length) * 100
+  }
+
   return (
-    <Card className="shadow-md">
-      <CardContent className="space-y-8 pt-4">
+    <div className="space-y-6">
+      <div className="space-y-5">
         {statements.map((statement, index) => (
-          <div key={index} className="space-y-4">
-            <Label className="text-sm font-medium leading-relaxed">{statement}</Label>
-            <RadioGroup
-              value={responses[index]?.rating?.toString() || "4"}
-              onValueChange={(value) => handleRatingChange(index, parseInt(value))}
-              className="flex justify-between"
-            >
-              {[1, 2, 3, 4, 5, 6, 7].map((rating) => (
-                <div key={rating} className="flex flex-col items-center space-y-2">
-                  <RadioGroupItem value={rating.toString()} id={`${index}-${rating}`} />
-                  <Label 
-                    htmlFor={`${index}-${rating}`} 
-                    className="text-xs cursor-pointer"
-                  >
-                    {rating}
-                  </Label>
+          <Card key={index} className="group hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 border-l-4 border-l-blue-500">
+            <CardContent className="p-5">
+              <div className="space-y-4">
+                <Label className="text-sm font-semibold leading-relaxed text-gray-800">{statement}</Label>
+
+                <RadioGroup
+                  value={responses[index]?.rating?.toString() || "4"}
+                  onValueChange={(value) => handleRatingChange(index, parseInt(value))}
+                  className="flex justify-between gap-2 items-center"
+                >
+                  {[1, 2, 3, 4, 5, 6, 7].map((rating) => {
+                    const selected = responses[index]?.rating === rating
+                    return (
+                      <div key={rating} className="flex flex-col items-center space-y-2">
+                        <RadioGroupItem
+                          value={rating.toString()}
+                          id={`core-${index}-${rating}`}
+                          className={
+                            `w-4 h-4 rounded-full border-2 transition-all duration-200 flex items-center justify-center ${
+                              selected ? 'bg-blue-600 border-transparent ring-2 ring-blue-200 text-white' : 'bg-white border-gray-200'
+                            }`
+                          }
+                        />
+                        <Label htmlFor={`core-${index}-${rating}`} className="text-xs cursor-pointer transition-colors duration-200 hover:text-blue-600">{rating}</Label>
+                      </div>
+                    )
+                  })}
+                </RadioGroup>
+
+                <div className="flex justify-between text-xs text-gray-500 px-1">
+                  <span>Strongly Disagree</span>
+                  <span>Neutral</span>
+                  <span>Strongly Agree</span>
                 </div>
-              ))}
-            </RadioGroup>
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Strongly Disagree</span>
-              <span>Neutral</span>
-              <span>Strongly Agree</span>
-            </div>
-          </div>
+              </div>
+            </CardContent>
+          </Card>
         ))}
-        
-        <Button onClick={handleSubmit} className="w-full">Complete Step</Button>
-      </CardContent>
-    </Card>
+      </div>
+
+      <Button
+        onClick={handleSubmit}
+        disabled={getProgress() < 100}
+        className="w-full h-12 transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl bg-gradient-to-r from-blue-600 to-indigo-600 text-white"
+      >
+        {getProgress() === 100 ? (
+          <>
+            <CheckCircle2 className="w-4 h-4 mr-2" />
+            Complete Core Usability
+          </>
+        ) : (
+          `Answer All Questions (${Math.round(getProgress())}%)`
+        )}
+      </Button>
+    </div>
   )
 }
 
+// ------------------------------
 // Step 2: Trust & Transparency
-const TrustTransparencyStep = ({ onSubmit, initialData }: any) => {
-  const [responses, setResponses] = useState<any[]>(initialData?.trust_transparency_responses || [])
+// ------------------------------
+const TrustTransparencyStep: React.FC<any> = ({ onSubmit, initialData }: any) => {
+  const [responses, setResponses] = useState<any[]>(
+    initialData?.trust_transparency_responses || new Array(4).fill(null).map(() => ({ rating: 4 }))
+  )
 
   const statements = [
     "I understand the origins and currency of the data shown.",
@@ -96,84 +145,111 @@ const TrustTransparencyStep = ({ onSubmit, initialData }: any) => {
   }
 
   const handleSubmit = () => {
-    // Ensure all responses are filled with default rating of 4 if not set
     const completeResponses = statements.map((statement, index) => ({
-      statement,
+      statement: statement,
       rating: responses[index]?.rating || 4
     }))
     onSubmit({ trust_transparency_responses: completeResponses })
   }
 
+  const getProgress = () => {
+    const filledCount = responses.filter(r => r?.rating).length
+    return (filledCount / statements.length) * 100
+  }
+
   return (
-    <Card className="shadow-md">
-      <CardContent className="space-y-8 pt-4">
+    <div className="space-y-6">
+      <div className="space-y-5">
         {statements.map((statement, index) => (
-          <div key={index} className="space-y-4">
-            <Label className="text-sm font-medium leading-relaxed">{statement}</Label>
-            <RadioGroup
-              value={responses[index]?.rating?.toString() || "4"}
-              onValueChange={(value) => handleRatingChange(index, parseInt(value))}
-              className="flex justify-between"
-            >
-              {[1, 2, 3, 4, 5, 6, 7].map((rating) => (
-                <div key={rating} className="flex flex-col items-center space-y-2">
-                  <RadioGroupItem value={rating.toString()} id={`trust-${index}-${rating}`} />
-                  <Label 
-                    htmlFor={`trust-${index}-${rating}`} 
-                    className="text-xs cursor-pointer"
-                  >
-                    {rating}
-                  </Label>
+          <Card key={index} className="group hover:shadow-lg transition-all duration-300 hover:-translate-y-0.5 border-l-4 border-l-purple-500">
+            <CardContent className="p-5">
+              <div className="space-y-4">
+                <Label className="text-sm font-semibold leading-relaxed text-gray-800">{statement}</Label>
+
+                <RadioGroup
+                  value={responses[index]?.rating?.toString() || "4"}
+                  onValueChange={(value) => handleRatingChange(index, parseInt(value))}
+                  className="flex justify-between gap-2 items-center"
+                >
+                  {[1, 2, 3, 4, 5, 6, 7].map((rating) => {
+                    const selected = responses[index]?.rating === rating
+                    return (
+                      <div key={rating} className="flex flex-col items-center space-y-2">
+                        <RadioGroupItem
+                          value={rating.toString()}
+                          id={`trust-${index}-${rating}`}
+                          className={
+                            `w-4 h-4 rounded-full border-2 transition-all duration-200 flex items-center justify-center ${
+                              selected ? 'bg-purple-600 border-transparent ring-2 ring-purple-200 text-white' : 'bg-white border-gray-200'
+                            }`
+                          }
+                        />
+                        <Label htmlFor={`trust-${index}-${rating}`} className="text-xs cursor-pointer transition-colors duration-200 hover:text-purple-600">{rating}</Label>
+                      </div>
+                    )
+                  })}
+                </RadioGroup>
+
+                <div className="flex justify-between text-xs text-gray-500 px-1">
+                  <span>Strongly Disagree</span>
+                  <span>Neutral</span>
+                  <span>Strongly Agree</span>
                 </div>
-              ))}
-            </RadioGroup>
-            <div className="flex justify-between text-xs text-muted-foreground">
-              <span>Strongly Disagree</span>
-              <span>Neutral</span>
-              <span>Strongly Agree</span>
-            </div>
-          </div>
+              </div>
+            </CardContent>
+          </Card>
         ))}
-        
-        <Button onClick={handleSubmit} className="w-full">Complete Step</Button>
-      </CardContent>
-    </Card>
+      </div>
+
+      <Button
+        onClick={handleSubmit}
+        disabled={getProgress() < 100}
+        className="w-full h-12 transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl bg-gradient-to-r from-purple-600 to-indigo-600 text-white"
+      >
+        {getProgress() === 100 ? (
+          <>
+            <CheckCircle2 className="w-4 h-4 mr-2" />
+            Complete Trust Assessment
+          </>
+        ) : (
+          `Answer All Questions (${Math.round(getProgress())}%)`
+        )}
+      </Button>
+    </div>
   )
 }
 
-// Step 3: Workload & Performance  
-const WorkloadPerformanceStep = ({ onSubmit, initialData }: any) => {
+// ------------------------------
+// Step 3: Workload & Performance
+// ------------------------------
+const WorkloadPerformanceStep: React.FC<any> = ({ onSubmit, initialData }: any) => {
   const [workloadMetrics, setWorkloadMetrics] = useState({
-    mental_demand: initialData?.workload_metrics?.mental_demand || 60,
-    effort_required: initialData?.workload_metrics?.effort_required || 60,
-    frustration_level: initialData?.workload_metrics?.frustration_level || 40
+    mental_demand: initialData?.workload_metrics?.mental_demand || 3,
+    effort_required: initialData?.workload_metrics?.effort_required || 3,
+    frustration_level: initialData?.workload_metrics?.frustration_level || 2
   })
 
   const [cybersicknessResponses, setCybersicknessResponses] = useState(
     initialData?.cybersickness_responses || [
       { symptom: "Queasiness or nausea", severity: 1 },
       { symptom: "Dizziness or off-balance feeling", severity: 1 },
-      { symptom: "Eye strain or visual discomfort", severity: 1 }
+      { symptom: "Eye strain or visual discomfort", severity: 2 }
     ]
   )
 
   const [emotionalResponse, setEmotionalResponse] = useState({
-    valence: initialData?.emotional_response?.valence || 3,
+    valence: initialData?.emotional_response?.valence || 4,
     arousal: initialData?.emotional_response?.arousal || 3
   })
 
   const [performanceMetrics, setPerformanceMetrics] = useState({
-    task_completion_time_min: initialData?.performance_metrics?.task_completion_time_min || "",
-    error_rate: initialData?.performance_metrics?.error_rate || "",
-    help_requests: initialData?.performance_metrics?.help_requests || ""
+    task_completion_time_min: initialData?.performance_metrics?.task_completion_time_min || "15.5",
+    error_rate: initialData?.performance_metrics?.error_rate || "2",
+    help_requests: initialData?.performance_metrics?.help_requests || "1"
   })
 
-  // Convert 0-100 scale to 1-5 scale for display
-  const scaleToDisplay = (value: number) => Math.round(value / 20) || 1
-  const displayToScale = (display: number) => display * 20
-
-  const handleWorkloadChange = (metric: string, displayValue: number) => {
-    setWorkloadMetrics(prev => ({ ...prev, [metric]: displayToScale(displayValue) }))
+  const handleWorkloadChange = (metric: string, value: number) => {
+    setWorkloadMetrics(prev => ({ ...prev, [metric]: value }))
   }
 
   const handleCybersicknessChange = (index: number, severity: number) => {
@@ -190,6 +266,17 @@ const WorkloadPerformanceStep = ({ onSubmit, initialData }: any) => {
     setPerformanceMetrics(prev => ({ ...prev, [metric]: value }))
   }
 
+  const isComplete = () => {
+    const workloadComplete = Object.values(workloadMetrics).every(v => v > 0)
+    const cybersicknessComplete = cybersicknessResponses.every(r => r.severity > 0)
+    const emotionalComplete = emotionalResponse.valence > 0 && emotionalResponse.arousal > 0
+    const performanceComplete = performanceMetrics.task_completion_time_min !== "" &&
+      performanceMetrics.error_rate !== "" &&
+      performanceMetrics.help_requests !== ""
+
+    return workloadComplete && cybersicknessComplete && emotionalComplete && performanceComplete
+  }
+
   const handleSubmit = () => {
     const finalData = {
       workload_metrics: workloadMetrics,
@@ -201,225 +288,277 @@ const WorkloadPerformanceStep = ({ onSubmit, initialData }: any) => {
         help_requests: parseInt(performanceMetrics.help_requests) || 0
       }
     }
-    
     onSubmit(finalData)
   }
 
+  const workloadLabels = ["Low", "Moderate", "High", "Very High", "Extreme"]
+  const severityLabels = ["None", "Slight", "Moderate", "Severe", "Very Severe"]
+  const valenceLabels = ["Very Negative", "Negative", "Neutral", "Positive", "Very Positive"]
+  const arousalLabels = ["Very Calm", "Calm", "Neutral", "Energetic", "Very Energetic"]
+
   return (
-    <Card className="shadow-md">
-      <CardContent className="space-y-8 pt-4">
-        {/* NASA-TLX Workload Metrics */}
-        <div className="space-y-6">
-          <h4 className="font-medium">Workload Assessment</h4>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">Mental Demand</Label>
-              <RadioGroup
-                value={scaleToDisplay(workloadMetrics.mental_demand).toString()}
-                onValueChange={(value) => handleWorkloadChange('mental_demand', parseInt(value))}
-                className="space-y-2"
-              >
-                {["Low", "Moderate", "High", "Very High", "Extreme"].map((label, index) => (
-                  <div key={index} className="flex items-center space-x-2">
-                    <RadioGroupItem value={(index + 1).toString()} id={`mental-${index}`} />
-                    <Label htmlFor={`mental-${index}`} className="text-sm cursor-pointer">{label}</Label>
-                  </div>
-                ))}
-              </RadioGroup>
-            </div>
+    <div className="space-y-6">
 
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">Effort Required</Label>
+      {/* Workload Assessment */}
+      <Card className="hover:shadow-lg transition-all duration-300 border-l-4 border-l-orange-500">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Brain className="w-5 h-5 text-orange-500" />
+            Workload Assessment
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {[
+            { key: 'mental_demand', label: 'Mental Demand' },
+            { key: 'effort_required', label: 'Effort Required' },
+            { key: 'frustration_level', label: 'Frustration Level' }
+          ].map(({ key, label }) => (
+            <div key={key} className="space-y-3">
+              <Label className="text-sm font-medium text-gray-800">{label}</Label>
               <RadioGroup
-                value={scaleToDisplay(workloadMetrics.effort_required).toString()}
-                onValueChange={(value) => handleWorkloadChange('effort_required', parseInt(value))}
-                className="space-y-2"
+                value={workloadMetrics[key as keyof typeof workloadMetrics].toString()}
+                onValueChange={(value) => handleWorkloadChange(key, parseInt(value))}
+                className="flex justify-between gap-2"
               >
-                {["Low", "Moderate", "High", "Very High", "Extreme"].map((label, index) => (
-                  <div key={index} className="flex items-center space-x-2">
-                    <RadioGroupItem value={(index + 1).toString()} id={`effort-${index}`} />
-                    <Label htmlFor={`effort-${index}`} className="text-sm cursor-pointer">{label}</Label>
-                  </div>
-                ))}
-              </RadioGroup>
-            </div>
-
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">Frustration Level</Label>
-              <RadioGroup
-                value={scaleToDisplay(workloadMetrics.frustration_level).toString()}
-                onValueChange={(value) => handleWorkloadChange('frustration_level', parseInt(value))}
-                className="space-y-2"
-              >
-                {["Low", "Moderate", "High", "Very High", "Extreme"].map((label, index) => (
-                  <div key={index} className="flex items-center space-x-2">
-                    <RadioGroupItem value={(index + 1).toString()} id={`frustration-${index}`} />
-                    <Label htmlFor={`frustration-${index}`} className="text-sm cursor-pointer">{label}</Label>
-                  </div>
-                ))}
-              </RadioGroup>
-            </div>
-          </div>
-        </div>
-
-        {/* Cybersickness Assessment */}
-        <div className="space-y-6">
-          <h4 className="font-medium">Physical Symptoms</h4>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {cybersicknessResponses.map((response, index) => (
-              <div key={index} className="space-y-3">
-                <Label className="text-sm font-medium">{response.symptom}</Label>
-                <RadioGroup
-                  value={response.severity.toString()}
-                  onValueChange={(value) => handleCybersicknessChange(index, parseInt(value))}
-                  className="space-y-2"
-                >
-                  {["None", "Slight", "Moderate", "Severe", "Very Severe"].map((label, severityIndex) => (
-                    <div key={severityIndex} className="flex items-center space-x-2">
-                      <RadioGroupItem value={(severityIndex + 1).toString()} id={`symptom-${index}-${severityIndex}`} />
-                      <Label htmlFor={`symptom-${index}-${severityIndex}`} className="text-sm cursor-pointer">{label}</Label>
+                {workloadLabels.map((lab, index) => {
+                  const selected = workloadMetrics[key as keyof typeof workloadMetrics] === index + 1
+                  return (
+                    <div key={index} className="flex flex-col items-center space-y-2">
+                      <RadioGroupItem
+                        value={(index + 1).toString()}
+                        id={`${key}-${index}`}
+                        className={`w-4 h-4 rounded-full border-2 transition-all duration-200 flex items-center justify-center ${
+                          selected ? 'bg-orange-500 border-transparent ring-2 ring-orange-200 text-white' : 'bg-white border-gray-200'
+                        }`}
+                      />
+                      <Label htmlFor={`${key}-${index}`} className="text-xs text-center cursor-pointer max-w-16 transition-colors duration-200 hover:text-orange-600">{lab}</Label>
                     </div>
-                  ))}
-                </RadioGroup>
-              </div>
-            ))}
-          </div>
-        </div>
-
-        {/* Emotional Response */}
-        <div className="space-y-6">
-          <h4 className="font-medium">Emotional Response</h4>
-          
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">Overall Experience</Label>
-              <RadioGroup
-                value={emotionalResponse.valence.toString()}
-                onValueChange={(value) => handleEmotionalChange('valence', parseInt(value))}
-                className="space-y-2"
-              >
-                {["Very Negative", "Negative", "Neutral", "Positive", "Very Positive"].map((label, index) => (
-                  <div key={index} className="flex items-center space-x-2">
-                    <RadioGroupItem value={(index + 1).toString()} id={`valence-${index}`} />
-                    <Label htmlFor={`valence-${index}`} className="text-sm cursor-pointer">{label}</Label>
-                  </div>
-                ))}
+                  )
+                })}
               </RadioGroup>
             </div>
+          ))}
+        </CardContent>
+      </Card>
 
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">Energy Level</Label>
+      {/* Cybersickness Assessment */}
+      <Card className="hover:shadow-lg transition-all duration-300 border-l-4 border-l-red-500">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Activity className="w-5 h-5 text-red-500" />
+            Physical Symptoms
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {cybersicknessResponses.map((response, index) => (
+            <div key={index} className="space-y-3">
+              <Label className="text-sm font-medium text-gray-800">{response.symptom}</Label>
               <RadioGroup
-                value={emotionalResponse.arousal.toString()}
-                onValueChange={(value) => handleEmotionalChange('arousal', parseInt(value))}
-                className="space-y-2"
+                value={response.severity.toString()}
+                onValueChange={(value) => handleCybersicknessChange(index, parseInt(value))}
+                className="flex justify-between gap-2"
               >
-                {["Very Calm", "Calm", "Neutral", "Energetic", "Very Energetic"].map((label, index) => (
-                  <div key={index} className="flex items-center space-x-2">
-                    <RadioGroupItem value={(index + 1).toString()} id={`arousal-${index}`} />
-                    <Label htmlFor={`arousal-${index}`} className="text-sm cursor-pointer">{label}</Label>
-                  </div>
-                ))}
+                {severityLabels.map((label, severityIndex) => {
+                  const selected = response.severity === severityIndex + 1
+                  return (
+                    <div key={severityIndex} className="flex flex-col items-center space-y-2">
+                      <RadioGroupItem
+                        value={(severityIndex + 1).toString()}
+                        id={`symptom-${index}-${severityIndex}`}
+                        className={`w-4 h-4 rounded-full border-2 transition-all duration-200 flex items-center justify-center ${
+                          selected ? 'bg-red-500 border-transparent ring-2 ring-red-200 text-white' : 'bg-white border-gray-200'
+                        }`}
+                      />
+                      <Label htmlFor={`symptom-${index}-${severityIndex}`} className="text-xs text-center cursor-pointer max-w-16 transition-colors duration-200 hover:text-red-600">{label}</Label>
+                    </div>
+                  )
+                })}
               </RadioGroup>
             </div>
+          ))}
+        </CardContent>
+      </Card>
+
+      {/* Emotional Response */}
+      <Card className="hover:shadow-lg transition-all duration-300 border-l-4 border-l-green-500">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Heart className="w-5 h-5 text-green-500" />
+            Emotional Response
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-3">
+            <Label className="text-sm font-medium text-gray-800">Overall Experience</Label>
+            <RadioGroup
+              value={emotionalResponse.valence.toString()}
+              onValueChange={(value) => handleEmotionalChange('valence', parseInt(value))}
+              className="flex justify-between gap-2"
+            >
+              {valenceLabels.map((label, index) => {
+                const selected = emotionalResponse.valence === index + 1
+                return (
+                  <div key={index} className="flex flex-col items-center space-y-2">
+                    <RadioGroupItem
+                      value={(index + 1).toString()}
+                      id={`valence-${index}`}
+                      className={`w-4 h-4 rounded-full border-2 transition-all duration-200 flex items-center justify-center ${
+                        selected ? 'bg-green-500 border-transparent ring-2 ring-green-200 text-white' : 'bg-white border-gray-200'
+                      }`}
+                    />
+                    <Label htmlFor={`valence-${index}`} className="text-xs text-center cursor-pointer max-w-16 transition-colors duration-200 hover:text-green-600">{label}</Label>
+                  </div>
+                )
+              })}
+            </RadioGroup>
           </div>
-        </div>
 
-        {/* Performance Metrics */}
-        <div className="space-y-6">
-          <h4 className="font-medium">Performance Metrics</h4>
-          
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div>
-              <Label htmlFor="taskTime" className="text-sm font-medium">Task Completion Time (minutes)</Label>
-              <Input
-                id="taskTime"
-                type="number"
-                step="0.1"
-                placeholder="15.5"
-                value={performanceMetrics.task_completion_time_min}
-                onChange={(e) => handlePerformanceChange('task_completion_time_min', e.target.value)}
-                className="mt-2"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="errorRate" className="text-sm font-medium">Error Rate (count)</Label>
-              <Input
-                id="errorRate"
-                type="number"
-                placeholder="2"
-                value={performanceMetrics.error_rate}
-                onChange={(e) => handlePerformanceChange('error_rate', e.target.value)}
-                className="mt-2"
-              />
-            </div>
-
-            <div>
-              <Label htmlFor="helpRequests" className="text-sm font-medium">Help Requests (count)</Label>
-              <Input
-                id="helpRequests"
-                type="number"
-                placeholder="1"
-                value={performanceMetrics.help_requests}
-                onChange={(e) => handlePerformanceChange('help_requests', e.target.value)}
-                className="mt-2"
-              />
-            </div>
+          <div className="space-y-3">
+            <Label className="text-sm font-medium text-gray-800">Energy Level</Label>
+            <RadioGroup
+              value={emotionalResponse.arousal.toString()}
+              onValueChange={(value) => handleEmotionalChange('arousal', parseInt(value))}
+              className="flex justify-between gap-2"
+            >
+              {arousalLabels.map((label, index) => {
+                const selected = emotionalResponse.arousal === index + 1
+                return (
+                  <div key={index} className="flex flex-col items-center space-y-2">
+                    <RadioGroupItem
+                      value={(index + 1).toString()}
+                      id={`arousal-${index}`}
+                      className={`w-4 h-4 rounded-full border-2 transition-all duration-200 flex items-center justify-center ${
+                        selected ? 'bg-green-500 border-transparent ring-2 ring-green-200 text-white' : 'bg-white border-gray-200'
+                      }`}
+                    />
+                    <Label htmlFor={`arousal-${index}`} className="text-xs text-center cursor-pointer max-w-16 transition-colors duration-200 hover:text-green-600">{label}</Label>
+                  </div>
+                )
+              })}
+            </RadioGroup>
           </div>
-        </div>
+        </CardContent>
+      </Card>
 
-        <Button onClick={handleSubmit} className="w-full">Complete Assessment</Button>
-      </CardContent>
-    </Card>
+      {/* Performance Metrics */}
+      <Card className="hover:shadow-lg transition-all duration-300 border-l-4 border-l-indigo-500">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
+            <Zap className="w-5 h-5 text-indigo-500" />
+            Performance Metrics
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="space-y-2">
+            <Label htmlFor="taskTime" className="text-sm font-medium text-gray-800">Task Time (minutes)</Label>
+            <Input
+              id="taskTime"
+              type="number"
+              step="0.1"
+              placeholder="15.5"
+              value={performanceMetrics.task_completion_time_min}
+              onChange={(e) => handlePerformanceChange('task_completion_time_min', e.target.value)}
+              className="transition-all duration-200 focus:scale-105 focus:shadow-lg"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="errorRate" className="text-sm font-medium text-gray-800">Error Count</Label>
+            <Input
+              id="errorRate"
+              type="number"
+              placeholder="2"
+              value={performanceMetrics.error_rate}
+              onChange={(e) => handlePerformanceChange('error_rate', e.target.value)}
+              className="transition-all duration-200 focus:scale-105 focus:shadow-lg"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label htmlFor="helpRequests" className="text-sm font-medium text-gray-800">Help Requests</Label>
+            <Input
+              id="helpRequests"
+              type="number"
+              placeholder="1"
+              value={performanceMetrics.help_requests}
+              onChange={(e) => handlePerformanceChange('help_requests', e.target.value)}
+              className="transition-all duration-200 focus:scale-105 focus:shadow-lg"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
+      <Button
+        onClick={handleSubmit}
+        disabled={!isComplete()}
+        className="w-full h-12 transition-all duration-300 hover:scale-105 shadow-lg hover:shadow-xl bg-gradient-to-r from-indigo-600 to-blue-600 text-white"
+      >
+        {isComplete() ? (
+          <>
+            <CheckCircle2 className="w-4 h-4 mr-2" />
+            Complete Workload & Performance Assessment
+          </>
+        ) : (
+          "Fill out all sections to continue"
+        )}
+      </Button>
+    </div>
   )
 }
 
-// Main form component that combines all steps and generates final JSON
-export const HumanCentricityForm = ({ 
-  assessmentId = "assessment_123456",
-  userId = "user_789", 
-  systemName = "Digital Twin Manufacturing System",
-  onSubmit,
-  initialData = {}
-}: {
+// ------------------------------
+// Main form component
+// ------------------------------
+export const HumanCentricityForm: React.FC<{
   assessmentId?: string;
   userId?: string;
   systemName?: string;
   onSubmit?: (data: any) => void;
   initialData?: any;
+}> = ({
+  assessmentId = "assessment_123456",
+  userId = "user_789",
+  systemName = "Digital Twin Manufacturing System",
+  onSubmit,
+  initialData = {}
 }) => {
   const [currentStep, setCurrentStep] = useState(0)
   const [formData, setFormData] = useState(initialData.form_data || {})
+  const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set())
 
   const steps = [
     {
       title: "Core Usability",
       description: "Evaluate basic usability and system integration",
-      component: CoreUsabilityStep
+      component: CoreUsabilityStep,
+      icon: User,
+      color: "blue"
     },
     {
-      title: "Trust & Transparency", 
+      title: "Trust & Transparency",
       description: "Assess trust in system outputs and transparency",
-      component: TrustTransparencyStep
+      component: TrustTransparencyStep,
+      icon: Shield,
+      color: "purple"
     },
     {
       title: "Workload & Performance",
       description: "Measure workload, cybersickness, emotions, and performance",
-      component: WorkloadPerformanceStep
+      component: WorkloadPerformanceStep,
+      icon: Activity,
+      color: "indigo"
     }
   ]
 
   const handleStepSubmit = (stepData: any) => {
     const updatedFormData = { ...formData, ...stepData }
     setFormData(updatedFormData)
-    
+    setCompletedSteps(prev => new Set([...prev, currentStep]))
+
     if (currentStep < steps.length - 1) {
       setCurrentStep(currentStep + 1)
     } else {
-      // Final submission - generate complete JSON
+      // Final submission
       const finalJson = {
         assessment_id: assessmentId,
         user_id: userId,
@@ -438,11 +577,11 @@ export const HumanCentricityForm = ({
           trust_transparency_count: updatedFormData.trust_transparency_responses?.length || 4
         }
       }
-      
+
       if (onSubmit) {
         onSubmit(finalJson)
       }
-      
+
       console.log("Final Human Centricity Assessment JSON:", JSON.stringify(finalJson, null, 2))
     }
   }
@@ -454,54 +593,84 @@ export const HumanCentricityForm = ({
   }
 
   const CurrentStepComponent = steps[currentStep].component
+  const overallProgress = ((completedSteps.size) / steps.length) * 100
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <div className="mb-8">
-        <h2 className="text-2xl font-bold mb-2">Human Centricity Assessment</h2>
-        <p className="text-muted-foreground mb-4">{systemName}</p>
-        
-        {/* Progress indicator */}
-        <div className="flex items-center justify-between mb-6">
-          {steps.map((step, index) => (
-            <div key={index} className="flex items-center">
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-medium ${
-                index <= currentStep 
-                  ? 'bg-primary text-primary-foreground' 
-                  : 'bg-muted text-muted-foreground'
-              }`}>
-                {index + 1}
-              </div>
-              <div className="ml-2 text-sm">
-                <div className="font-medium">{step.title}</div>
-                <div className="text-muted-foreground">{step.description}</div>
-              </div>
-              {index < steps.length - 1 && (
-                <div className={`w-16 h-1 mx-4 ${
-                  index < currentStep ? 'bg-primary' : 'bg-muted'
-                }`} />
-              )}
-            </div>
-          ))}
+    <div className="max-w-4xl mx-auto space-y-8">
+      {/* Header */}
+      <div className="text-center space-y-4">
+        <div className="inline-flex items-center gap-2 bg-gradient-to-r from-blue-50 to-purple-50 px-4 py-2 rounded-full border border-blue-100">
+          <User className="w-4 h-4 text-blue-600" />
+          <span className="text-sm font-medium text-gray-900">Human Centricity Assessment</span>
+        </div>
+        <h1 className="text-3xl font-extrabold text-gray-900">{systemName}</h1>
+        <p className="text-gray-600">Comprehensive evaluation of user experience and system interaction</p>
+
+        {/* Progress */}
+        <div className="max-w-md mx-auto space-y-3">
+          <div className="flex items-center justify-between text-sm text-gray-600">
+            <span>Overall Progress</span>
+            <span className="font-medium">{Math.round(overallProgress)}%</span>
+          </div>
+          <Progress value={overallProgress} className="h-3 rounded-full transition-all duration-500 shadow-sm" />
         </div>
       </div>
 
-      <div className="space-y-6">
-        <CurrentStepComponent 
-          onSubmit={handleStepSubmit} 
-          initialData={formData}
-        />
-        
-        {currentStep > 0 && (
-          <Button 
-            variant="outline" 
-            onClick={goToPreviousStep}
-            className="w-full"
-          >
+      {/* Step Navigation */}
+      <div className="flex items-center justify-between bg-white p-6 rounded-xl border shadow-sm">
+        {steps.map((step, index) => {
+          const IconComponent = step.icon
+          const isCompleted = completedSteps.has(index)
+          const isCurrent = index === currentStep
+          const color = COLOR_CLASSES[step.color] || COLOR_CLASSES.blue
+
+          return (
+            <React.Fragment key={index}>
+              <div className="flex flex-col items-center space-y-3 transition-all duration-300 hover:scale-105">
+                <div className={`w-12 h-12 rounded-xl flex items-center justify-center transition-all duration-300 ${
+                  isCurrent
+                    ? `${color.bg} text-white shadow-lg ring-4 ${color.ring}`
+                    : isCompleted
+                      ? 'bg-green-600 text-white shadow-md'
+                      : 'bg-gray-100 text-gray-600'
+                }`}>
+                  {isCompleted ? <CheckCircle2 className="w-5 h-5" /> : <IconComponent className="w-5 h-5" />}
+                </div>
+                <div className="text-center">
+                  <div className={`text-sm font-medium ${isCurrent ? color.text : isCompleted ? 'text-green-600' : 'text-gray-600'}`}>
+                    {step.title}
+                  </div>
+                  <div className="text-xs text-gray-500 max-w-24">{step.description}</div>
+                </div>
+              </div>
+
+              {index < steps.length - 1 && (
+                <div className={`flex-1 h-0.5 mx-4 rounded-full transition-all duration-500 ${isCompleted ? 'bg-green-400' : 'bg-gray-200'}`} />
+              )}
+            </React.Fragment>
+          )
+        })}
+      </div>
+
+      {/* Current Step Content */}
+      <Card>
+        <CardHeader>
+          <CardTitle>{steps[currentStep].title}</CardTitle>
+          <CardDescription>{steps[currentStep].description}</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <CurrentStepComponent onSubmit={handleStepSubmit} initialData={formData} />
+        </CardContent>
+      </Card>
+
+      {/* Navigation */}
+      {currentStep > 0 && (
+        <div className="flex justify-center">
+          <Button variant="outline" onClick={goToPreviousStep} className="px-6 py-2">
             Previous Step
           </Button>
-        )}
-      </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -513,7 +682,7 @@ export const getHumanCentricitySteps = () => [
     component: <CoreUsabilityStep />
   },
   {
-    title: "Trust & Transparency", 
+    title: "Trust & Transparency",
     description: "Assess trust in system outputs and transparency",
     component: <TrustTransparencyStep />
   },

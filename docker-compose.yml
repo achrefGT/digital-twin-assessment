@@ -128,8 +128,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    volumes:
-      - ./logs:/app/logs
 
   resilience-service:
     build:
@@ -162,8 +160,38 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    volumes:
-      - ./logs:/app/logs
+
+  sustainability-service:
+    build:
+      context: .
+      dockerfile: backend/services/sustainability/Dockerfile
+    container_name: sustainability-service
+    ports:
+      - "${SUSTAINABILITY_SERVICE_PORT:-8006}:8006"
+    env_file:
+      - ./backend/.env
+    environment:
+      - PORT=8006
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - SUSTAINABILITY_API_HOST=0.0.0.0
+      - SUSTAINABILITY_API_PORT=8006
+      - SUSTAINABILITY_LOG_LEVEL=${LOG_LEVEL:-INFO}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+    networks:
+      - digital-twin-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8006/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
 
   human-centricity-service:
     build:
@@ -196,8 +224,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    volumes:
-      - ./logs:/app/logs
 
   slca-service:
     build:
@@ -230,8 +256,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    volumes:
-      - ./logs:/app/logs
 
   lcc-service:
     build:
@@ -264,8 +288,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 60s
-    volumes:
-      - ./logs:/app/logs
 
   elca-service:
     build:
@@ -300,7 +322,6 @@ services:
       retries: 3
       start_period: 60s
     volumes:
-      - ./logs:/app/logs
       - elca_brightway2_data:/tmp/brightway2_data  
 
   # Optional: Kafka UI for monitoring

@@ -1,7 +1,8 @@
 from datetime import datetime
-from typing import List, Optional
+from typing import Any, Dict, List, Optional
 from fastapi import APIRouter, HTTPException, Depends, status
 from fastapi.responses import JSONResponse
+import logging
 
 # Import shared models
 from shared.models.assessment import (
@@ -13,11 +14,19 @@ from shared.models.events import EventFactory
 
 from ..database import DatabaseManager
 from ..kafka_service import KafkaService
+from ..config import settings
 from ..models import AssessmentCreate, AssessmentResponse, FormSubmission
 from ..dependencies import get_db_manager, get_kafka_service, get_current_user, handle_exceptions
 # from ..exceptions import AssessmentNotFoundException
 
 router = APIRouter(prefix="/assessments", tags=["assessments"])
+
+# Setup logging
+logging.basicConfig(
+    level=getattr(logging, settings.log_level.upper()),
+    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
 
 
 @router.post("/", response_model=AssessmentResponse)
@@ -407,6 +416,7 @@ def _can_submit_domain(progress: AssessmentProgress, domain: str) -> bool:
     """Check if a domain can be submitted based on current progress"""
     domain_map = {
         "resilience": not progress.resilience_submitted,
+        "sustainability": not progress.sustainability_submitted,
         "slca": not progress.slca_submitted,
         "lcc": not progress.lcc_submitted,
         "elca": not progress.elca_submitted,
@@ -427,6 +437,8 @@ def _mark_domain_complete(progress: AssessmentProgress, domain: str) -> Assessme
         progress.lcc_submitted = True
     elif domain == "human_centricity":
         progress.human_centricity_submitted = True
+    elif domain == "sustainability":
+        progress.sustainability_submitted = True
     
     # Update status based on completion
     progress.status = _calculate_status(progress)
@@ -436,9 +448,17 @@ def _mark_domain_complete(progress: AssessmentProgress, domain: str) -> Assessme
 
 
 def _calculate_status(progress: AssessmentProgress) -> AssessmentStatus:
-    """Calculate assessment status based on domain completion"""
-    if progress.resilience_submitted and progress.slca_submitted and progress.lcc_submitted and progress.elca_submitted and progress.human_centricity_submitted:
+    if (
+        progress.resilience_submitted
+        and progress.slca_submitted
+        and progress.lcc_submitted
+        and progress.elca_submitted
+        and progress.human_centricity_submitted
+        and progress.sustainability_submitted
+    ):
         return AssessmentStatus.ALL_COMPLETE
+    elif progress.sustainability_submitted:
+        return AssessmentStatus.SUSTAINABILITY_COMPLETE
     elif progress.human_centricity_submitted:
         return AssessmentStatus.HUMAN_CENTRICITY_COMPLETE
     elif progress.slca_submitted:
@@ -459,6 +479,7 @@ def _is_valid_status_transition(current: AssessmentStatus, new: AssessmentStatus
     valid_transitions = {
         AssessmentStatus.STARTED: [
             AssessmentStatus.RESILIENCE_COMPLETE,
+            AssessmentStatus.SUSTAINABILITY_COMPLETE,
             AssessmentStatus.SLCA_COMPLETE,
             AssessmentStatus.ELCA_COMPLETE,
             AssessmentStatus.LCC_COMPLETE,
@@ -473,27 +494,55 @@ def _is_valid_status_transition(current: AssessmentStatus, new: AssessmentStatus
             AssessmentStatus.HUMAN_CENTRICITY_COMPLETE,
             AssessmentStatus.ALL_COMPLETE,
             AssessmentStatus.PROCESSING,
+            AssessmentStatus.SUSTAINABILITY_COMPLETE,
             AssessmentStatus.FAILED
         ],
         AssessmentStatus.ELCA_COMPLETE: [
+            AssessmentStatus.SLCA_COMPLETE,
+            AssessmentStatus.RESILIENCE_COMPLETE,
+            AssessmentStatus.SUSTAINABILITY_COMPLETE,
+            AssessmentStatus.LCC_COMPLETE,
             AssessmentStatus.HUMAN_CENTRICITY_COMPLETE,
             AssessmentStatus.ALL_COMPLETE,
             AssessmentStatus.PROCESSING,
             AssessmentStatus.FAILED
         ],
         AssessmentStatus.SLCA_COMPLETE: [
+            AssessmentStatus.RESILIENCE_COMPLETE,
+            AssessmentStatus.SUSTAINABILITY_COMPLETE,
+            AssessmentStatus.LCC_COMPLETE,
+            AssessmentStatus.ELCA_COMPLETE,
             AssessmentStatus.HUMAN_CENTRICITY_COMPLETE,
             AssessmentStatus.ALL_COMPLETE,
             AssessmentStatus.PROCESSING,
             AssessmentStatus.FAILED
         ],
         AssessmentStatus.LCC_COMPLETE: [
+            AssessmentStatus.RESILIENCE_COMPLETE,
+            AssessmentStatus.SUSTAINABILITY_COMPLETE,
             AssessmentStatus.HUMAN_CENTRICITY_COMPLETE,
+            AssessmentStatus.ELCA_COMPLETE,
+            AssessmentStatus.SLCA_COMPLETE,
             AssessmentStatus.ALL_COMPLETE,
             AssessmentStatus.PROCESSING,
             AssessmentStatus.FAILED
         ],
         AssessmentStatus.HUMAN_CENTRICITY_COMPLETE: [
+            AssessmentStatus.RESILIENCE_COMPLETE,
+            AssessmentStatus.SUSTAINABILITY_COMPLETE,
+            AssessmentStatus.SLCA_COMPLETE,
+            AssessmentStatus.ELCA_COMPLETE,
+            AssessmentStatus.LCC_COMPLETE,
+            AssessmentStatus.ALL_COMPLETE,
+            AssessmentStatus.PROCESSING,
+            AssessmentStatus.FAILED
+        ],
+        AssessmentStatus.SUSTAINABILITY_COMPLETE: [
+            AssessmentStatus.RESILIENCE_COMPLETE,
+            AssessmentStatus.HUMAN_CENTRICITY_COMPLETE,
+            AssessmentStatus.SLCA_COMPLETE,
+            AssessmentStatus.ELCA_COMPLETE,
+            AssessmentStatus.LCC_COMPLETE,
             AssessmentStatus.ALL_COMPLETE,
             AssessmentStatus.PROCESSING,
             AssessmentStatus.FAILED
@@ -515,3 +564,316 @@ def _is_valid_status_transition(current: AssessmentStatus, new: AssessmentStatus
     }
     
     return new in valid_transitions.get(current, [])
+
+@router.get("/{assessment_id}/domain-scores")
+@handle_exceptions
+async def get_assessment_domain_scores(
+    assessment_id: str,
+    db_manager: DatabaseManager = Depends(get_db_manager),
+    current_user: Optional[str] = Depends(get_current_user)
+):
+    """Get detailed scores for all completed domains in an assessment"""
+    
+    # Get the main assessment
+    assessment = db_manager.get_assessment(assessment_id)
+    progress = assessment.to_progress_model()
+    
+    # Authorization check (when auth is implemented)
+    # if current_user and progress.user_id and progress.user_id != current_user:
+    #     raise HTTPException(
+    #         status_code=status.HTTP_403_FORBIDDEN,
+    #         detail="Access denied"
+    #     )
+    
+    domain_scores = {
+        "assessment_id": assessment_id,
+        "overall_assessment": {
+            "status": progress.status.value,
+            "completion_percentage": _calculate_completion_percentage(progress),
+            "completed_domains": _get_completed_domains(progress),
+            "pending_domains": _get_pending_domains(progress),
+            "overall_score": progress.overall_score,
+            "created_at": progress.created_at.isoformat(),
+            "updated_at": progress.updated_at.isoformat(),
+            "completed_at": progress.completed_at.isoformat() if progress.completed_at else None
+        },
+        "domain_results": {}
+    }
+    
+    # Helper function to safely fetch microservice results
+    async def fetch_domain_result(domain_name: str, service_url: str):
+        try:
+            import httpx
+            async with httpx.AsyncClient() as client:
+                response = await client.get(f"{service_url}/assessment/{assessment_id}", timeout=5.0)
+                if response.status_code == 200:
+                    return response.json()
+                elif response.status_code == 404:
+                    return None  # Assessment not found in this service
+                else:
+                    logger.warning(f"Failed to fetch {domain_name} results: {response.status_code}")
+                    return None
+        except Exception as e:
+            logger.error(f"Error fetching {domain_name} results: {e}")
+            return None
+    
+    # Fetch results for completed domains
+    if progress.resilience_submitted:
+        resilience_result = await fetch_domain_result("resilience", settings.resilience_service_url)
+        if resilience_result:
+            domain_scores["domain_results"]["resilience"] = {
+                "domain_name": "Resilience Assessment",
+                "status": "completed",
+                "submitted_at": resilience_result.get("submitted_at"),
+                "processed_at": resilience_result.get("processed_at"),
+                "overall_score": resilience_result.get("overall_score"),
+                "detailed_scores": {
+                    "domain_scores": resilience_result.get("domain_scores", {}),
+                    "risk_metrics": resilience_result.get("risk_metrics", {})
+                },
+                "score_breakdown": _format_resilience_breakdown(resilience_result.get("domain_scores", {})),
+                "insights": _generate_resilience_insights(resilience_result.get("overall_score"), resilience_result.get("domain_scores", {}))
+            }
+    
+    if progress.sustainability_submitted:
+        sustainability_result = await fetch_domain_result("sustainability", settings.sustainability_service_url)
+        if sustainability_result:
+            domain_scores["domain_results"]["sustainability"] = {
+                "domain_name": "Sustainability Assessment",
+                "status": "completed",
+                "submitted_at": sustainability_result.get("submitted_at"),
+                "processed_at": sustainability_result.get("processed_at"),
+                "overall_score": sustainability_result.get("overall_score"),
+                "detailed_scores": {
+                    "dimension_scores": sustainability_result.get("dimension_scores", {}),
+                    "sustainability_metrics": sustainability_result.get("sustainability_metrics", {})
+                },
+                "score_breakdown": _format_sustainability_breakdown(sustainability_result.get("dimension_scores", {})),
+                "insights": _generate_sustainability_insights(sustainability_result.get("overall_score"), sustainability_result.get("dimension_scores", {}))
+            }
+    
+    if progress.human_centricity_submitted:
+        hc_result = await fetch_domain_result("human_centricity", settings.human_centricity_service_url)
+        if hc_result:
+            domain_scores["domain_results"]["human_centricity"] = {
+                "domain_name": "Human Centricity Assessment", 
+                "status": "completed",
+                "submitted_at": hc_result.get("submitted_at"),
+                "processed_at": hc_result.get("processed_at"),
+                "overall_score": hc_result.get("overall_score"),
+                "detailed_scores": {
+                    "domain_scores": hc_result.get("domain_scores", {}),
+                    "detailed_metrics": hc_result.get("detailed_metrics", {})
+                },
+                "score_breakdown": _format_human_centricity_breakdown(hc_result.get("domain_scores", {})),
+                "insights": _generate_human_centricity_insights(hc_result.get("overall_score"), hc_result.get("domain_scores", {}))
+            }
+    
+    # For SLCA, ELCA, LCC - add placeholders since their specific service URLs aren't clear from the code
+    if progress.slca_submitted:
+        domain_scores["domain_results"]["slca"] = {
+            "domain_name": "Social Life Cycle Assessment",
+            "status": "completed",
+            "overall_score": progress.domain_scores.get("slca"),
+            "message": "Detailed SLCA results available via dedicated service endpoint"
+        }
+    
+    if progress.elca_submitted:
+        domain_scores["domain_results"]["elca"] = {
+            "domain_name": "Environmental Life Cycle Assessment", 
+            "status": "completed",
+            "overall_score": progress.domain_scores.get("elca"),
+            "message": "Detailed ELCA results available via dedicated service endpoint"
+        }
+    
+    if progress.lcc_submitted:
+        domain_scores["domain_results"]["lcc"] = {
+            "domain_name": "Life Cycle Costing",
+            "status": "completed", 
+            "overall_score": progress.domain_scores.get("lcc"),
+            "message": "Detailed LCC results available via dedicated service endpoint"
+        }
+    
+    # Add summary statistics
+    completed_scores = [result.get("overall_score") for result in domain_scores["domain_results"].values() 
+                       if result.get("overall_score") is not None]
+    
+    if completed_scores:
+        domain_scores["summary_statistics"] = {
+            "completed_domain_count": len(completed_scores),
+            "average_score": sum(completed_scores) / len(completed_scores),
+            "highest_score": max(completed_scores),
+            "lowest_score": min(completed_scores),
+            "score_distribution": _categorize_scores(completed_scores)
+        }
+    
+    return domain_scores
+
+
+def _calculate_completion_percentage(progress: AssessmentProgress) -> float:
+    """Calculate percentage of domains completed"""
+    total_domains = 6
+    completed = sum([
+        progress.resilience_submitted,
+        progress.sustainability_submitted, 
+        progress.slca_submitted,
+        progress.elca_submitted,
+        progress.lcc_submitted,
+        progress.human_centricity_submitted
+    ])
+    return (completed / total_domains) * 100
+
+
+def _get_completed_domains(progress: AssessmentProgress) -> List[str]:
+    """Get list of completed domain names"""
+    completed = []
+    if progress.resilience_submitted:
+        completed.append("resilience")
+    if progress.sustainability_submitted:
+        completed.append("sustainability")
+    if progress.slca_submitted:
+        completed.append("slca")
+    if progress.elca_submitted:
+        completed.append("elca") 
+    if progress.lcc_submitted:
+        completed.append("lcc")
+    if progress.human_centricity_submitted:
+        completed.append("human_centricity")
+    return completed
+
+
+def _get_pending_domains(progress: AssessmentProgress) -> List[str]:
+    """Get list of pending domain names"""
+    pending = []
+    if not progress.resilience_submitted:
+        pending.append("resilience")
+    if not progress.sustainability_submitted:
+        pending.append("sustainability")
+    if not progress.slca_submitted:
+        pending.append("slca")
+    if not progress.elca_submitted:
+        pending.append("elca")
+    if not progress.lcc_submitted:
+        pending.append("lcc")
+    if not progress.human_centricity_submitted:
+        pending.append("human_centricity")
+    return pending
+
+
+def _format_resilience_breakdown(domain_scores: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Format resilience domain scores for frontend display"""
+    breakdown = []
+    for domain, score in domain_scores.items():
+        breakdown.append({
+            "category": domain.replace("_", " ").title(),
+            "score": score,
+            "status": _get_score_status(score)
+        })
+    return breakdown
+
+
+def _format_sustainability_breakdown(dimension_scores: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Format sustainability dimension scores for frontend display"""
+    breakdown = []
+    for dimension, score in dimension_scores.items():
+        breakdown.append({
+            "category": dimension.replace("_", " ").title(),
+            "score": score,
+            "status": _get_score_status(score)
+        })
+    return breakdown
+
+
+def _format_human_centricity_breakdown(domain_scores: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """Format human centricity domain scores for frontend display"""
+    breakdown = []
+    for domain, score in domain_scores.items():
+        breakdown.append({
+            "category": domain.replace("_", " ").title(),
+            "score": score,
+            "status": _get_score_status(score)
+        })
+    return breakdown
+
+
+def _get_score_status(score: float) -> str:
+    """Get status category based on score"""
+    if score >= 90:
+        return "excellent"
+    elif score >= 70:
+        return "good"
+    elif score >= 50:
+        return "fair"
+    elif score >= 30:
+        return "poor"
+    else:
+        return "critical"
+
+
+def _generate_resilience_insights(overall_score: float, domain_scores: Dict[str, Any]) -> List[str]:
+    """Generate insights for resilience assessment"""
+    insights = []
+    if overall_score:
+        if overall_score >= 80:
+            insights.append("System demonstrates strong resilience across multiple domains")
+        elif overall_score >= 60:
+            insights.append("System shows moderate resilience with room for improvement")
+        else:
+            insights.append("System resilience requires significant attention")
+    
+    # Find strongest and weakest domains
+    if domain_scores:
+        strongest = max(domain_scores.items(), key=lambda x: x[1])
+        weakest = min(domain_scores.items(), key=lambda x: x[1])
+        insights.append(f"Strongest area: {strongest[0].replace('_', ' ').title()} ({strongest[1]:.1f})")
+        insights.append(f"Area for improvement: {weakest[0].replace('_', ' ').title()} ({weakest[1]:.1f})")
+    
+    return insights
+
+
+def _generate_sustainability_insights(overall_score: float, dimension_scores: Dict[str, Any]) -> List[str]:
+    """Generate insights for sustainability assessment"""
+    insights = []
+    if overall_score:
+        if overall_score >= 80:
+            insights.append("System demonstrates strong sustainability performance")
+        elif overall_score >= 60:
+            insights.append("System shows good sustainability with opportunities for enhancement")
+        else:
+            insights.append("Sustainability performance needs significant improvement")
+    
+    if dimension_scores:
+        strongest = max(dimension_scores.items(), key=lambda x: x[1])
+        weakest = min(dimension_scores.items(), key=lambda x: x[1])
+        insights.append(f"Best performing dimension: {strongest[0].replace('_', ' ').title()} ({strongest[1]:.1f})")
+        insights.append(f"Focus area: {weakest[0].replace('_', ' ').title()} ({weakest[1]:.1f})")
+    
+    return insights
+
+
+def _generate_human_centricity_insights(overall_score: float, domain_scores: Dict[str, Any]) -> List[str]:
+    """Generate insights for human centricity assessment"""
+    insights = []
+    if overall_score:
+        if overall_score >= 80:
+            insights.append("System provides excellent user experience and human-centered design")
+        elif overall_score >= 60:
+            insights.append("System offers good user experience with areas for enhancement")
+        else:
+            insights.append("User experience requires significant improvement")
+    
+    if domain_scores:
+        strongest = max(domain_scores.items(), key=lambda x: x[1])
+        weakest = min(domain_scores.items(), key=lambda x: x[1])
+        insights.append(f"Strongest aspect: {strongest[0].replace('_', ' ').title()} ({strongest[1]:.1f})")
+        insights.append(f"Improvement opportunity: {weakest[0].replace('_', ' ').title()} ({weakest[1]:.1f})")
+    
+    return insights
+
+
+def _categorize_scores(scores: List[float]) -> Dict[str, int]:
+    """Categorize scores into performance bands"""
+    categories = {"excellent": 0, "good": 0, "fair": 0, "poor": 0, "critical": 0}
+    for score in scores:
+        categories[_get_score_status(score)] += 1
+    return categories

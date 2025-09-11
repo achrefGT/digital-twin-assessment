@@ -11,8 +11,38 @@ interface Assessment {
     completion_percentage: number
     domain_scores?: Record<string, number>
     overall_score?: number
+    domain_data?: Record<string, any> // Added this property
+    summary_statistics?: {
+      completed_domain_count: number
+      average_score: number
+      highest_score: number
+      lowest_score: number
+      score_distribution: Record<string, number>
+    }
   }
   [key: string]: any
+}
+
+interface DomainScoresResponse {
+  assessment_id: string
+  overall_assessment: {
+    status: string
+    completion_percentage: number
+    completed_domains: string[]
+    pending_domains: string[]
+    overall_score?: number
+    created_at: string
+    updated_at: string
+    completed_at?: string
+  }
+  domain_results: Record<string, any>
+  summary_statistics?: {
+    completed_domain_count: number
+    average_score: number
+    highest_score: number
+    lowest_score: number
+    score_distribution: Record<string, number>
+  }
 }
 
 const STORAGE_KEYS = {
@@ -53,7 +83,7 @@ const loadStoredAssessment = (): Assessment | null => {
     if (!stored) return null
     
     const assessment = JSON.parse(stored)
-    console.log('📥 Loaded assessment from storage:', assessment.assessment_id)
+    console.log('🔥 Loaded assessment from storage:', assessment.assessment_id)
     
     // Load additional progress data if available
     const progress = getStoredProgress(assessment.assessment_id)
@@ -97,34 +127,124 @@ const clearAssessmentData = (assessmentId?: string) => {
   }
 }
 
+// NEW: Function to fetch domain scores from API
+const fetchDomainScores = async (assessmentId: string): Promise<DomainScoresResponse | null> => {
+  try {
+    console.log('🔄 Fetching domain scores for assessment:', assessmentId)
+    const response = await fetch(`http://localhost:8000/assessments/${assessmentId}/domain-scores`)
+    
+    if (!response.ok) {
+      if (response.status === 404) {
+        console.log('🔭 Assessment not found in backend')
+        return null
+      }
+      throw new Error(`Failed to fetch domain scores: ${response.status}`)
+    }
+    
+    const domainScores = await response.json()
+    console.log('✅ Fetched domain scores:', domainScores)
+    return domainScores
+  } catch (error) {
+    console.error('❌ Error fetching domain scores:', error)
+    return null
+  }
+}
+
+// NEW: Convert domain scores response to assessment format
+const convertDomainScoresToAssessment = (
+  assessmentId: string, 
+  domainScores: DomainScoresResponse
+): Assessment => {
+  // Extract domain scores from domain_results
+  const extractedDomainScores: Record<string, number> = {}
+  const domainData: Record<string, any> = {}
+  
+  Object.entries(domainScores.domain_results).forEach(([domain, result]) => {
+    if (result.overall_score !== undefined) {
+      extractedDomainScores[domain] = result.overall_score
+    }
+    
+    // Store detailed domain data for dashboard display
+    domainData[domain] = {
+      scores: result.detailed_scores || {},
+      score_value: result.overall_score,
+      submitted_at: result.submitted_at,
+      processed_at: result.processed_at,
+      insights: result.insights || []
+    }
+  })
+  
+  return {
+    assessment_id: assessmentId,
+    status: domainScores.overall_assessment.status,
+    created_at: domainScores.overall_assessment.created_at,
+    updated_at: domainScores.overall_assessment.updated_at,
+    completed_at: domainScores.overall_assessment.completed_at,
+    progress: {
+      completed_domains: domainScores.overall_assessment.completed_domains,
+      completion_percentage: domainScores.overall_assessment.completion_percentage,
+      domain_scores: extractedDomainScores,
+      overall_score: domainScores.overall_assessment.overall_score,
+      domain_data: domainData,
+      summary_statistics: domainScores.summary_statistics
+    }
+  }
+}
+
 export const useAssessment = () => {
   const [currentAssessment, setCurrentAssessment] = useState<Assessment | null>(null)
   const [isLoading, setIsLoading] = useState(true)
 
-  // Load assessment from localStorage on mount
+  // Load assessment from localStorage on mount, with API fallback
   useEffect(() => {
-    const loadAssessment = () => {
-      const assessment = loadStoredAssessment()
-      if (assessment) {
-        console.log('[Assessment Hook] Loaded from localStorage:', assessment.assessment_id)
-        setCurrentAssessment(assessment)
-      } else {
-        console.log('[Assessment Hook] No assessment in localStorage')
+    const loadAssessment = async () => {
+      // First try localStorage
+      const storedAssessment = loadStoredAssessment()
+      
+      if (storedAssessment) {
+        console.log('[Assessment Hook] Loaded from localStorage:', storedAssessment.assessment_id)
         
+        // Try to fetch fresh data from API to ensure we have latest scores
+        const domainScores = await fetchDomainScores(storedAssessment.assessment_id)
+        
+        if (domainScores) {
+          console.log('[Assessment Hook] Refreshed with API data')
+          const refreshedAssessment = convertDomainScoresToAssessment(
+            storedAssessment.assessment_id, 
+            domainScores
+          )
+          setCurrentAssessment(refreshedAssessment)
+          persistAssessmentData(refreshedAssessment)
+        } else {
+          // Use stored data if API fails
+          console.log('[Assessment Hook] Using stored data (API unavailable)')
+          setCurrentAssessment(storedAssessment)
+        }
+      } else {
         // Check if we have just an assessment ID (fallback)
         const lastId = localStorage.getItem(STORAGE_KEYS.LAST_ASSESSMENT_ID)
         if (lastId) {
-          console.log('[Assessment Hook] Found last assessment ID, creating minimal assessment object')
-          const minimalAssessment: Assessment = {
-            assessment_id: lastId,
-            status: 'IN_PROGRESS',
-            created_at: new Date().toISOString(),
-            progress: {
-              completed_domains: [],
-              completion_percentage: 0
+          console.log('[Assessment Hook] Found last assessment ID, fetching from API:', lastId)
+          
+          const domainScores = await fetchDomainScores(lastId)
+          if (domainScores) {
+            const restoredAssessment = convertDomainScoresToAssessment(lastId, domainScores)
+            setCurrentAssessment(restoredAssessment)
+            persistAssessmentData(restoredAssessment)
+          } else {
+            // Create minimal assessment object as fallback
+            console.log('[Assessment Hook] API unavailable, creating minimal assessment object')
+            const minimalAssessment: Assessment = {
+              assessment_id: lastId,
+              status: 'IN_PROGRESS',
+              created_at: new Date().toISOString(),
+              progress: {
+                completed_domains: [],
+                completion_percentage: 0
+              }
             }
+            setCurrentAssessment(minimalAssessment)
           }
-          setCurrentAssessment(minimalAssessment)
         }
       }
       setIsLoading(false)
@@ -242,16 +362,48 @@ export const useAssessment = () => {
     return localStorage.getItem(STORAGE_KEYS.LAST_ASSESSMENT_ID)
   }, [])
 
-  // Restore assessment by ID (if we have the ID but lost the object)
+  // NEW: Refresh assessment data from API
+  const refreshAssessmentData = useCallback(async (assessmentId?: string) => {
+    const targetId = assessmentId || currentAssessment?.assessment_id
+    if (!targetId) {
+      console.warn('[Assessment Hook] Cannot refresh - no assessment ID')
+      return
+    }
+    
+    console.log('[Assessment Hook] Refreshing assessment data:', targetId)
+    const domainScores = await fetchDomainScores(targetId)
+    
+    if (domainScores) {
+      const refreshedAssessment = convertDomainScoresToAssessment(targetId, domainScores)
+      setCurrentAssessment(refreshedAssessment)
+      persistAssessmentData(refreshedAssessment)
+      console.log('[Assessment Hook] Successfully refreshed assessment data')
+      return refreshedAssessment
+    } else {
+      console.warn('[Assessment Hook] Failed to refresh assessment data')
+      return null
+    }
+  }, [currentAssessment])
+
+  // Restore assessment by ID (enhanced with API fetch)
   const restoreAssessmentById = useCallback(async (assessmentId: string) => {
     console.log('[Assessment Hook] Attempting to restore assessment:', assessmentId)
     
+    // First try the domain scores endpoint (more comprehensive)
+    const domainScores = await fetchDomainScores(assessmentId)
+    if (domainScores) {
+      const restoredAssessment = convertDomainScoresToAssessment(assessmentId, domainScores)
+      setCurrentAssessment(restoredAssessment)
+      persistAssessmentData(restoredAssessment)
+      return restoredAssessment
+    }
+    
+    // Fallback: try basic assessment endpoint
     try {
-      // Try to fetch from backend first
       const response = await fetch(`http://localhost:8000/assessments/${assessmentId}`)
       if (response.ok) {
         const assessment = await response.json()
-        console.log('[Assessment Hook] Restored assessment from backend')
+        console.log('[Assessment Hook] Restored assessment from basic endpoint')
         updateAssessment(assessment)
         return assessment
       }
@@ -259,7 +411,7 @@ export const useAssessment = () => {
       console.warn('[Assessment Hook] Could not restore from backend:', error)
     }
     
-    // Fallback: create minimal assessment object
+    // Final fallback: create minimal assessment object
     const minimalAssessment: Assessment = {
       assessment_id: assessmentId,
       status: 'IN_PROGRESS',
@@ -281,6 +433,7 @@ export const useAssessment = () => {
     clearAssessment,
     ensureAssessment,
     getLastAssessmentId,
-    restoreAssessmentById
+    restoreAssessmentById,
+    refreshAssessmentData // NEW: expose refresh function
   }
 }

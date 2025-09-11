@@ -7,6 +7,7 @@ from enum import Enum
 class AssessmentStatus(str, Enum):
     STARTED = "started"
     RESILIENCE_COMPLETE = "resilience_complete"
+    SUSTAINABILITY_COMPLETE = "sustainability_complete"
     SLCA_COMPLETE = "slca_complete" 
     ELCA_COMPLETE = "elca_complete" 
     LCC_COMPLETE = "lcc_complete" 
@@ -26,6 +27,7 @@ class AssessmentProgress(BaseModel):
     
     # Domain completion flags
     resilience_submitted: bool = False
+    sustainability_submitted: bool = False
     slca_submitted: bool = False
     elca_submitted: bool = False
     lcc_submitted: bool = False

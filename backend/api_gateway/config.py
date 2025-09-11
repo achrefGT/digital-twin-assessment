@@ -15,6 +15,14 @@ class Settings(BaseSettings):
         case_sensitive=False
     )
     
+    # Microservice URLs
+    resilience_service_url: str = "http://resilience-service:8001"
+    sustainability_service_url: str = "http://sustainability-service:8006" 
+    human_centricity_service_url: str = "http://human-centricity-service:8002"
+    slca_service_url: str = "http://slca-service:8003"
+    elca_service_url: str = "http://elca-service:8005"
+    lcc_service_url: str = "http://lcc-service:8004"
+
     # Database - Use shared database config utility
     database_pool_size: int = 10
     database_max_overflow: int = 20
@@ -27,6 +35,7 @@ class Settings(BaseSettings):
 
     # Kafka topics
     resilience_scores_topic: str = KafkaConfig.RESILIENCE_SCORES_TOPIC
+    sustainability_scores_topic: str = KafkaConfig.SUSTAINABILITY_SCORES_TOPIC
     elca_scores_topic: str = KafkaConfig.ELCA_SCORES_TOPIC
     lcc_scores_topic: str = KafkaConfig.LCC_SCORES_TOPIC
     slca_scores_topic: str = KafkaConfig.SLCA_SCORES_TOPIC
@@ -35,6 +44,7 @@ class Settings(BaseSettings):
     
     # Producer topics
     resilience_submission_topic: str = KafkaConfig.RESILIENCE_SUBMISSION_TOPIC
+    sustainability_submission_topic: str = KafkaConfig.SUSTAINABILITY_SUBMISSION_TOPIC
     elca_submission_topic: str = KafkaConfig.ELCA_SUBMISSION_TOPIC
     lcc_submission_topic: str = KafkaConfig.LCC_SUBMISSION_TOPIC
     slca_submission_topic: str = KafkaConfig.SLCA_SUBMISSION_TOPIC

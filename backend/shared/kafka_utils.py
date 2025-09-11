@@ -13,7 +13,8 @@ class KafkaConfig:
     REQUEST_TIMEOUT         = int(os.getenv("KAFKA_REQUEST_TIMEOUT", "30000"))
 
     # Submission Topics (Services consume from these)
-    RESILIENCE_SUBMISSION_TOPIC         = os.getenv("RESILIENCE_RESULTS_TOPIC", "resilience-submissions")
+    RESILIENCE_SUBMISSION_TOPIC         = os.getenv("RESILIENCE_SUBMISSION_TOPIC", "resilience-submissions")
+    SUSTAINABILITY_SUBMISSION_TOPIC     = os.getenv("SUSTAINABILITY_SUBMISSION_TOPIC", "sustainability-submissions")
     ELCA_SUBMISSION_TOPIC               = os.getenv("ELCA_SUBMISSION_TOPIC", "elca-submissions")
     LCC_SUBMISSION_TOPIC                = os.getenv("LCC_SUBMISSION_TOPIC", "lcc-submissions")
     SLCA_SUBMISSION_TOPIC               = os.getenv("SLCA_SUBMISSION_TOPIC", "slca-submissions")
@@ -21,6 +22,7 @@ class KafkaConfig:
 
     # Score Topics (Services produce to these)
     RESILIENCE_SCORES_TOPIC             = os.getenv("RESILIENCE_SCORES_TOPIC", "resilience-scores")
+    SUSTAINABILITY_SCORES_TOPIC          = os.getenv("SUSTAINABILITY_SCORES_TOPIC", "sustainability-scores")
     ELCA_SCORES_TOPIC                   = os.getenv("ELCA_SCORES_TOPIC", "elca-scores")
     LCC_SCORES_TOPIC                    = os.getenv("LCC_SCORES_TOPIC", "lcc-scores")
     SLCA_SCORES_TOPIC                   = os.getenv("SLCA_SCORES_TOPIC", "slca-scores")

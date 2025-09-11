@@ -1,15 +1,15 @@
 import json
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Set
 from uuid import uuid4
 from enum import Enum
 
-from pydantic import BaseModel, ValidationError, Field
+from pydantic import BaseModel, ValidationError, Field, validator
 
 
 class LikelihoodLevel(str, Enum):
     RARE = "Rare"
-    UNLIKELY = "Unlikely"
+    UNLIKELY = "Unlikely" 
     POSSIBLE = "Possible"
     LIKELY = "Likely"
     ALMOST_CERTAIN = "Almost Certain"
@@ -23,13 +23,25 @@ class ImpactLevel(str, Enum):
     CATASTROPHIC = "Catastrophic"
 
 
+class ResilienceDomain(str, Enum):
+    ROBUSTNESS = "Robustness"
+    REDUNDANCY = "Redundancy"
+    ADAPTABILITY = "Adaptability"
+    RAPIDITY = "Rapidity"
+    PHM = "PHM"
+    SECURITY = "Security"
+
+
 class ScenarioAssessment(BaseModel):
     likelihood: LikelihoodLevel
     impact: ImpactLevel
+    notes: Optional[str] = Field(None, description="Additional notes or context")
+    confidence: Optional[int] = Field(None, ge=1, le=5, description="Confidence level (1-5)")
 
 
 class DomainAssessment(BaseModel):
     scenarios: Dict[str, ScenarioAssessment]
+    custom_scenarios: Optional[Dict[str, str]] = Field(default_factory=dict, description="User-defined scenarios")
 
 
 class ResilienceInput(BaseModel):
@@ -48,42 +60,87 @@ class ResilienceResult(BaseModel):
     riskMetrics: Dict[str, Any]
     timestamp: datetime
     processingTimeMs: float
+    recommendations: Optional[List[str]] = Field(default_factory=list)
 
 
 class ResilienceScenarios(BaseModel):
     scenarios: Dict[str, List[str]]
+    domain_descriptions: Dict[str, str]
+    scenario_categories: Dict[str, List[str]]
 
 
-# Resilience scenarios configuration
+# Enhanced resilience scenarios configuration with original domains only
 RESILIENCE_SCENARIOS = {
-    'Robustness': [
-        "Core model parameter drifts or becomes invalid",
-        "Input data exceeds expected ranges",
-        "Critical compute module crashes under load",
-        "Required external service becomes unavailable"
-    ],
-    'Redundancy': [
-        "Primary data channel fails",
-        "Backup resources are offline when needed",
-        "Multiple parallel processes stall simultaneously",
-        "Failover logic does not trigger as designed"
-    ],
-    'Adaptability': [
-        "System must incorporate a new asset type on‑the‑fly",
-        "An unforeseen failure mode emerges",
-        "Configuration parameters change unexpectedly",
-        "Operational conditions shift beyond original design"
-    ],
-    'Rapidity': [
-        "Anomaly detection delayed beyond alert threshold",
-        "Recovery routines restart slower than required",
-        "Operator notifications delayed by system lag",
-        "Corrective actions cannot be executed in time"
-    ],
-    'PHM': [
-        "Failure‑prediction accuracy degrades significantly",
-        "Remaining‑useful‑life estimates deviate widely",
-        "Maintenance recommendations cannot reach operators",
-        "Health‑monitoring data streams are interrupted"
-    ]
+    'Robustness': {
+        'description': 'System ability to withstand stresses and continue operating',
+        'scenarios': [
+            "Core model parameter drifts or becomes invalid",
+            "Input data exceeds expected ranges",
+            "Critical compute module crashes under load",
+            "Required external service becomes unavailable"
+        ]
+    },
+    'Redundancy': {
+        'description': 'System ability to maintain operations through backup resources',
+        'scenarios': [
+            "Primary data channel fails",
+            "Backup resources are offline when needed",
+            "Multiple parallel processes stall simultaneously",
+            "Failover logic does not trigger as designed"
+        ]
+    },
+    'Adaptability': {
+        'description': 'System ability to adjust to changing conditions and requirements',
+        'scenarios': [
+            "System must incorporate a new asset type on-the-fly",
+            "An unforeseen failure mode emerges",
+            "Configuration parameters change unexpectedly",
+            "Operational conditions shift beyond original design"
+        ]
+    },
+    'Rapidity': {
+        'description': 'System ability to respond quickly to disruptions',
+        'scenarios': [
+            "Anomaly detection delayed beyond alert threshold",
+            "Recovery routines restart slower than required",
+            "Operator notifications delayed by system lag",
+            "Corrective actions cannot be executed in time"
+        ]
+    },
+    'PHM': {
+        'description': 'Prognostics and Health Management capabilities',
+        'scenarios': [
+            "Failure-prediction accuracy degrades significantly",
+            "Remaining-useful-life estimates deviate widely",
+            "Maintenance recommendations cannot reach operators",
+            "Health-monitoring data streams are interrupted"
+        ]
+    }
 }
+
+
+class DomainSelectionHelper:
+    """Helper class for managing domain selection and configuration"""
+    
+    @staticmethod
+    def get_available_domains() -> List[Dict[str, Any]]:
+        """Get list of available domains with descriptions"""
+        return [
+            {
+                'domain': domain.value,
+                'enum': domain,
+                'description': RESILIENCE_SCENARIOS[domain.value]['description'],
+                'scenario_count': len(RESILIENCE_SCENARIOS[domain.value]['scenarios'])
+            }
+            for domain in ResilienceDomain
+            if domain.value in RESILIENCE_SCENARIOS
+        ]
+    
+    @staticmethod
+    def get_scenarios_for_domains(selected_domains: Set[ResilienceDomain]) -> Dict[str, List[str]]:
+        """Get scenarios for selected domains"""
+        return {
+            domain.value: RESILIENCE_SCENARIOS[domain.value]['scenarios']
+            for domain in selected_domains
+            if domain.value in RESILIENCE_SCENARIOS
+        }

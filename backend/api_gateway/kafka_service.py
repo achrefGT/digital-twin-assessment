@@ -87,18 +87,20 @@ class KafkaService:
         self._processing_assessments: set[str] = set()  # Track assessments currently being processed
         self._message_cache = {}  # Cache recent messages to avoid duplicate processing
         
-        # Domain to topic mapping for form submissions
+        # Domain to topic mapping for form submissions - UPDATED to include sustainability
         self.submission_topic_mapping = {
             "resilience": settings.resilience_submission_topic,
+            "sustainability": settings.sustainability_submission_topic,  
             "elca": settings.elca_submission_topic,
             "lcc": settings.lcc_submission_topic,
             "slca": settings.slca_submission_topic,
             "human_centricity": settings.human_centricity_submission_topic,
         }
         
-        # Topics to consume score updates from
+        # Topics to consume score updates from - UPDATED to include sustainability
         self.score_topics = [
             settings.resilience_scores_topic,
+            settings.sustainability_scores_topic, 
             settings.elca_scores_topic, 
             settings.lcc_scores_topic,
             settings.slca_scores_topic,
@@ -592,6 +594,24 @@ class KafkaService:
             "connection_manager_stats": stats,
             "currently_processing": assessment_id in self._processing_assessments
         }
+    
+    async def _send_error_websocket_notification(self, assessment_id: str, domain: str, error_message: str):
+        """Send error notification via WebSocket"""
+        try:
+            error_notification = {
+                "type": "error",
+                "timestamp": datetime.utcnow().isoformat(),
+                "assessment_id": assessment_id,
+                "domain": domain,
+                "error_message": error_message,
+                "error_type": "processing_error"
+            }
+            
+            await connection_manager.send_to_assessment(assessment_id, error_notification)
+            logger.info(f"[WEBSOCKET_DEBUG] Error notification sent for assessment {assessment_id}")
+            
+        except Exception as e:
+            logger.error(f"Failed to send error WebSocket notification: {e}")
 
     
     async def _publish_domain_events(self, assessment_id: str, domain: str, score_value: float,

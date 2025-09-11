@@ -11,6 +11,7 @@ import { getLCCSteps } from "@/components/forms/LCCFormSteps"
 import { getELCASteps } from "@/components/forms/ELCAFormSteps"
 import { getHumanCentricitySteps } from "@/components/forms/HumanCentricityFormSteps"
 import { getResilienceSteps } from "@/components/forms/ResilienceFormSteps"
+import { getSustainabilitySteps } from "@/components/forms/SustainabilityFormSteps"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
@@ -20,6 +21,7 @@ const domainInfo = {
   lcc: { title: "Life Cycle Costing", gradient: "from-purple-500 to-violet-600", bgColor: "bg-purple-50", borderColor: "border-purple-200" },
   elca: { title: "Environmental Life Cycle Assessment", gradient: "from-green-500 to-emerald-600", bgColor: "bg-green-50", borderColor: "border-green-200" },
   human_centricity: { title: "Human Centricity Assessment", gradient: "from-blue-500 to-cyan-600", bgColor: "bg-blue-50", borderColor: "border-blue-200" },
+  sustainability: { title: "Sustainability", gradient: "from-green-500 to-emerald-600", bgColor: "bg-green-50", borderColor: "border-green-200"},
   resilience: { title: "Resilience Assessment", gradient: "from-purple-500 to-violet-600", bgColor: "bg-purple-50", borderColor: "border-purple-200" }
 }
 
@@ -284,6 +286,8 @@ const Assessment = () => {
         return getHumanCentricitySteps()
       case 'resilience':
         return getResilienceSteps()
+      case 'sustainability':          
+        return getSustainabilitySteps()
       default:
         return []
     }
@@ -324,8 +328,15 @@ const Assessment = () => {
                   </div>
                   {info.title}
                 </CardTitle>
-                <CardDescription className="text-base text-gray-600 leading-relaxed">
-                  Complete this comprehensive assessment to evaluate your digital twin system across {domain === 'elca' ? 'environmental' : domain === 'slca' ? 'social' : domain === 'lcc' ? 'economic' : domain === 'human_centricity' ? 'human-centric' : 'resilience'} parameters
+                <CardDescription>
+                  Complete this comprehensive assessment to evaluate your digital twin system across {
+                    domain === 'elca' ? 'environmental' :
+                    domain === 'slca' ? 'social' :
+                    domain === 'lcc' ? 'economic' :
+                    domain === 'human_centricity' ? 'human-centric' :
+                    domain === 'resilience' ? 'resilience' :
+                    domain === 'sustainability' ? 'sustainability ' : 'parameters'
+                  } parameters
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-8">
