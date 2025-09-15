@@ -1,6 +1,6 @@
 import asyncio
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, List, Optional, Set
 import logging
 
 from shared.kafka_utils import create_kafka_consumer, create_kafka_producer
@@ -15,9 +15,9 @@ from shared.models.exceptions import (
 from .models import (
     HumanCentricityInput, HumanCentricityResult, LikertResponse, 
     CybersicknessResponse, WorkloadMetrics, EmotionalResponse, 
-    PerformanceMetrics
+    PerformanceMetrics, HumanCentricityDomain, DomainSelectionHelper
 )
-from .score import calculate_human_centricity_score
+from .score import calculate_human_centricity_score_with_domains
 from .database import DatabaseManager
 from .config import settings
 
@@ -152,13 +152,11 @@ class HumanCentricityKafkaHandler:
             # Calculate human centricity scores
             logger.debug("Calculating human centricity scores")
             print(f"DEBUG: About to calculate scores for assessment {assessment_id}")
-            scores = calculate_human_centricity_score(
-                human_centricity_input.ux_trust_responses,
-                human_centricity_input.workload_metrics,
-                human_centricity_input.cybersickness_responses,
-                human_centricity_input.emotional_response,
-                human_centricity_input.performance_metrics
-            )
+            print(f"DEBUG: Selected domains: {[d.value for d in human_centricity_input.selected_domains]}")
+            
+            scores = calculate_human_centricity_score_with_domains(human_centricity_input)
+            print(f"DEBUG: Using domain-based scoring with {len(human_centricity_input.selected_domains)} domains")
+            
             logger.debug(f"Calculated scores: {scores}")
             print(f"DEBUG: Calculated scores keys: {list(scores.keys()) if scores else 'None'}")
             
@@ -174,6 +172,7 @@ class HumanCentricityKafkaHandler:
                 assessmentId=human_centricity_input.assessmentId,
                 overallScore=scores['overall_score'],
                 domainScores=scores['domain_scores'],
+                selectedDomains=[d.value for d in human_centricity_input.selected_domains],
                 detailedMetrics=scores['detailed_metrics'],
                 timestamp=datetime.utcnow(),
                 processingTimeMs=processing_time
@@ -191,6 +190,7 @@ class HumanCentricityKafkaHandler:
                 "system_name": human_centricity_input.systemName,
                 "overall_score": result.overallScore,
                 "domain_scores": result.domainScores,
+                "selected_domains": result.selectedDomains,
                 "detailed_metrics": result.detailedMetrics,
                 "raw_assessments": human_centricity_input,  # Database will handle JSON serialization
                 "metadata": human_centricity_input.metadata,  # Database will handle JSON serialization
@@ -204,7 +204,7 @@ class HumanCentricityKafkaHandler:
             logger.debug("Successfully saved to database")
             print(f"DEBUG: Successfully saved assessment {assessment_id} to database")
             
-            # Publish success event
+            # Publish success event - SIMPLIFIED to match resilience structure
             logger.debug("Publishing domain scored event")
             print(f"DEBUG: Publishing success event for assessment {assessment_id}")
             await self._publish_domain_scored_event(result)
@@ -236,7 +236,7 @@ class HumanCentricityKafkaHandler:
             await self._publish_error_event(assessment_id, "processing_error", str(e))
     
     def _parse_human_centricity_input(self, form_submission) -> HumanCentricityInput:
-        """Parse form submission into human centricity input model"""
+        """Parse form submission into human centricity input model with domain selection support"""
         try:
             logger.debug(f"Parsing form submission: {form_submission}")
             print(f"DEBUG: _parse_human_centricity_input called with type: {type(form_submission)}")
@@ -248,99 +248,84 @@ class HumanCentricityKafkaHandler:
             print(f"DEBUG: form_data type: {type(form_data)}")
             print(f"DEBUG: form_data keys: {list(form_data.keys()) if isinstance(form_data, dict) else 'Not a dict'}")
             
-            # Updated validation for the new structure
-            # We can accept multiple naming conventions for flexibility
-            required_fields_new = ['core_usability_responses', 'trust_transparency_responses', 'workload_metrics', 
-                                 'cybersickness_responses', 'emotional_response', 'performance_metrics']
-            required_fields_alt = ['section1_responses', 'section2_responses', 'workload_metrics', 
-                                 'cybersickness_responses', 'emotional_response', 'performance_metrics']
-            required_fields_legacy = ['ux_trust_responses', 'workload_metrics', 'cybersickness_responses', 
-                                    'emotional_response', 'performance_metrics']
+            # Parse selected domains (new feature)
+            selected_domains = set()
+            if 'selected_domains' in form_data:
+                domain_list = form_data['selected_domains']
+                print(f"DEBUG: Found selected_domains: {domain_list}")
+                try:
+                    for domain_str in domain_list:
+                        domain_enum = HumanCentricityDomain(domain_str)
+                        selected_domains.add(domain_enum)
+                    print(f"DEBUG: Parsed {len(selected_domains)} selected domains")
+                except ValueError as e:
+                    logger.error(f"Invalid domain in selection: {e}")
+                    print(f"DEBUG: Invalid domain in selection: {e}")
+                    raise InvalidFormDataException(f"Invalid domain in selection: {e}")
+            else:
+                print(f"DEBUG: No selected_domains found - checking for legacy data structure")
+                # Auto-detect domains based on available data for backward compatibility
+                selected_domains = self._detect_legacy_domains(form_data)
+                print(f"DEBUG: Auto-detected legacy domains: {[d.value for d in selected_domains]}")
             
-            has_new_structure = all(field in form_data for field in required_fields_new)
-            has_alt_structure = all(field in form_data for field in required_fields_alt)
-            has_legacy_structure = all(field in form_data for field in required_fields_legacy)
+            # Validate that form data contains required fields for selected domains
+            if selected_domains:
+                missing_fields = DomainSelectionHelper.validate_domain_data(selected_domains, form_data)
+                if missing_fields:
+                    logger.error(f"Missing required fields for selected domains: {missing_fields}")
+                    print(f"DEBUG: ❌ Missing fields: {missing_fields}")
+                    raise InvalidFormDataException(f"Missing required fields for selected domains: {missing_fields}")
+            else:
+                raise InvalidFormDataException("No domains selected or detected for assessment")
             
-            if not (has_new_structure or has_alt_structure or has_legacy_structure):
-                missing_new = [f for f in required_fields_new if f not in form_data]
-                missing_alt = [f for f in required_fields_alt if f not in form_data]
-                missing_legacy = [f for f in required_fields_legacy if f not in form_data]
-                
-                logger.error(f"Form data missing required fields. New: {missing_new}, Alt: {missing_alt}, Legacy: {missing_legacy}")
-                print(f"DEBUG: ❌ Missing fields - New: {missing_new}, Alt: {missing_alt}, Legacy: {missing_legacy}")
-                print(f"DEBUG: Available keys: {list(form_data.keys()) if isinstance(form_data, dict) else 'N/A'}")
-                raise InvalidFormDataException("Form data missing required fields for human centricity assessment")
+            # Parse domain-specific data
+            parsed_data = {
+                'assessmentId': form_submission.assessment_id,
+                'userId': form_submission.user_id,
+                'systemName': form_submission.system_name,
+                'selected_domains': selected_domains,
+                'submittedAt': datetime.utcnow(),
+                'metadata': form_submission.metadata or {}
+            }
             
-            try:
-                # Parse UX/Trust responses - handle multiple naming conventions
-                if has_new_structure:
-                    # New structure: core_usability_responses and trust_transparency_responses
-                    core_usability_data = form_data['core_usability_responses']
-                    trust_transparency_data = form_data['trust_transparency_responses']
-                    
-                    core_usability_responses = [LikertResponse(**response) for response in core_usability_data]
-                    trust_transparency_responses = [LikertResponse(**response) for response in trust_transparency_data]
-                    
-                    # Combine for processing
-                    ux_trust_responses = core_usability_responses + trust_transparency_responses
-                    
-                    print(f"DEBUG: Parsed new structure - Core Usability: {len(core_usability_responses)}, Trust/Transparency: {len(trust_transparency_responses)}")
-                    
-                elif has_alt_structure:
-                    # Alternative structure: section1_responses and section2_responses
-                    section1_data = form_data['section1_responses']
-                    section2_data = form_data['section2_responses']
-                    
-                    section1_responses = [LikertResponse(**response) for response in section1_data]
-                    section2_responses = [LikertResponse(**response) for response in section2_data]
-                    
-                    # Combine for processing
-                    ux_trust_responses = section1_responses + section2_responses
-                    
-                    print(f"DEBUG: Parsed alt structure - Section 1: {len(section1_responses)}, Section 2: {len(section2_responses)}")
-                    
-                else:
-                    # Legacy structure: combined ux_trust_responses
-                    ux_trust_data = form_data['ux_trust_responses']
-                    ux_trust_responses = [LikertResponse(**response) for response in ux_trust_data]
-                    
-                    print(f"DEBUG: Parsed legacy structure - Combined UX/Trust: {len(ux_trust_responses)}")
+            # Parse each selected domain's data
+            for domain in selected_domains:
+                if domain == HumanCentricityDomain.CORE_USABILITY:
+                    if 'core_usability_responses' in form_data:
+                        responses_data = form_data['core_usability_responses']
+                        parsed_data['core_usability_responses'] = [LikertResponse(**r) for r in responses_data]
+                        print(f"DEBUG: Parsed {len(parsed_data['core_usability_responses'])} core usability responses")
                 
-                # Parse workload metrics (same for both structures)
-                workload_metrics = WorkloadMetrics(**form_data['workload_metrics'])
+                elif domain == HumanCentricityDomain.TRUST_TRANSPARENCY:
+                    if 'trust_transparency_responses' in form_data:
+                        responses_data = form_data['trust_transparency_responses']
+                        parsed_data['trust_transparency_responses'] = [LikertResponse(**r) for r in responses_data]
+                        print(f"DEBUG: Parsed {len(parsed_data['trust_transparency_responses'])} trust transparency responses")
                 
-                # Parse cybersickness responses (same for both structures)
-                cybersickness_data = form_data['cybersickness_responses']
-                cybersickness_responses = [CybersicknessResponse(**response) for response in cybersickness_data]
+                elif domain == HumanCentricityDomain.WORKLOAD_COMFORT:
+                    if 'workload_metrics' in form_data:
+                        parsed_data['workload_metrics'] = WorkloadMetrics(**form_data['workload_metrics'])
+                        print(f"DEBUG: Parsed workload metrics")
+                    if 'cybersickness_responses' in form_data:
+                        responses_data = form_data['cybersickness_responses']
+                        parsed_data['cybersickness_responses'] = [CybersicknessResponse(**r) for r in responses_data]
+                        print(f"DEBUG: Parsed {len(parsed_data['cybersickness_responses'])} cybersickness responses")
                 
-                # Parse emotional response (same for both structures)
-                emotional_response = EmotionalResponse(**form_data['emotional_response'])
+                elif domain == HumanCentricityDomain.EMOTIONAL_RESPONSE:
+                    if 'emotional_response' in form_data:
+                        parsed_data['emotional_response'] = EmotionalResponse(**form_data['emotional_response'])
+                        print(f"DEBUG: Parsed emotional response")
                 
-                # Parse performance metrics (same for both structures)
-                performance_metrics = PerformanceMetrics(**form_data['performance_metrics'])
-                
-                human_centricity_input = HumanCentricityInput(
-                    assessmentId=form_submission.assessment_id,
-                    userId=form_submission.user_id,
-                    systemName=form_submission.system_name,
-                    ux_trust_responses=ux_trust_responses,
-                    workload_metrics=workload_metrics,
-                    cybersickness_responses=cybersickness_responses,
-                    emotional_response=emotional_response,
-                    performance_metrics=performance_metrics,
-                    submittedAt=datetime.utcnow(),  # Use current time since we're processing now
-                    metadata=form_submission.metadata or {}
-                )
-                
-                print(f"DEBUG: Successfully created HumanCentricityInput - UX/Trust responses: {len(ux_trust_responses)}")
-                
-            except Exception as e:
-                logger.error(f"Failed to parse human centricity components: {e}")
-                print(f"DEBUG: ❌ Component parsing failed: {type(e).__name__}: {e}")
-                raise InvalidFormDataException(f"Failed to parse human centricity components: {e}")
+                elif domain == HumanCentricityDomain.PERFORMANCE:
+                    if 'performance_metrics' in form_data:
+                        parsed_data['performance_metrics'] = PerformanceMetrics(**form_data['performance_metrics'])
+                        print(f"DEBUG: Parsed performance metrics")
+            
+            human_centricity_input = HumanCentricityInput(**parsed_data)
             
             logger.debug(f"Created HumanCentricityInput: {human_centricity_input}")
             print(f"DEBUG: ✅ Successfully created HumanCentricityInput for assessment {human_centricity_input.assessmentId}")
+            print(f"DEBUG: Selected domains: {[d.value for d in human_centricity_input.selected_domains]}")
             return human_centricity_input
             
         except Exception as e:
@@ -352,12 +337,35 @@ class HumanCentricityKafkaHandler:
             traceback.print_exc()
             raise InvalidFormDataException(f"Failed to parse human centricity form data: {e}")
     
+    def _detect_legacy_domains(self, form_data: Dict[str, Any]) -> Set[HumanCentricityDomain]:
+        """Auto-detect domains based on available data for backward compatibility"""
+        detected_domains = set()
+        
+        # Check for domain-specific data
+        if 'core_usability_responses' in form_data:
+            detected_domains.add(HumanCentricityDomain.CORE_USABILITY)
+        
+        if 'trust_transparency_responses' in form_data:
+            detected_domains.add(HumanCentricityDomain.TRUST_TRANSPARENCY)
+        
+        if 'workload_metrics' in form_data and 'cybersickness_responses' in form_data:
+            detected_domains.add(HumanCentricityDomain.WORKLOAD_COMFORT)
+        
+        if 'emotional_response' in form_data:
+            detected_domains.add(HumanCentricityDomain.EMOTIONAL_RESPONSE)
+        
+        if 'performance_metrics' in form_data:
+            detected_domains.add(HumanCentricityDomain.PERFORMANCE)
+        
+        return detected_domains
+    
     async def _publish_domain_scored_event(self, result: HumanCentricityResult):
-        """Publish domain scored event"""
+        """Publish simplified domain scored event to match resilience service structure"""
         try:
             logger.debug(f"Publishing domain scored event for {result.assessmentId}")
-            print(f"DEBUG: _publish_domain_scored_event called for {result.assessmentId}")
+            print(f"DEBUG: _publish_domain_scored_event called - assessment_id: {result.assessmentId}")
             
+            # Create simplified event structure matching resilience service
             event = EventFactory.create_domain_scored_event(
                 assessment_id=result.assessmentId,
                 domain="human_centricity",
@@ -370,12 +378,12 @@ class HumanCentricityKafkaHandler:
                 processing_time_ms=result.processingTimeMs
             )
             
-            logger.debug(f"Created event: {event}")
-            print(f"DEBUG: Created domain scored event: {event.dict()}")
+            logger.debug(f"Created simplified domain scored event: {event}")
+            print(f"DEBUG: Created simplified domain scored event with overall score: {result.overallScore}")
             
             await self.producer.send(settings.human_centricity_scores_topic, event.dict())
-            logger.info(f"Published domain scored event for assessment {result.assessmentId}")
-            print(f"DEBUG: ✅ Successfully published domain scored event to {settings.human_centricity_scores_topic}")
+            logger.info(f"Published simplified domain scored event for assessment {result.assessmentId}")
+            print(f"DEBUG: ✅ Successfully published simplified domain scored event to {settings.human_centricity_scores_topic}")
             
         except Exception as e:
             logger.error(f"Failed to publish domain scored event: {e}")

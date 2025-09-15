@@ -417,9 +417,6 @@ def _can_submit_domain(progress: AssessmentProgress, domain: str) -> bool:
     domain_map = {
         "resilience": not progress.resilience_submitted,
         "sustainability": not progress.sustainability_submitted,
-        "slca": not progress.slca_submitted,
-        "lcc": not progress.lcc_submitted,
-        "elca": not progress.elca_submitted,
         "human_centricity": not progress.human_centricity_submitted
     }
     return domain_map.get(domain, False)
@@ -429,12 +426,6 @@ def _mark_domain_complete(progress: AssessmentProgress, domain: str) -> Assessme
     """Mark a domain as complete and update progress status"""
     if domain == "resilience":
         progress.resilience_submitted = True
-    elif domain == "slca":
-        progress.slca_submitted = True
-    elif domain == "elca":
-        progress.elca_submitted = True
-    elif domain == "lcc":
-        progress.lcc_submitted = True
     elif domain == "human_centricity":
         progress.human_centricity_submitted = True
     elif domain == "sustainability":
@@ -450,9 +441,6 @@ def _mark_domain_complete(progress: AssessmentProgress, domain: str) -> Assessme
 def _calculate_status(progress: AssessmentProgress) -> AssessmentStatus:
     if (
         progress.resilience_submitted
-        and progress.slca_submitted
-        and progress.lcc_submitted
-        and progress.elca_submitted
         and progress.human_centricity_submitted
         and progress.sustainability_submitted
     ):
@@ -461,12 +449,6 @@ def _calculate_status(progress: AssessmentProgress) -> AssessmentStatus:
         return AssessmentStatus.SUSTAINABILITY_COMPLETE
     elif progress.human_centricity_submitted:
         return AssessmentStatus.HUMAN_CENTRICITY_COMPLETE
-    elif progress.slca_submitted:
-        return AssessmentStatus.SLCA_COMPLETE
-    elif progress.elca_submitted:
-        return AssessmentStatus.ELCA_COMPLETE
-    elif progress.lcc_submitted:
-        return AssessmentStatus.LCC_COMPLETE
     elif progress.resilience_submitted:
         return AssessmentStatus.RESILIENCE_COMPLETE
     else:
@@ -480,59 +462,20 @@ def _is_valid_status_transition(current: AssessmentStatus, new: AssessmentStatus
         AssessmentStatus.STARTED: [
             AssessmentStatus.RESILIENCE_COMPLETE,
             AssessmentStatus.SUSTAINABILITY_COMPLETE,
-            AssessmentStatus.SLCA_COMPLETE,
-            AssessmentStatus.ELCA_COMPLETE,
-            AssessmentStatus.LCC_COMPLETE,
             AssessmentStatus.HUMAN_CENTRICITY_COMPLETE,
             AssessmentStatus.PROCESSING,
             AssessmentStatus.FAILED
         ],
         AssessmentStatus.RESILIENCE_COMPLETE: [
-            AssessmentStatus.SLCA_COMPLETE,
-            AssessmentStatus.ELCA_COMPLETE,
-            AssessmentStatus.LCC_COMPLETE,
             AssessmentStatus.HUMAN_CENTRICITY_COMPLETE,
             AssessmentStatus.ALL_COMPLETE,
             AssessmentStatus.PROCESSING,
             AssessmentStatus.SUSTAINABILITY_COMPLETE,
-            AssessmentStatus.FAILED
-        ],
-        AssessmentStatus.ELCA_COMPLETE: [
-            AssessmentStatus.SLCA_COMPLETE,
-            AssessmentStatus.RESILIENCE_COMPLETE,
-            AssessmentStatus.SUSTAINABILITY_COMPLETE,
-            AssessmentStatus.LCC_COMPLETE,
-            AssessmentStatus.HUMAN_CENTRICITY_COMPLETE,
-            AssessmentStatus.ALL_COMPLETE,
-            AssessmentStatus.PROCESSING,
-            AssessmentStatus.FAILED
-        ],
-        AssessmentStatus.SLCA_COMPLETE: [
-            AssessmentStatus.RESILIENCE_COMPLETE,
-            AssessmentStatus.SUSTAINABILITY_COMPLETE,
-            AssessmentStatus.LCC_COMPLETE,
-            AssessmentStatus.ELCA_COMPLETE,
-            AssessmentStatus.HUMAN_CENTRICITY_COMPLETE,
-            AssessmentStatus.ALL_COMPLETE,
-            AssessmentStatus.PROCESSING,
-            AssessmentStatus.FAILED
-        ],
-        AssessmentStatus.LCC_COMPLETE: [
-            AssessmentStatus.RESILIENCE_COMPLETE,
-            AssessmentStatus.SUSTAINABILITY_COMPLETE,
-            AssessmentStatus.HUMAN_CENTRICITY_COMPLETE,
-            AssessmentStatus.ELCA_COMPLETE,
-            AssessmentStatus.SLCA_COMPLETE,
-            AssessmentStatus.ALL_COMPLETE,
-            AssessmentStatus.PROCESSING,
             AssessmentStatus.FAILED
         ],
         AssessmentStatus.HUMAN_CENTRICITY_COMPLETE: [
             AssessmentStatus.RESILIENCE_COMPLETE,
             AssessmentStatus.SUSTAINABILITY_COMPLETE,
-            AssessmentStatus.SLCA_COMPLETE,
-            AssessmentStatus.ELCA_COMPLETE,
-            AssessmentStatus.LCC_COMPLETE,
             AssessmentStatus.ALL_COMPLETE,
             AssessmentStatus.PROCESSING,
             AssessmentStatus.FAILED
@@ -540,9 +483,6 @@ def _is_valid_status_transition(current: AssessmentStatus, new: AssessmentStatus
         AssessmentStatus.SUSTAINABILITY_COMPLETE: [
             AssessmentStatus.RESILIENCE_COMPLETE,
             AssessmentStatus.HUMAN_CENTRICITY_COMPLETE,
-            AssessmentStatus.SLCA_COMPLETE,
-            AssessmentStatus.ELCA_COMPLETE,
-            AssessmentStatus.LCC_COMPLETE,
             AssessmentStatus.ALL_COMPLETE,
             AssessmentStatus.PROCESSING,
             AssessmentStatus.FAILED
@@ -669,31 +609,6 @@ async def get_assessment_domain_scores(
                 "insights": _generate_human_centricity_insights(hc_result.get("overall_score"), hc_result.get("domain_scores", {}))
             }
     
-    # For SLCA, ELCA, LCC - add placeholders since their specific service URLs aren't clear from the code
-    if progress.slca_submitted:
-        domain_scores["domain_results"]["slca"] = {
-            "domain_name": "Social Life Cycle Assessment",
-            "status": "completed",
-            "overall_score": progress.domain_scores.get("slca"),
-            "message": "Detailed SLCA results available via dedicated service endpoint"
-        }
-    
-    if progress.elca_submitted:
-        domain_scores["domain_results"]["elca"] = {
-            "domain_name": "Environmental Life Cycle Assessment", 
-            "status": "completed",
-            "overall_score": progress.domain_scores.get("elca"),
-            "message": "Detailed ELCA results available via dedicated service endpoint"
-        }
-    
-    if progress.lcc_submitted:
-        domain_scores["domain_results"]["lcc"] = {
-            "domain_name": "Life Cycle Costing",
-            "status": "completed", 
-            "overall_score": progress.domain_scores.get("lcc"),
-            "message": "Detailed LCC results available via dedicated service endpoint"
-        }
-    
     # Add summary statistics
     completed_scores = [result.get("overall_score") for result in domain_scores["domain_results"].values() 
                        if result.get("overall_score") is not None]
@@ -712,13 +627,10 @@ async def get_assessment_domain_scores(
 
 def _calculate_completion_percentage(progress: AssessmentProgress) -> float:
     """Calculate percentage of domains completed"""
-    total_domains = 6
+    total_domains = 3
     completed = sum([
         progress.resilience_submitted,
         progress.sustainability_submitted, 
-        progress.slca_submitted,
-        progress.elca_submitted,
-        progress.lcc_submitted,
         progress.human_centricity_submitted
     ])
     return (completed / total_domains) * 100
@@ -731,12 +643,6 @@ def _get_completed_domains(progress: AssessmentProgress) -> List[str]:
         completed.append("resilience")
     if progress.sustainability_submitted:
         completed.append("sustainability")
-    if progress.slca_submitted:
-        completed.append("slca")
-    if progress.elca_submitted:
-        completed.append("elca") 
-    if progress.lcc_submitted:
-        completed.append("lcc")
     if progress.human_centricity_submitted:
         completed.append("human_centricity")
     return completed
@@ -749,12 +655,6 @@ def _get_pending_domains(progress: AssessmentProgress) -> List[str]:
         pending.append("resilience")
     if not progress.sustainability_submitted:
         pending.append("sustainability")
-    if not progress.slca_submitted:
-        pending.append("slca")
-    if not progress.elca_submitted:
-        pending.append("elca")
-    if not progress.lcc_submitted:
-        pending.append("lcc")
     if not progress.human_centricity_submitted:
         pending.append("human_centricity")
     return pending

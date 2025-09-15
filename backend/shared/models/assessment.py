@@ -8,9 +8,6 @@ class AssessmentStatus(str, Enum):
     STARTED = "started"
     RESILIENCE_COMPLETE = "resilience_complete"
     SUSTAINABILITY_COMPLETE = "sustainability_complete"
-    SLCA_COMPLETE = "slca_complete" 
-    ELCA_COMPLETE = "elca_complete" 
-    LCC_COMPLETE = "lcc_complete" 
     HUMAN_CENTRICITY_COMPLETE = "human_centricity_complete"
     ALL_COMPLETE = "all_complete"
     PROCESSING = "processing"
@@ -28,9 +25,6 @@ class AssessmentProgress(BaseModel):
     # Domain completion flags
     resilience_submitted: bool = False
     sustainability_submitted: bool = False
-    slca_submitted: bool = False
-    elca_submitted: bool = False
-    lcc_submitted: bool = False
     human_centricity_submitted: bool = False
     
     # Timestamps
@@ -48,6 +42,6 @@ class FormSubmissionRequest(BaseModel):
     assessment_id: Optional[str] = None
     user_id: Optional[str] = None
     system_name: Optional[str] = None
-    domain: str  # resilience, elca, slca, lcc, human_centricity
+    domain: str  # resilience, sustainability, human_centricity
     form_data: Dict[str, Any]
     metadata: Dict[str, Any] = Field(default_factory=dict)

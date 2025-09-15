@@ -1,5 +1,5 @@
 import numpy as np
-from typing import Dict, Any
+from typing import Dict, Any, List, Union
 import logging
 
 from shared.models.exceptions import ScoringException
@@ -16,50 +16,67 @@ logger = logging.getLogger(__name__)
 
 
 def calculate_sustainability_score(
-    environmental: EnvironmentalAssessment,
-    economic: EconomicAssessment,
-    social: SocialAssessment
+    assessments: Dict[str, Union[EnvironmentalAssessment, EconomicAssessment, SocialAssessment]]
 ) -> Dict[str, Any]:
-    """Calculate sustainability scores from assessments"""
+    """
+    Calculate sustainability scores from selected domain assessments
+    
+    Args:
+        assessments: Dictionary containing selected domain assessments
+    
+    Returns:
+        Dictionary containing comprehensive scoring results
+    """
     
     try:
-        # Environmental scoring (0-100 scale)
-        environmental_score = _calculate_environmental_score(environmental)
+        if not assessments:
+            raise ScoringException("No assessments provided for scoring")
         
-        # Economic scoring (0-100 scale)
-        economic_score = _calculate_economic_score(economic)
+        dimension_scores = {}
+        detailed_metrics = {}
         
-        # Social scoring (0-100 scale)
-        social_score = _calculate_social_score(social)
+        # Process each provided domain
+        for domain_name, assessment in assessments.items():
+            try:
+                if domain_name == 'environmental' and isinstance(assessment, EnvironmentalAssessment):
+                    score = _calculate_environmental_score(assessment)
+                    details = _get_environmental_details(assessment)
+                elif domain_name == 'economic' and isinstance(assessment, EconomicAssessment):
+                    score = _calculate_economic_score(assessment)
+                    details = _get_economic_details(assessment)
+                elif domain_name == 'social' and isinstance(assessment, SocialAssessment):
+                    score = _calculate_social_score(assessment)
+                    details = _get_social_details(assessment)
+                else:
+                    logger.warning(f"Unknown or invalid domain assessment: {domain_name}")
+                    continue
+                
+                dimension_scores[domain_name] = round(score, 1)
+                detailed_metrics[domain_name] = details
+                logger.debug(f"Domain {domain_name}: score={score:.1f}")
+                
+            except Exception as e:
+                logger.error(f"Error processing domain {domain_name}: {e}")
+                raise ScoringException(f"Failed to process domain {domain_name}: {e}")
         
-        # Calculate weighted overall score
-        overall_score = (
-            environmental_score * settings.dimension_weight_environmental +
-            economic_score * settings.dimension_weight_economic +
-            social_score * settings.dimension_weight_social
-        )
+        if not dimension_scores:
+            raise ScoringException("No valid domains processed for scoring")
         
-        dimension_scores = {
-            'environmental': round(environmental_score, 1),
-            'economic': round(economic_score, 1),
-            'social': round(social_score, 1)
-        }
+        # Calculate weighted overall score based on available domains
+        overall_score = _calculate_weighted_overall_score(dimension_scores)
         
-        # Detailed metrics for analysis
+        # Generate sustainability metrics
         sustainability_metrics = {
-            'dimension_weights': {
-                'environmental': settings.dimension_weight_environmental,
-                'economic': settings.dimension_weight_economic,
-                'social': settings.dimension_weight_social
-            },
-            'environmental_details': _get_environmental_details(environmental),
-            'economic_details': _get_economic_details(economic),
-            'social_details': _get_social_details(social),
+            'selected_domains': list(dimension_scores.keys()),
+            'domain_count': len(dimension_scores),
+            'dimension_weights': _get_applied_weights(dimension_scores.keys()),
+            'detailed_metrics': detailed_metrics,
             'score_distribution': {
-                'min': min(environmental_score, economic_score, social_score),
-                'max': max(environmental_score, economic_score, social_score),
-                'std': round(np.std([environmental_score, economic_score, social_score]), 2)
-            }
+                'min': min(dimension_scores.values()) if dimension_scores else 0,
+                'max': max(dimension_scores.values()) if dimension_scores else 0,
+                'std': round(np.std(list(dimension_scores.values())), 2) if len(dimension_scores) > 1 else 0
+            },
+            'recommendations': _generate_recommendations(dimension_scores, detailed_metrics)
         }
         
         result = {
@@ -68,12 +85,127 @@ def calculate_sustainability_score(
             'sustainability_metrics': sustainability_metrics
         }
         
-        logger.info(f"Successfully calculated sustainability scores: overall={overall_score:.1f}")
+        logger.info(f"Successfully calculated sustainability scores: overall={overall_score:.1f}, domains={list(dimension_scores.keys())}")
         return result
         
+    except ScoringException:
+        raise
     except Exception as e:
         logger.error(f"Unexpected error in sustainability scoring: {e}")
         raise ScoringException(f"Unexpected error during scoring calculation: {e}")
+
+
+def _calculate_weighted_overall_score(dimension_scores: Dict[str, float]) -> float:
+    """Calculate weighted overall score based on available domains"""
+    
+    # Base weights from settings (assumes these exist)
+    base_weights = {
+        'environmental': getattr(settings, 'dimension_weight_environmental', 0.4),
+        'economic': getattr(settings, 'dimension_weight_economic', 0.3),
+        'social': getattr(settings, 'dimension_weight_social', 0.3)
+    }
+    
+    # Calculate total weight for selected domains
+    total_weight = sum(base_weights[domain] for domain in dimension_scores.keys() if domain in base_weights)
+    
+    if total_weight == 0:
+        # Fallback to equal weights if no base weights found
+        return np.mean(list(dimension_scores.values()))
+    
+    # Normalize weights for selected domains
+    normalized_weights = {
+        domain: base_weights[domain] / total_weight
+        for domain in dimension_scores.keys()
+        if domain in base_weights
+    }
+    
+    # Calculate weighted score
+    weighted_score = sum(
+        dimension_scores[domain] * normalized_weights.get(domain, 0)
+        for domain in dimension_scores.keys()
+    )
+    
+    return weighted_score
+
+
+def _get_applied_weights(selected_domains) -> Dict[str, float]:
+    """Get the normalized weights applied to selected domains"""
+    base_weights = {
+        'environmental': getattr(settings, 'dimension_weight_environmental', 0.4),
+        'economic': getattr(settings, 'dimension_weight_economic', 0.3),
+        'social': getattr(settings, 'dimension_weight_social', 0.3)
+    }
+    
+    total_weight = sum(base_weights[domain] for domain in selected_domains if domain in base_weights)
+    
+    if total_weight == 0:
+        return {domain: 1.0 / len(selected_domains) for domain in selected_domains}
+    
+    return {
+        domain: base_weights[domain] / total_weight
+        for domain in selected_domains
+        if domain in base_weights
+    }
+
+
+def _generate_recommendations(dimension_scores: Dict[str, float], detailed_metrics: Dict[str, Any]) -> List[str]:
+    """Generate recommendations based on assessment results"""
+    recommendations = []
+    
+    if not dimension_scores:
+        return recommendations
+    
+    # Find domains with lowest scores
+    min_score = min(dimension_scores.values())
+    weakest_domains = [domain for domain, score in dimension_scores.items() if score == min_score]
+    
+    # Overall recommendations based on score ranges
+    if min_score < 40:
+        recommendations.append(
+            f"Critical improvement needed in {', '.join(weakest_domains)} "
+            f"(score: {min_score}). Consider immediate action plans."
+        )
+    elif min_score < 60:
+        recommendations.append(
+            f"Significant improvements recommended for {', '.join(weakest_domains)} "
+            f"(score: {min_score})"
+        )
+    elif min_score < 80:
+        recommendations.append(
+            f"Moderate improvements possible in {', '.join(weakest_domains)} "
+            f"(score: {min_score})"
+        )
+    
+    # Domain-specific recommendations
+    for domain, score in dimension_scores.items():
+        if score < 70:  # Focus on lower-performing domains
+            if domain == 'environmental':
+                recommendations.append(
+                    "Environmental: Consider enhancing digital twin realism and expanding environmental monitoring scope"
+                )
+            elif domain == 'economic':
+                recommendations.append(
+                    "Economic: Review budget allocation and focus on demonstrable savings and performance improvements"
+                )
+            elif domain == 'social':
+                recommendations.append(
+                    "Social: Prioritize workforce development and enhance regional partnership opportunities"
+                )
+    
+    # If all domains selected and scores are good
+    if len(dimension_scores) == 3 and all(score >= 70 for score in dimension_scores.values()):
+        recommendations.append(
+            "Strong performance across all sustainability dimensions. Focus on maintaining and optimizing current practices."
+        )
+    
+    # If only partial assessment
+    missing_domains = set(['environmental', 'economic', 'social']) - set(dimension_scores.keys())
+    if missing_domains:
+        recommendations.append(
+            f"Consider completing assessment for {', '.join(missing_domains)} dimensions for comprehensive sustainability evaluation"
+        )
+    
+    return recommendations
 
 
 def _calculate_environmental_score(assessment: EnvironmentalAssessment) -> float:

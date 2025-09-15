@@ -77,7 +77,7 @@ export const OverallScoreDisplay: React.FC<OverallScoreDisplayProps> = ({
   domainScores,
   finalResults,
   completionPercentage = 0,
-  totalDomains = 5
+  totalDomains = 3
 }) => {
   const hasData = overallScore !== null && overallScore !== undefined
   const completedDomains = domainScores ? Object.keys(domainScores).length : 0
@@ -102,7 +102,7 @@ export const OverallScoreDisplay: React.FC<OverallScoreDisplayProps> = ({
       sustainability: {
         name: 'Sustainability',
         icon: Sparkles,
-        domains: ['elca', 'slca', 'lcc'],
+        domains: ['sustainability'],
         color: 'text-purple-600'
       }
     }

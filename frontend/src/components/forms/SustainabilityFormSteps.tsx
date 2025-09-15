@@ -4,9 +4,21 @@ import { Label } from "@/components/ui/label"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Leaf, DollarSign, Users } from "lucide-react"
-import ConversationalSustainabilityForm from "./ConversationalSustainabilityForm"
 
-const EnvironmentalStep = ({ onSubmit, initialData }: any) => {
+
+
+interface StepProps {
+  onSubmit: (data: any) => void
+  initialData?: any
+}
+
+interface StepDefinition {
+  title: string
+  description: string
+  component: React.ComponentType<StepProps>
+}
+
+const EnvironmentalStep: React.FC<StepProps> = ({ onSubmit, initialData }) => {
   const [environmental, setEnvironmental] = React.useState({
     digital_twin_realism: initialData?.environmental?.digital_twin_realism || "",
     flow_tracking: initialData?.environmental?.flow_tracking || "",
@@ -26,15 +38,16 @@ const EnvironmentalStep = ({ onSubmit, initialData }: any) => {
 
   const handleSubmit = () => {
     const finalData = {
-      environmental,
+      // only include the assessments map; no top-level environmental/economic duplication
       assessments: {
         ...initialData?.assessments,
-        Environmental: { data: environmental }
+        environmental: environmental
       }
     }
     console.log('DEBUG: Environmental step submitting:', finalData)
     onSubmit(finalData)
   }
+
 
   return (
     <div className="space-y-6">
@@ -147,7 +160,7 @@ const EnvironmentalStep = ({ onSubmit, initialData }: any) => {
   )
 }
 
-const EconomicStep = ({ onSubmit, initialData }: any) => {
+const EconomicStep: React.FC<StepProps> = ({ onSubmit, initialData }) => {
   const [economic, setEconomic] = React.useState({
     digitalization_budget: initialData?.economic?.digitalization_budget || "",
     savings_realized: initialData?.economic?.savings_realized || "",
@@ -166,15 +179,15 @@ const EconomicStep = ({ onSubmit, initialData }: any) => {
 
   const handleSubmit = () => {
     const finalData = {
-      economic,
       assessments: {
         ...initialData?.assessments,
-        Economic: { data: economic }
+        economic: economic
       }
     }
     console.log('DEBUG: Economic step submitting:', finalData)
     onSubmit(finalData)
   }
+
 
   return (
     <div className="space-y-6">
@@ -270,7 +283,7 @@ const EconomicStep = ({ onSubmit, initialData }: any) => {
   )
 }
 
-const SocialStep = ({ onSubmit, initialData }: any) => {
+const SocialStep: React.FC<StepProps> = ({ onSubmit, initialData }) => {
   const [social, setSocial] = React.useState({
     employee_impact: initialData?.social?.employee_impact || "",
     workplace_safety: initialData?.social?.workplace_safety || "",
@@ -288,16 +301,16 @@ const SocialStep = ({ onSubmit, initialData }: any) => {
 
   const handleSubmit = () => {
     const finalData = {
-      social,
+      // finalData.assessments will contain environmental + economic + social in lowercase
       assessments: {
         ...initialData?.assessments,
-        Social: { data: social }
+        social: social
       }
     }
     console.log('DEBUG: Social final step submitting complete assessment data:', finalData)
-    console.log('DEBUG: Final assessment domains:', Object.keys(finalData.assessments))
     onSubmit(finalData)
   }
+
 
   return (
     <div className="space-y-6">
@@ -388,16 +401,16 @@ export const getSustainabilitySteps = () => [
   {
     title: "Environmental",
     description: "Evaluate environmental monitoring and impact tracking capabilities",
-    component: <EnvironmentalStep />
+    component: EnvironmentalStep 
   },
   {
     title: "Economic", 
     description: "Assess economic performance and cost-benefit analysis",
-    component: <EconomicStep />
+    component: EconomicStep
   },
   {
     title: "Social",
     description: "Evaluate social impact and community benefits",
-    component: <SocialStep />
+    component: SocialStep
   }
 ]

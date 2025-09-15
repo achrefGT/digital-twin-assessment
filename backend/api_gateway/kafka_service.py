@@ -87,23 +87,17 @@ class KafkaService:
         self._processing_assessments: set[str] = set()  # Track assessments currently being processed
         self._message_cache = {}  # Cache recent messages to avoid duplicate processing
         
-        # Domain to topic mapping for form submissions - UPDATED to include sustainability
+        # Domain to topic mapping for form submissions - UPDATED to remove elca, slca, lcc
         self.submission_topic_mapping = {
             "resilience": settings.resilience_submission_topic,
             "sustainability": settings.sustainability_submission_topic,  
-            "elca": settings.elca_submission_topic,
-            "lcc": settings.lcc_submission_topic,
-            "slca": settings.slca_submission_topic,
             "human_centricity": settings.human_centricity_submission_topic,
         }
         
-        # Topics to consume score updates from - UPDATED to include sustainability
+        # Topics to consume score updates from - UPDATED to remove elca, slca, lcc
         self.score_topics = [
             settings.resilience_scores_topic,
             settings.sustainability_scores_topic, 
-            settings.elca_scores_topic, 
-            settings.lcc_scores_topic,
-            settings.slca_scores_topic,
             settings.human_centricity_scores_topic,
             settings.final_results_topic,
         ]

@@ -1,6 +1,6 @@
 import json
 from datetime import datetime
-from typing import Optional, Dict, Any, List
+from typing import Optional, Dict, Any, List, Set, Union
 from uuid import uuid4
 from enum import Enum
 
@@ -118,6 +118,13 @@ class RegionalBenefitsLevel(str, Enum):
     MAJOR_IMPACT = "major_impact"  # Impact majeur
 
 
+# Sustainability Domain Enum
+class SustainabilityDomain(str, Enum):
+    ENVIRONMENTAL = "environmental"
+    ECONOMIC = "economic"
+    SOCIAL = "social"
+
+
 # Assessment Models
 class EnvironmentalAssessment(BaseModel):
     digital_twin_realism: DigitalTwinRealismLevel
@@ -140,13 +147,15 @@ class SocialAssessment(BaseModel):
     regional_benefits: RegionalBenefitsLevel
 
 
+# Updated SustainabilityInput to support selective domain assessment
 class SustainabilityInput(BaseModel):
     assessmentId: Optional[str] = Field(None, description="Unique identifier for the assessment")
     userId: Optional[str] = Field(None, description="User identifier")
     systemName: Optional[str] = Field(None, description="Name of the system being assessed")
-    environmental: EnvironmentalAssessment = Field(..., description="Environmental sustainability assessment")
-    economic: EconomicAssessment = Field(..., description="Economic sustainability assessment")
-    social: SocialAssessment = Field(..., description="Social sustainability assessment")
+    # Accept model instances for each domain (so parsed Pydantic models are valid)
+    assessments: Dict[str, Union[EnvironmentalAssessment, EconomicAssessment, SocialAssessment]] = Field(
+        ..., description="Selected sustainability domain assessments"
+    )
     submittedAt: Optional[datetime] = Field(None, description="Timestamp when assessment was submitted")
     metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
 
@@ -164,108 +173,204 @@ class SustainabilityScenarios(BaseModel):
     scenarios: Dict[str, Dict[str, List[str]]]
 
 
-# Sustainability assessment criteria configuration
+# Enhanced sustainability scenarios configuration
 SUSTAINABILITY_SCENARIOS = {
     'environmental': {
-        'digital_twin_realism': [
-            "Static plan, no link with reality",
-            "Simple 3D shapes",
-            "Model with basic movements",
-            "Representative simulation: processes realistically simulated",
-            "High-fidelity model: detailed physical model, very close to reality",
-            "Real-time connection: complete digital replica, synchronized in real time"
-        ],
-        'flow_tracking': [
-            "Nothing is tracked",
-            "A single flow measured (e.g., electricity)",
-            "Multiple flows measured separately (e.g., water + energy)",
-            "Global balances of main flows (total inputs/outputs)",
-            "Detailed traceability workstation by workstation, inside the plant",
-            "Complete tracking including supply chain (upstream/downstream)"
-        ],
-        'energy_visibility': [
-            "No data",
-            "Annual bills",
-            "Monthly readings",
-            "Continuous monitoring of major equipment",
-            "Real-time monitoring of most systems",
-            "Precise subsystem and equipment-level metering"
-        ],
-        'environmental_scope': [
-            "No indicators tracked",
-            "Energy only",
-            "Energy + carbon emissions",
-            "Add water (consumption, discharges)",
-            "Multi-indicators: energy, carbon, water, waste, materials",
-            "Full lifecycle analysis (production → use → end of life)"
-        ],
-        'simulation_prediction': [
-            "Observation only",
-            "Simple reports and alerts",
-            "Basic change tests (e.g., rate, schedules)",
-            "Predictive scenarios with comparisons",
-            "Assisted optimization: system proposes several optimal solutions",
-            "Autonomous optimization: twin automatically adjusts parameters"
-        ]
+        'description': 'Environmental impact and resource management assessment',
+        'criteria': {
+            'digital_twin_realism': {
+                'name': 'Digital Twin Realism',
+                'description': 'Level of digital model accuracy and real-world connection',
+                'levels': [
+                    "Static plan, no link with reality",
+                    "Simple 3D shapes",
+                    "Model with basic movements",
+                    "Representative simulation: processes realistically simulated",
+                    "High-fidelity model: detailed physical model, very close to reality",
+                    "Real-time connection: complete digital replica, synchronized in real time"
+                ]
+            },
+            'flow_tracking': {
+                'name': 'Flow Tracking',
+                'description': 'Material and energy flow monitoring capabilities',
+                'levels': [
+                    "Nothing is tracked",
+                    "A single flow measured (e.g., electricity)",
+                    "Multiple flows measured separately (e.g., water + energy)",
+                    "Global balances of main flows (total inputs/outputs)",
+                    "Detailed traceability workstation by workstation, inside the plant",
+                    "Complete tracking including supply chain (upstream/downstream)"
+                ]
+            },
+            'energy_visibility': {
+                'name': 'Energy Visibility',
+                'description': 'Level of energy consumption monitoring and visibility',
+                'levels': [
+                    "No data",
+                    "Annual bills",
+                    "Monthly readings",
+                    "Continuous monitoring of major equipment",
+                    "Real-time monitoring of most systems",
+                    "Precise subsystem and equipment-level metering"
+                ]
+            },
+            'environmental_scope': {
+                'name': 'Environmental Scope',
+                'description': 'Breadth of environmental indicators tracked',
+                'levels': [
+                    "No indicators tracked",
+                    "Energy only",
+                    "Energy + carbon emissions",
+                    "Add water (consumption, discharges)",
+                    "Multi-indicators: energy, carbon, water, waste, materials",
+                    "Full lifecycle analysis (production → use → end of life)"
+                ]
+            },
+            'simulation_prediction': {
+                'name': 'Simulation & Prediction',
+                'description': 'Predictive and optimization capabilities',
+                'levels': [
+                    "Observation only",
+                    "Simple reports and alerts",
+                    "Basic change tests (e.g., rate, schedules)",
+                    "Predictive scenarios with comparisons",
+                    "Assisted optimization: system proposes several optimal solutions",
+                    "Autonomous optimization: twin automatically adjusts parameters"
+                ]
+            }
+        }
     },
     'economic': {
-        'digitalization_budget': [
-            "No budget allocated for digitizing the system",
-            "Minimal budget - Basic modeling of the physical system",
-            "Correct budget - Faithful reproduction of main equipment",
-            "Large budget - Complete digital copy of the system",
-            "Very large budget - Ultra-precise twin with advanced sensors",
-            "Maximum budget - Perfect real-time connected replica"
-        ],
-        'savings_realized': [
-            "No savings",
-            "Small savings",
-            "Correct savings",
-            "Good savings",
-            "Very good savings",
-            "Exceptional savings"
-        ],
-        'performance_improvement': [
-            "No improvement",
-            "Small improvement",
-            "Correct improvement",
-            "Good improvement",
-            "Very good improvement",
-            "Exceptional improvement"
-        ],
-        'roi_timeframe': [
-            "Not calculated or more than 5 years",
-            "Profitable between 3 and 5 years",
-            "Profitable between 2 and 3 years",
-            "Profitable between 18 and 24 months",
-            "Profitable between 12 and 18 months",
-            "Profitable in less than 12 months"
-        ]
+        'description': 'Economic viability and financial impact assessment',
+        'criteria': {
+            'digitalization_budget': {
+                'name': 'Digitalization Budget',
+                'description': 'Investment level in digital transformation',
+                'levels': [
+                    "No budget allocated for digitizing the system",
+                    "Minimal budget - Basic modeling of the physical system",
+                    "Correct budget - Faithful reproduction of main equipment",
+                    "Large budget - Complete digital copy of the system",
+                    "Very large budget - Ultra-precise twin with advanced sensors",
+                    "Maximum budget - Perfect real-time connected replica"
+                ]
+            },
+            'savings_realized': {
+                'name': 'Savings Realized',
+                'description': 'Actual cost savings achieved',
+                'levels': [
+                    "No savings",
+                    "Small savings",
+                    "Correct savings",
+                    "Good savings",
+                    "Very good savings",
+                    "Exceptional savings"
+                ]
+            },
+            'performance_improvement': {
+                'name': 'Performance Improvement',
+                'description': 'Operational performance gains',
+                'levels': [
+                    "No improvement",
+                    "Small improvement",
+                    "Correct improvement",
+                    "Good improvement",
+                    "Very good improvement",
+                    "Exceptional improvement"
+                ]
+            },
+            'roi_timeframe': {
+                'name': 'ROI Timeframe',
+                'description': 'Return on investment timeline',
+                'levels': [
+                    "Not calculated or more than 5 years",
+                    "Profitable between 3 and 5 years",
+                    "Profitable between 2 and 3 years",
+                    "Profitable between 18 and 24 months",
+                    "Profitable between 12 and 18 months",
+                    "Profitable in less than 12 months"
+                ]
+            }
+        }
     },
     'social': {
-        'employee_impact': [
-            "Job cuts (over 10% of workforce affected)",
-            "Some job cuts (5–10% of workforce)",
-            "Stable workforce, some training",
-            "Same number of jobs + training for all concerned",
-            "New positions created (5–10% more jobs)",
-            "Strong creation of qualified jobs (over 10% increase)"
-        ],
-        'workplace_safety': [
-            "No change in risks",
-            "Slight reduction of incidents (<10%)",
-            "Moderate risk reduction (10–25%)",
-            "Good improvement in safety (25–50%)",
-            "Strong reduction in accidents (50–75%)",
-            "Near elimination of risks (>75% reduction)"
-        ],
-        'regional_benefits': [
-            "No local impact: no local purchases/partnerships identified",
-            "Some additional local purchases",
-            "Partnership with 1–2 local companies",
-            "Institutional collaboration: active collaboration with local universities/schools",
-            "Notable local creation: new local jobs linked to the project",
-            "Major impact: new local jobs or significant financial benefits"
-        ]
+        'description': 'Social impact and stakeholder benefits assessment',
+        'criteria': {
+            'employee_impact': {
+                'name': 'Employee Impact',
+                'description': 'Effects on workforce and employment',
+                'levels': [
+                    "Job cuts (over 10% of workforce affected)",
+                    "Some job cuts (5–10% of workforce)",
+                    "Stable workforce, some training",
+                    "Same number of jobs + training for all concerned",
+                    "New positions created (5–10% more jobs)",
+                    "Strong creation of qualified jobs (over 10% increase)"
+                ]
+            },
+            'workplace_safety': {
+                'name': 'Workplace Safety',
+                'description': 'Impact on worker safety and risk reduction',
+                'levels': [
+                    "No change in risks",
+                    "Slight reduction of incidents (<10%)",
+                    "Moderate risk reduction (10–25%)",
+                    "Good improvement in safety (25–50%)",
+                    "Strong reduction in accidents (50–75%)",
+                    "Near elimination of risks (>75% reduction)"
+                ]
+            },
+            'regional_benefits': {
+                'name': 'Regional Benefits',
+                'description': 'Local economic and social benefits',
+                'levels': [
+                    "No local impact: no local purchases/partnerships identified",
+                    "Some additional local purchases",
+                    "Partnership with 1–2 local companies",
+                    "Institutional collaboration: active collaboration with local universities/schools",
+                    "Notable local creation: new local jobs linked to the project",
+                    "Major impact: new local jobs or significant financial benefits"
+                ]
+            }
+        }
     }
 }
+
+
+class DomainSelectionHelper:
+    """Helper class for managing domain selection and configuration"""
+    
+    @staticmethod
+    def get_available_domains() -> List[Dict[str, Any]]:
+        """Get list of available domains with descriptions"""
+        return [
+            {
+                'domain': domain.value,
+                'enum': domain,
+                'description': SUSTAINABILITY_SCENARIOS[domain.value]['description'],
+                'criteria_count': len(SUSTAINABILITY_SCENARIOS[domain.value]['criteria'])
+            }
+            for domain in SustainabilityDomain
+            if domain.value in SUSTAINABILITY_SCENARIOS
+        ]
+    
+    @staticmethod
+    def get_criteria_for_domains(selected_domains: Set[SustainabilityDomain]) -> Dict[str, Dict[str, Any]]:
+        """Get criteria for selected domains"""
+        return {
+            domain.value: SUSTAINABILITY_SCENARIOS[domain.value]['criteria']
+            for domain in selected_domains
+            if domain.value in SUSTAINABILITY_SCENARIOS
+        }
+    
+    @staticmethod
+    def create_assessment_from_data(domain: str, data: Dict[str, Any]) -> Any:
+        """Create appropriate assessment object from data"""
+        if domain == 'environmental':
+            return EnvironmentalAssessment(**data)
+        elif domain == 'economic':
+            return EconomicAssessment(**data)
+        elif domain == 'social':
+            return SocialAssessment(**data)
+        else:
+            raise ValueError(f"Unknown domain: {domain}")

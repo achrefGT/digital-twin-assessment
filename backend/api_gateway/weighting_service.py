@@ -10,9 +10,7 @@ class WeightingService:
         # Define domain weights (configurable)
         self.default_weights = {
             "resilience": 0.30,
-            "elca": 0.23,
-            "lcc": 0.17,
-            "slca": 0.10,
+            "sustainability": 0.5,
             "human_centricity": 0.20
         }
         
@@ -66,7 +64,7 @@ class WeightingService:
             return False
         
         # Validate all required domains are present
-        required_domains = {"resilience", "elca", "lcc", "slca", "human_centricity"}
+        required_domains = {"resilience", "sustainability", "human_centricity"}
         if set(new_weights.keys()) != required_domains:
             logger.error(f"Invalid domains. Required: {required_domains}, got: {set(new_weights.keys())}")
             return False

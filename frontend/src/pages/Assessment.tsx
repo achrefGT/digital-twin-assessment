@@ -3,26 +3,66 @@ import { useParams, useNavigate } from "react-router-dom"
 import { Button } from "@/components/ui/enhanced-button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { ArrowLeft, Download, Eye, FileJson, FileText, CheckCircle, Activity, Sparkles } from "lucide-react"
+import { ArrowLeft, Download, Eye, FileJson, FileText, CheckCircle, Activity, Sparkles, Brain, Users, Shield } from "lucide-react"
 import { CreateAssessment } from "@/components/CreateAssessment"
 import { PaginatedForm } from "@/components/PaginatedForm"
 import { getSLCASteps } from "@/components/forms/SLCAFormSteps"
 import { getLCCSteps } from "@/components/forms/LCCFormSteps"
 import { getELCASteps } from "@/components/forms/ELCAFormSteps"
-import { getHumanCentricitySteps } from "@/components/forms/HumanCentricityFormSteps"
-import { getResilienceSteps } from "@/components/forms/ResilienceFormSteps"
-import { getSustainabilitySteps } from "@/components/forms/SustainabilityFormSteps"
+import UnifiedDomainSelector from "@/components/UnifiedDomainSelector"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 
 const domainInfo = {
-  slca: { title: "Social Life Cycle Assessment", gradient: "from-blue-500 to-cyan-600", bgColor: "bg-blue-50", borderColor: "border-blue-200" },
-  lcc: { title: "Life Cycle Costing", gradient: "from-purple-500 to-violet-600", bgColor: "bg-purple-50", borderColor: "border-purple-200" },
-  elca: { title: "Environmental Life Cycle Assessment", gradient: "from-green-500 to-emerald-600", bgColor: "bg-green-50", borderColor: "border-green-200" },
-  human_centricity: { title: "Human Centricity Assessment", gradient: "from-blue-500 to-cyan-600", bgColor: "bg-blue-50", borderColor: "border-blue-200" },
-  sustainability: { title: "Sustainability", gradient: "from-green-500 to-emerald-600", bgColor: "bg-green-50", borderColor: "border-green-200"},
-  resilience: { title: "Resilience Assessment", gradient: "from-purple-500 to-violet-600", bgColor: "bg-purple-50", borderColor: "border-purple-200" }
+  slca: { 
+    title: "Social Life Cycle Assessment", 
+    gradient: "from-blue-500 to-cyan-600", 
+    bgColor: "bg-blue-50", 
+    borderColor: "border-blue-200",
+    icon: "👥",
+    description: "social"
+  },
+  lcc: { 
+    title: "Life Cycle Costing", 
+    gradient: "from-purple-500 to-violet-600", 
+    bgColor: "bg-purple-50", 
+    borderColor: "border-purple-200",
+    icon: "💰",
+    description: "economic"
+  },
+  elca: { 
+    title: "Environmental Life Cycle Assessment", 
+    gradient: "from-green-500 to-emerald-600", 
+    bgColor: "bg-green-50", 
+    borderColor: "border-green-200",
+    icon: "🌱",
+    description: "environmental"
+  },
+  human_centricity: { 
+    title: "Human Centricity Assessment", 
+    gradient: "from-violet-500 to-purple-600", 
+    bgColor: "bg-violet-50", 
+    borderColor: "border-violet-200",
+    icon: Brain,
+    description: "human-centric"
+  },
+  sustainability: { 
+    title: "Sustainability Assessment", 
+    gradient: "from-emerald-500 to-green-600", 
+    bgColor: "bg-emerald-50", 
+    borderColor: "border-emerald-200",
+    icon: Sparkles,
+    description: "sustainability"
+  },
+  resilience: { 
+    title: "Resilience Assessment", 
+    gradient: "from-blue-500 to-indigo-600", 
+    bgColor: "bg-blue-50", 
+    borderColor: "border-blue-200",
+    icon: Shield,
+    description: "resilience"
+  }
 }
 
 const Assessment = () => {
@@ -282,21 +322,18 @@ const Assessment = () => {
         return getLCCSteps()
       case 'elca':
         return getELCASteps()
-      case 'human_centricity':
-        return getHumanCentricitySteps()
-      case 'resilience':
-        return getResilienceSteps()
-      case 'sustainability':          
-        return getSustainabilitySteps()
       default:
         return []
     }
   }
 
+  // Check if this is a unified domain selector assessment type
+  const isUnifiedDomain = ['human_centricity', 'sustainability', 'resilience'].includes(domain as string)
+
   return (
-    <div className="min-h-screen bg-white">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-gray-50">
       {/* Navigation Header */}
-      <nav className="border-b border-gray-200 bg-white/95 backdrop-blur-sm">
+      <nav className="border-b border-gray-200 bg-white/95 backdrop-blur-sm sticky top-0 z-50">
         <div className="container mx-auto px-6">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-3">
@@ -307,121 +344,164 @@ const Assessment = () => {
               >
                 <ArrowLeft className="w-5 h-5 text-black" />
               </Button>
+              <div className="h-6 w-px bg-gray-300" />
+              <div className="flex items-center gap-3">
+                <span className="text-2xl"><info.icon /></span>
+                <span className="text-lg font-semibold text-gray-900">{info.title}</span>
+              </div>
             </div>
-            <Badge className={`${info.bgColor} ${info.borderColor} border text-gray-700 font-medium`}>
+            <Badge className={`${info.bgColor} ${info.borderColor} border text-gray-700 font-medium px-3 py-1`}>
               {domain?.toUpperCase()}
             </Badge>
           </div>
         </div>
       </nav>
 
-      <div className="relative">
-        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-gray-50" />
-        <div className="relative container mx-auto px-6 py-8">
-          {/* Centered Form Section */}
-          <div className="max-w-4xl mx-auto">
-            <Card className={`border-2 ${info.borderColor} shadow-xl bg-white`}>
-              <CardHeader className={`bg-gradient-to-r ${info.bgColor} border-b border-gray-200`}>
-                <CardTitle className="flex items-center gap-3 text-2xl text-gray-900">
-                  <div className={`p-3 rounded-xl bg-gradient-to-br ${info.gradient} shadow-lg`}>
-                    <FileText className="w-6 h-6 text-white" />
+      <div className="container mx-auto px-6 py-8">
+        {isSubmitting ? (
+          <div className="max-w-2xl mx-auto">
+            <Card className="border-2 border-blue-200 shadow-xl bg-white">
+              <CardContent className="text-center py-16">
+                <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mx-auto mb-8 flex items-center justify-center">
+                  <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white"></div>
+                </div>
+                <h3 className="text-2xl font-semibold text-gray-900 mb-4">Processing Assessment</h3>
+                <p className="text-gray-600 text-lg">Submitting your assessment data to the backend system...</p>
+                <div className="mt-8">
+                  <div className="w-full bg-gray-200 rounded-full h-2">
+                    <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{width: '75%'}}></div>
                   </div>
-                  {info.title}
-                </CardTitle>
-                <CardDescription>
-                  Complete this comprehensive assessment to evaluate your digital twin system across {
-                    domain === 'elca' ? 'environmental' :
-                    domain === 'slca' ? 'social' :
-                    domain === 'lcc' ? 'economic' :
-                    domain === 'human_centricity' ? 'human-centric' :
-                    domain === 'resilience' ? 'resilience' :
-                    domain === 'sustainability' ? 'sustainability ' : 'parameters'
-                  } parameters
-                </CardDescription>
-              </CardHeader>
-              <CardContent className="p-8">
-                {isSubmitting ? (
-                  <div className="text-center py-12">
-                    <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mx-auto mb-6 flex items-center justify-center">
-                      <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
-                    </div>
-                    <h3 className="text-xl font-semibold text-gray-900 mb-2">Processing Assessment</h3>
-                    <p className="text-gray-600">Submitting your assessment data to the backend system...</p>
-                  </div>
-                ) : (
-                  <PaginatedForm
-                    steps={getFormSteps()}
-                    onComplete={handleFormSubmit}
-                    assessmentInfo={assessment}
-                  />
-                )}
+                  <p className="text-sm text-gray-500 mt-3">Almost done...</p>
+                </div>
               </CardContent>
             </Card>
           </div>
-
-          {/* Success State - Show Results if Available */}
-          {isCompleted && (
-            <div className="max-w-4xl mx-auto mt-8">
-              <Card className="border-2 border-green-200 shadow-xl bg-white">
-                <CardHeader className="bg-gradient-to-r from-green-50 to-emerald-50 border-b border-green-200">
-                  <CardTitle className="flex items-center gap-3 text-2xl text-gray-900">
-                    <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
-                      <CheckCircle className="w-6 h-6 text-white" />
+        ) : isUnifiedDomain ? (
+          // Use UnifiedDomainSelector for the three assessment types
+          <UnifiedDomainSelector
+            assessmentType={domain as 'sustainability' | 'resilience' | 'human_centricity'}
+            assessmentInfo={assessment}
+            onComplete={(finalSubmission: any) => {
+              // Handle the submission from UnifiedDomainSelector
+              const payload = finalSubmission?.form_data ?? finalSubmission
+              handleFormSubmit(payload)
+            }}
+          />
+        ) : (
+          // Use PaginatedForm for traditional assessment types (SLCA, LCC, ELCA)
+          <div className="max-w-4xl mx-auto">
+            <Card className={`border-2 ${info.borderColor} shadow-xl bg-white`}>
+              <CardHeader className={`bg-gradient-to-r ${info.bgColor} border-b border-gray-200`}>
+                <CardTitle className="flex items-center gap-4 text-2xl text-gray-900">
+                  <div className={`p-4 rounded-xl bg-gradient-to-br ${info.gradient} shadow-lg`}>
+                    <span className="text-2xl"><info.icon /></span>
+                  </div>
+                  <div>
+                    <div className="text-2xl font-bold">{info.title}</div>
+                    <div className="text-sm font-normal text-gray-600 mt-1">
+                      Complete this comprehensive assessment
                     </div>
-                    Assessment Completed Successfully
-                  </CardTitle>
-                  <CardDescription className="text-base text-gray-600 leading-relaxed">
-                    Your {info.title.toLowerCase()} has been processed and is ready for analysis in the dashboard
-                  </CardDescription>
-                </CardHeader>
-                <CardContent className="p-8">
-                  <div className="space-y-8">
-                    <div className="flex items-center justify-between p-6 bg-gradient-to-r from-green-50 to-emerald-50 rounded-2xl border border-green-200">
+                  </div>
+                </CardTitle>
+                <CardDescription className="text-base mt-4">
+                  Evaluate your digital twin system across {info.description} parameters with detailed analysis and recommendations.
+                </CardDescription>
+              </CardHeader>
+              <CardContent className="p-8">
+                <PaginatedForm
+                  steps={getFormSteps()}
+                  onComplete={handleFormSubmit}
+                  assessmentInfo={assessment}
+                />
+              </CardContent>
+            </Card>
+          </div>
+        )}
+
+        {/* Success State - Show Results if Available */}
+        {isCompleted && (
+          <div className="max-w-4xl mx-auto mt-8">
+            <Card className="border-2 border-green-200 shadow-2xl bg-white overflow-hidden">
+              <div className="bg-gradient-to-r from-green-500 to-emerald-600 p-8 text-white">
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center">
+                    <CheckCircle className="w-8 h-8 text-white" />
+                  </div>
+                  <div>
+                    <h2 className="text-3xl font-bold mb-2">Assessment Completed!</h2>
+                    <p className="text-green-100 text-lg">
+                      Your {info.title.toLowerCase()} has been successfully processed
+                    </p>
+                  </div>
+                </div>
+              </div>
+              
+              <CardContent className="p-8">
+                <div className="space-y-6">
+                  {/* Assessment Summary */}
+                  <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-2xl border border-green-200">
+                    <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
-                          <CheckCircle className="w-6 h-6 text-white" />
+                          <span className="text-xl"><info.icon /></span>
                         </div>
                         <div>
-                          <p className="font-semibold text-gray-900 text-lg">Assessment Completed</p>
-                          <p className="text-sm text-gray-600 font-mono bg-white px-3 py-1 rounded border border-gray-200 mt-1">
-                            {assessment.assessment_id}
+                          <p className="font-bold text-gray-900 text-lg">{info.title}</p>
+                          <p className="text-sm text-gray-600 font-mono bg-white px-3 py-1 rounded-lg border border-gray-200 mt-2">
+                            ID: {assessment.assessment_id}
                           </p>
                         </div>
                       </div>
                       <div className="text-right">
-                        <p className="text-sm text-gray-500 font-medium">Domain</p>
-                        <Badge className={`mt-1 ${info.bgColor} ${info.borderColor} border text-gray-700 font-semibold`}>
+                        <Badge className={`${info.bgColor} ${info.borderColor} border text-gray-700 font-semibold text-sm px-4 py-2`}>
                           {domain?.toUpperCase()}
                         </Badge>
+                        <p className="text-xs text-gray-500 mt-2">
+                          {new Date().toLocaleDateString()}
+                        </p>
                       </div>
                     </div>
-                    
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <Button
-                        onClick={() => navigate('/dashboard')}
-                        size="lg"
-                        className="flex items-center justify-center gap-3 h-14 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300"
-                      >
-                        <Activity className="w-5 h-5" />
-                        View Dashboard
-                      </Button>
-                      
-                      <Button
-                        variant="outline"
-                        onClick={() => navigate('/')}
-                        size="lg"
-                        className="flex items-center justify-center gap-3 h-14 border-2 border-gray-200 hover:border-gray-300 text-gray-700 hover:bg-gray-100 font-semibold rounded-xl transition-all duration-300"
-                      >
-                        <ArrowLeft className="w-5 h-5" />
-                        Back to Domains
-                      </Button>
-                    </div>
                   </div>
-                </CardContent>
-              </Card>
-            </div>
-          )}
-        </div>
+                  
+                  {/* Action Buttons */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <Button
+                      onClick={() => navigate('/dashboard')}
+                      size="lg"
+                      className="flex items-center justify-center gap-3 h-16 bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white font-semibold rounded-xl shadow-lg hover:shadow-xl transition-all duration-300 transform hover:scale-[1.02]"
+                    >
+                      <Activity className="w-6 h-6" />
+                      <div className="text-left">
+                        <div className="font-bold">View Dashboard</div>
+                        <div className="text-xs opacity-90">Analyze results</div>
+                      </div>
+                    </Button>
+                    
+                    <Button
+                      variant="outline"
+                      onClick={() => navigate('/')}
+                      size="lg"
+                      className="flex items-center justify-center gap-3 h-16 border-2 border-gray-200 hover:border-gray-300 text-gray-700 hover:bg-gray-50 font-semibold rounded-xl transition-all duration-300 transform hover:scale-[1.02]"
+                    >
+                      <ArrowLeft className="w-6 h-6" />
+                      <div className="text-left">
+                        <div className="font-bold">Back to Domains</div>
+                        <div className="text-xs opacity-70">Start new assessment</div>
+                      </div>
+                    </Button>
+                  </div>
+
+                  {/* Additional Actions */}
+                  <div className="pt-4 border-t border-gray-200">
+                    <p className="text-center text-sm text-gray-500 mb-4">
+                      Next steps: Review your results in the dashboard or start a new assessment for comprehensive analysis
+                    </p>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   )

@@ -5,9 +5,7 @@ import { Badge } from '@/components/ui/badge'
 import { X, Brain, Shield, Leaf, CheckCircle, Clock, Sparkles } from 'lucide-react'
 import { HumanCentricityPanel } from './panels/HumanCentricityPanel'
 import { ResiliencePanel } from './panels/ResiliencePanel'
-import { ELCAPanel } from './panels/ELCAPanel'
-import { SLCAPanel } from './panels/SLCAPanel'
-import { LCCPanel } from './panels/LCCPanel'
+import { SustainabilityPanel } from './panels/SustainabilityPanel'
 
 interface DetailedModuleViewProps {
   module: string
@@ -89,12 +87,9 @@ export const DetailedModuleView: React.FC<DetailedModuleViewProps> = ({
       case 'sustainability':
         return (
           <div className="space-y-6">
-            {/* Individual domain panels */}
-            <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-6">
-              <ELCAPanel data={assessmentData.domain_data.elca} />
-              <SLCAPanel data={assessmentData.domain_data.slca} />
-              <LCCPanel data={assessmentData.domain_data.lcc} />
-            </div>
+            <SustainabilityPanel 
+              data={assessmentData.domain_data.sustainability} 
+            />
           </div>
         )
       

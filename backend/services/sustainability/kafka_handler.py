@@ -13,13 +13,7 @@ from shared.models.exceptions import (
     ScoringException, DatabaseConnectionException
 )
 from .models import (
-    SustainabilityInput, SustainabilityResult,
-    EnvironmentalAssessment, EconomicAssessment, SocialAssessment,
-    DigitalTwinRealismLevel, FlowTrackingLevel, EnergyVisibilityLevel,
-    EnvironmentalScopeLevel, SimulationPredictionLevel,
-    DigitalizationBudgetLevel, SavingsLevel, PerformanceImprovementLevel,
-    ROITimeframeLevel, EmployeeImpactLevel, WorkplaceSafetyLevel, 
-    RegionalBenefitsLevel
+    SustainabilityInput, SustainabilityResult, DomainSelectionHelper
 )
 from .scoring import calculate_sustainability_score
 from .database import DatabaseManager
@@ -148,19 +142,15 @@ class SustainabilityKafkaHandler:
             
             start_time = datetime.utcnow()
             
-            # Parse sustainability input
+            # Parse sustainability input (now supports flexible domains)
             logger.debug("Parsing sustainability input")
             print(f"DEBUG: About to parse sustainability input for assessment {assessment_id}")
             sustainability_input = self._parse_sustainability_input(form_submission)
             
-            # Calculate sustainability scores
+            # Calculate sustainability scores (now handles flexible domains)
             logger.debug("Calculating sustainability scores")
-            print(f"DEBUG: About to calculate sustainability scores")
-            scores = calculate_sustainability_score(
-                sustainability_input.environmental,
-                sustainability_input.economic,
-                sustainability_input.social
-            )
+            print(f"DEBUG: About to calculate sustainability scores for {len(sustainability_input.assessments)} domains")
+            scores = calculate_sustainability_score(sustainability_input.assessments)
             logger.debug(f"Calculated scores: {scores}")
             print(f"DEBUG: Calculated scores keys: {list(scores.keys()) if scores else 'None'}")
             
@@ -194,11 +184,7 @@ class SustainabilityKafkaHandler:
                 "overall_score": result.overallScore,
                 "dimension_scores": result.dimensionScores,
                 "sustainability_metrics": result.sustainabilityMetrics,
-                "raw_assessments": {
-                    "environmental": sustainability_input.environmental,
-                    "economic": sustainability_input.economic,
-                    "social": sustainability_input.social
-                },
+                "raw_assessments": sustainability_input.assessments,  # Now contains flexible domain data
                 "metadata": sustainability_input.metadata,
                 "submitted_at": sustainability_input.submittedAt
             }
@@ -242,7 +228,7 @@ class SustainabilityKafkaHandler:
             await self._publish_error_event(assessment_id, "processing_error", str(e))
     
     def _parse_sustainability_input(self, form_submission) -> SustainabilityInput:
-        """Parse form submission into sustainability input model"""
+        """Parse form submission into sustainability input model (now supports flexible domains)"""
         try:
             logger.debug(f"Parsing form submission: {form_submission}")
             print(f"DEBUG: _parse_sustainability_input called with type: {type(form_submission)}")
@@ -254,47 +240,54 @@ class SustainabilityKafkaHandler:
             print(f"DEBUG: form_data type: {type(form_data)}")
             print(f"DEBUG: form_data keys: {list(form_data.keys()) if isinstance(form_data, dict) else 'Not a dict'}")
             
-            # Validate required fields for sustainability assessment
-            required_fields = ['environmental', 'economic', 'social']
-            for field in required_fields:
-                if field not in form_data:
-                    logger.error(f"Missing '{field}' field in sustainability form data")
-                    print(f"DEBUG: ❌ Missing '{field}' field. Available keys: {list(form_data.keys()) if isinstance(form_data, dict) else 'N/A'}")
-                    raise InvalidFormDataException(f"Missing '{field}' field in sustainability form data")
+            # Validate that we have assessments field
+            if 'assessments' not in form_data:
+                logger.error("Missing 'assessments' field in sustainability form data")
+                print(f"DEBUG: ❌ Missing 'assessments' field. Available keys: {list(form_data.keys()) if isinstance(form_data, dict) else 'N/A'}")
+                raise InvalidFormDataException("Missing 'assessments' field in sustainability form data")
             
-            # Extract assessment data
-            environmental_data = form_data['environmental']
-            economic_data = form_data['economic']
-            social_data = form_data['social']
+            assessments_data = form_data['assessments']
+            logger.debug(f"Assessments data: {assessments_data}")
+            print(f"DEBUG: assessments_data type: {type(assessments_data)}")
+            print(f"DEBUG: assessments_data keys: {list(assessments_data.keys()) if isinstance(assessments_data, dict) else 'Not a dict'}")
             
-            logger.debug(f"Environmental data: {environmental_data}")
-            logger.debug(f"Economic data: {economic_data}")
-            logger.debug(f"Social data: {social_data}")
-            print(f"DEBUG: Environmental data type: {type(environmental_data)}")
-            print(f"DEBUG: Economic data type: {type(economic_data)}")
-            print(f"DEBUG: Social data type: {type(social_data)}")
+            # Validate that we have at least one domain
+            if not assessments_data:
+                raise InvalidFormDataException("No assessment domains provided")
             
-            # Create assessment objects
-            try:
-                environmental_assessment = EnvironmentalAssessment(**environmental_data)
-                economic_assessment = EconomicAssessment(**economic_data)
-                social_assessment = SocialAssessment(**social_data)
+            # Validate and parse each domain assessment
+            parsed_assessments = {}
+            valid_domains = ['environmental', 'economic', 'social']
+            
+            for domain_name, domain_data in assessments_data.items():
+                if domain_name not in valid_domains:
+                    logger.warning(f"Unknown sustainability domain: {domain_name}")
+                    print(f"DEBUG: Unknown domain '{domain_name}', skipping")
+                    continue
                 
-                logger.debug("Successfully created assessment objects")
-                print(f"DEBUG: ✅ Created all assessment objects")
+                try:
+                    # Create appropriate assessment object for each domain
+                    assessment_obj = DomainSelectionHelper.create_assessment_from_data(domain_name, domain_data)
+                    parsed_assessments[domain_name] = assessment_obj
+                    logger.debug(f"Successfully parsed {domain_name} assessment")
+                    print(f"DEBUG: ✅ Parsed {domain_name} assessment")
                 
-            except Exception as e:
-                logger.error(f"Failed to create assessment objects: {e}")
-                print(f"DEBUG: ❌ Assessment object creation failed: {e}")
-                raise InvalidFormDataException(f"Failed to parse assessment data: {e}")
+                except Exception as e:
+                    logger.error(f"Failed to parse {domain_name} assessment: {e}")
+                    print(f"DEBUG: ❌ Failed to parse {domain_name} assessment: {e}")
+                    raise InvalidFormDataException(f"Failed to parse {domain_name} assessment data: {e}")
+            
+            if not parsed_assessments:
+                raise InvalidFormDataException("No valid assessment domains found")
+            
+            logger.debug(f"Successfully parsed {len(parsed_assessments)} domains: {list(parsed_assessments.keys())}")
+            print(f"DEBUG: Successfully parsed domains: {list(parsed_assessments.keys())}")
             
             sustainability_input = SustainabilityInput(
                 assessmentId=form_submission.assessment_id,
                 userId=form_submission.user_id,
                 systemName=form_submission.system_name,
-                environmental=environmental_assessment,
-                economic=economic_assessment,
-                social=social_assessment,
+                assessments=parsed_assessments,  # Now contains parsed assessment objects
                 submittedAt=datetime.utcnow(),  # Use current time since we're processing now
                 metadata=form_submission.metadata
             )

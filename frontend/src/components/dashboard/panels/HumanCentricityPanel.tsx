@@ -9,13 +9,74 @@ interface HumanCentricityPanelProps {
     scores?: {
       overall_score?: number
       domain_scores?: {
-        UX_Trust?: number
-        Workload?: number
-        Cybersickness?: number
-        Emotion?: number
+        Core_Usability?: number
         Performance?: number
+        Workload_Comfort?: number
+        Emotional_Response?: number
+        Trust_Transparency?: number
       }
-      detailed_metrics?: any
+      detailed_metrics?: {
+        Core_Usability?: {
+          mean_rating?: number
+          score?: number
+          response_count?: number
+          rating_distribution?: {
+            min?: number
+            max?: number
+            std?: number
+          }
+        }
+        Performance?: {
+          raw_metrics?: {
+            task_completion_time_min?: number
+            error_rate?: number
+            help_requests?: number
+          }
+          combined_score?: number
+          individual_scores?: {
+            time_score?: number
+            errors_score?: number
+            help_score?: number
+          }
+        }
+        Workload_Comfort?: {
+          combined_score?: number
+          workload?: {
+            mental_demand?: number
+            effort_required?: number
+            frustration_level?: number
+            mean_workload?: number
+            score?: number
+          }
+          cybersickness?: {
+            mean_severity?: number
+            score?: number
+            symptoms?: Record<string, number>
+          }
+        }
+        Emotional_Response?: {
+          valence?: number
+          arousal?: number
+          valence_normalized?: number
+          arousal_normalized?: number
+          score?: number
+          interpretation?: {
+            valence_label?: string
+            arousal_label?: string
+            quadrant?: string
+          }
+        }
+        Trust_Transparency?: {
+          mean_rating?: number
+          score?: number
+          response_count?: number
+          rating_distribution?: {
+            min?: number
+            max?: number
+            std?: number
+          }
+        }
+      }
     }
   }
 }
@@ -33,8 +94,8 @@ export const HumanCentricityPanel: React.FC<HumanCentricityPanelProps> = ({ data
               <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-gradient-to-br from-blue-900 to-blue-400 opacity-20 animate-pulse" />
             </div>
             <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Awaiting sustainability assessment</p>
-              <p className="text-xs text-muted-foreground/70">Human-centricity</p>
+              <p className="text-sm text-muted-foreground">Awaiting human centricity assessment</p>
+              <p className="text-xs text-muted-foreground/70">User experience evaluation</p>
             </div>
           </div>
         </CardContent>
@@ -45,11 +106,11 @@ export const HumanCentricityPanel: React.FC<HumanCentricityPanelProps> = ({ data
   const { overall_score, domain_scores, detailed_metrics } = data.scores
   
   const categories = [
-    { key: 'UX_Trust', label: 'UX & Trust', icon: Users, color: '#3b82f6' },
-    { key: 'Workload', label: 'Workload', icon: Brain, color: '#8b5cf6' },
-    { key: 'Cybersickness', label: 'Cybersickness', icon: Eye, color: '#06b6d4' },
-    { key: 'Emotion', label: 'Emotion', icon: Heart, color: '#f59e0b' },
-    { key: 'Performance', label: 'Performance', icon: Target, color: '#10b981' }
+    { key: 'Core_Usability', label: 'Core Usability', icon: Users, color: '#3b82f6' },
+    { key: 'Performance', label: 'Performance', icon: Target, color: '#10b981' },
+    { key: 'Workload_Comfort', label: 'Workload & Comfort', icon: Brain, color: '#8b5cf6' },
+    { key: 'Emotional_Response', label: 'Emotional Response', icon: Heart, color: '#f59e0b' },
+    { key: 'Trust_Transparency', label: 'Trust & Transparency', icon: Eye, color: '#06b6d4' }
   ]
 
   const getScoreColor = (score: number) => {
@@ -64,35 +125,47 @@ export const HumanCentricityPanel: React.FC<HumanCentricityPanelProps> = ({ data
     return 'bg-red-500'
   }
 
-  // Only show top insights from detailed metrics
+  // Extract key insights from the new detailed metrics structure
   const getKeyInsights = () => {
     const insights = []
     
-    if (detailed_metrics?.ux_trust_combined?.mean_rating) {
+    // Trust rating from Trust_Transparency
+    if (detailed_metrics?.Trust_Transparency?.mean_rating) {
       insights.push({
         label: 'Trust Rating',
-        value: `${detailed_metrics.ux_trust_combined.mean_rating}/7`,
+        value: `${detailed_metrics.Trust_Transparency.mean_rating.toFixed(1)}/7`,
         type: 'rating'
       })
     }
 
-    if (detailed_metrics?.section3_workload?.mental_demand) {
+    // Mental demand from Workload_Comfort
+    if (detailed_metrics?.Workload_Comfort?.workload?.mental_demand) {
       insights.push({
         label: 'Mental Demand',
-        value: `${detailed_metrics.section3_workload.mental_demand}%`,
-        type: 'percentage'
+        value: `${detailed_metrics.Workload_Comfort.workload.mental_demand}/20`,
+        type: 'scale'
       })
     }
 
-    if (detailed_metrics?.section5_performance?.raw_metrics?.task_completion_time_min) {
+    // Task completion time from Performance
+    if (detailed_metrics?.Performance?.raw_metrics?.task_completion_time_min) {
       insights.push({
         label: 'Task Time',
-        value: `${detailed_metrics.section5_performance.raw_metrics.task_completion_time_min}m`,
+        value: `${detailed_metrics.Performance.raw_metrics.task_completion_time_min}m`,
         type: 'time'
       })
     }
 
-    return insights.slice(0, 2) // Only show top 2 insights
+    // Error rate from Performance
+    if (detailed_metrics?.Performance?.raw_metrics?.error_rate !== undefined) {
+      insights.push({
+        label: 'Error Rate',
+        value: `${detailed_metrics.Performance.raw_metrics.error_rate}`,
+        type: 'count'
+      })
+    }
+
+    return insights.slice(0, 2) // Only show top 2 insights to fit the existing layout
   }
 
   const keyInsights = getKeyInsights()

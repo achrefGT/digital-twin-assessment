@@ -29,14 +29,11 @@ class ResilienceDomain(str, Enum):
     ADAPTABILITY = "Adaptability"
     RAPIDITY = "Rapidity"
     PHM = "PHM"
-    SECURITY = "Security"
 
 
 class ScenarioAssessment(BaseModel):
     likelihood: LikelihoodLevel
     impact: ImpactLevel
-    notes: Optional[str] = Field(None, description="Additional notes or context")
-    confidence: Optional[int] = Field(None, ge=1, le=5, description="Confidence level (1-5)")
 
 
 class DomainAssessment(BaseModel):

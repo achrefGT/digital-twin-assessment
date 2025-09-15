@@ -6,7 +6,7 @@ import { Leaf, DollarSign, Globe, Users, Shield, Activity, ArrowRight, CheckCirc
 import { useState, useEffect, useRef } from "react"
 
 const assessmentDomains = [
-  {
+  /*{
     id: "LCA",
     title: "SustainabilityLCA",
     tagline: "Environmental & Economic Impact",
@@ -36,8 +36,8 @@ const assessmentDomains = [
         features: ["CAPEX/OPEX analysis", "ROI calculations", "Benefit tracking"]
       }
     ]
-  },
-  /*{
+  },*/
+ {
     id: "sustainability",
     title: "Sustainability",
     tagline: "Balancing environmental, economic, and social impact",
@@ -47,7 +47,7 @@ const assessmentDomains = [
     bgGradient: "from-green-50 to-emerald-50",
     borderColor: "border-green-200 hover:border-green-400",
     features: ["Environmental", "Economic", "Social"]
-  },*/
+  },
   {
     id: "human_centricity",
     title: "Human Centricity",
@@ -534,13 +534,7 @@ const Home = () => {
               <Card 
                 key={domain.id} 
                 className={`group cursor-pointer border-2 ${domain.borderColor} bg-gradient-to-br ${domain.bgGradient} hover:shadow-2xl transition-all duration-500 hover:scale-[1.02] rounded-2xl overflow-hidden`}
-                onClick={() => {
-                  if (domain.id === 'LCA') {
-                    navigate('/sustainability')
-                  } else {
-                    navigate(`/assessment/${domain.id}`)
-                  }
-                }}
+                onClick={() => { navigate(`/assessment/${domain.id}`)}}
               >
                 <CardHeader className="pb-4">
                   <div className="flex items-start justify-between mb-4">

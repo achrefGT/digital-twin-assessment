@@ -124,10 +124,7 @@ class DatabaseManager:
             assessment.system_name = progress.system_name
             assessment.status = progress.status.value
             assessment.resilience_submitted = progress.resilience_submitted
-            assessment.slca_submitted = progress.slca_submitted
-            assessment.elca_submitted = progress.elca_submitted
             assessment.sustainability_submitted = progress.sustainability_submitted
-            assessment.lcc_submitted = progress.lcc_submitted
             assessment.human_centricity_submitted = progress.human_centricity_submitted
             assessment.domain_scores = progress.domain_scores
             assessment.overall_score = progress.overall_score
@@ -154,12 +151,6 @@ class DatabaseManager:
             # Update domain submission flag
             if domain == "resilience":
                 assessment.resilience_submitted = True
-            elif domain == "elca":
-                assessment.elca_submitted = True
-            elif domain == "slca":
-                assessment.slca_submitted = True
-            elif domain == "lcc":
-                assessment.lcc_submitted = True
             elif domain == "human_centricity":
                 assessment.human_centricity_submitted = True
             elif domain == "sustainability":
@@ -167,9 +158,6 @@ class DatabaseManager:
             
             # Update status
             if (assessment.resilience_submitted and 
-                assessment.slca_submitted and 
-                assessment.elca_submitted and
-                assessment.lcc_submitted and
                 assessment.sustainability_submitted and
                 assessment.human_centricity_submitted):
                 assessment.status = "all_complete"

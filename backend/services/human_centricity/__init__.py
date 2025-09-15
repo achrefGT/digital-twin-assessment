@@ -17,7 +17,7 @@ from .models import (
     ASSESSMENT_STATEMENTS
 )
 
-from .score import calculate_human_centricity_score
+from .score import calculate_human_centricity_score_with_domains as calculate_human_centricity_score
 from .config import settings
 
 __version__ = "1.0.0"

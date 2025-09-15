@@ -5,8 +5,8 @@ import { Progress } from '@/components/ui/progress'
 import { Button } from '@/components/ui/button'
 import { useWebSocket, WebSocketMessage } from '@/hooks/useWebSocket'
 import { useAssessment } from '@/hooks/useAssessment'
-import { ProgressTracker } from './ProgressTracker'
-import { OverallScoreDisplay } from './OverallScoreDisplay'
+
+import { RadarScoreChart } from './RadarScoreChart'
 import { HumanCentricityPanel } from './panels/HumanCentricityPanel'
 import { ResiliencePanel } from './panels/ResiliencePanel'
 import { SustainabilityPanel } from './panels/SustainabilityPanel'
@@ -71,34 +71,35 @@ const MODULES = {
   },
   sustainability: {
     name: 'Sustainability',
-    domains: ['elca', 'slca', 'lcc'],
+    domains: ['sustainability'],
     icon: Sparkles,
     color: 'green',
     description: 'Triple-bottom-line lifecycle impacts'
   }
 }
 
-// Updated utility functions to use localStorage instead of in-memory cache
+// Note: Removed localStorage functions as per artifact restrictions
+// Using in-memory storage only
+let dashboardDataCache: Record<string, AssessmentData> = {}
+
 const persistDashboardData = (assessmentId: string, data: AssessmentData) => {
   try {
-    const key = `dashboardData_${assessmentId}`
-    localStorage.setItem(key, JSON.stringify(data))
-    console.log('💾 Persisted dashboard data to localStorage for:', assessmentId)
+    dashboardDataCache[assessmentId] = { ...data }
+    console.log('💾 Cached dashboard data for:', assessmentId)
   } catch (error) {
-    console.error('⚠ Failed to persist dashboard data:', error)
+    console.error('⚠ Failed to cache dashboard data:', error)
   }
 }
 
 const loadPersistedDashboardData = (assessmentId: string): Partial<AssessmentData> => {
   try {
-    const key = `dashboardData_${assessmentId}`
-    const stored = localStorage.getItem(key)
+    const stored = dashboardDataCache[assessmentId]
     if (stored) {
-      console.log('🔥 Loaded persisted dashboard data from localStorage for:', assessmentId)
-      return JSON.parse(stored)
+      console.log('🔥 Loaded cached dashboard data for:', assessmentId)
+      return stored
     }
   } catch (error) {
-    console.error('⚠ Failed to load persisted dashboard data:', error)
+    console.error('⚠ Failed to load cached dashboard data:', error)
   }
   return {}
 }
@@ -115,7 +116,7 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
   
   const [selectedModule, setSelectedModule] = useState<string | null>(null)
   
-  // Initialize with persisted data
+  // Initialize with cached data
   const [assessmentData, setAssessmentData] = useState<AssessmentData>(() => {
     const persistedData = loadPersistedDashboardData(assessmentId)
     return {
@@ -149,10 +150,10 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
       return
     }
     
-    // Otherwise load persisted data
+    // Otherwise load cached data
     const persistedData = loadPersistedDashboardData(assessmentId)
     if (Object.keys(persistedData).length > 0) {
-      console.log('📊 Using cached data from localStorage')
+      console.log('📊 Using cached data from memory')
       setAssessmentData(prev => ({
         ...prev,
         assessment_id: assessmentId,
@@ -390,7 +391,7 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
     })
   }, [assessmentData, messages])
 
-  const allDomains = ['human_centricity', 'resilience', 'elca', 'slca', 'lcc']
+  const allDomains = ['human_centricity', 'resilience', 'sustainability']
   const completionPercentage = assessmentData.completion_percentage || 
     (assessmentData.completed_domains.length / allDomains.length) * 100
 
@@ -418,178 +419,135 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
   }
 
   return (
-    <div className="relative bg-gradient-to-br from-slate-50 via-white to-gray-50">
+    <div className="min-h-screen bg-gradient-to-br from-slate-50 via-background to-muted/20">
       <div className="container mx-auto px-6 py-8 space-y-8">
-        
-        {/* Header with refresh button */}
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <ConnectionIndicator 
-              connectionStatus={connectionStatus}
-            />
-            {assessmentData.status && (
-              <Badge variant={assessmentData.status === 'COMPLETED' ? 'default' : 'secondary'}>
-                {assessmentData.status}
-              </Badge>
-            )}
-          </div>
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={handleRefresh}
-            disabled={isRefreshing}
-            className="flex items-center gap-2"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-            Refresh Data
-          </Button>
-        </div>
 
-        {/* Assessment Overview Section */}
-        <div className="space-y-8">
-          <div className="grid grid-cols-1 xl:grid-cols-4 gap-6">
-            {/* Main Assessment Progress Section */}
-            <div className="xl:col-span-3 order-2 xl:order-1">
-              <Card className="border-2 border-gray-200 shadow-xl bg-white h-full">
-                <CardHeader className="bg-gradient-to-r from-gray-50 to-slate-50 border-b border-gray-200">
-                  <div className="flex items-center gap-3">
-                    <div>
-                      <CardTitle className="text-2xl font-bold text-gray-900">
-                        Digital Twin Assessment
-                      </CardTitle>
-                      <p className="text-gray-600 text-base leading-relaxed">
-                        Comprehensive evaluation across key technology and business domains
-                      </p>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent className="p-8">
-                  <ProgressTracker 
-                    key={`${assessmentData.assessment_id}-${assessmentData.completed_domains.length}`}
-                    modules={MODULES}
-                    completedDomains={assessmentData.completed_domains}
-                    domainData={assessmentData.domain_data}
-                    domainScores={assessmentData.domain_scores}
-                  />
-                </CardContent>
-              </Card>
-            </div>
-            
-            {/* Score Display */}
-            <div className="xl:col-span-1 order-1 xl:order-2">
-              <div className="sticky top-24">
-                <OverallScoreDisplay 
-                  overallScore={assessmentData.overall_score}
-                  domainScores={assessmentData.domain_scores}
-                  finalResults={assessmentData.final_results}
-                  completionPercentage={completionPercentage}
-                  totalDomains={allDomains.length}
-                />
-              </div>
-            </div>
-          </div>
-        </div>
+        {/* Enhanced Radar Chart with Overall Score */}
+        <RadarScoreChart 
+          domainScores={assessmentData.domain_scores}
+          overallScore={assessmentData.overall_score}
+          completedDomains={assessmentData.completed_domains}
+          completionPercentage={completionPercentage}
+          totalDomains={allDomains.length}
+        />
         
-        {/* Module Cards - Modern Design */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {Object.entries(MODULES).map(([moduleKey, module]) => {
-            const status = getModuleStatus(moduleKey)
-            const score = getModuleScore(moduleKey)
-            const IconComponent = module.icon
-            
-            return (
-              <Card 
-                key={moduleKey}
-                className="group border-slate-200/60 bg-white/60 backdrop-blur-sm hover:shadow-lg transition-all duration-300 relative overflow-hidden"
-              >
-                {/* Gradient overlay */}
-                <div className={`absolute inset-0 bg-gradient-to-br opacity-5 ${
-                  module.color === 'blue' ? 'from-blue-500 to-cyan-500' :
-                  module.color === 'purple' ? 'from-purple-500 to-pink-500' :
-                  'from-green-500 to-emerald-500'
-                }`} />
+        {/* Module Cards - Enhanced Design */}
+        <Card className="border-0 shadow-lg bg-card/50 backdrop-blur-sm">
+          <CardHeader className="bg-gradient-to-r from-secondary/10 via-secondary/5 to-background border-b border-border/50">
+            <CardTitle className="flex items-center gap-3 text-xl">
+              <div className="p-2 bg-secondary/20 rounded-lg">
+                <Activity className="w-6 h-6 text-primary" />
+              </div>
+              <div>
+                <span>Assessment Modules</span>
+                <p className="text-sm text-muted-foreground font-normal mt-1">
+                  Detailed breakdown by evaluation domains
+                </p>
+              </div>
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="p-8">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+              {Object.entries(MODULES).map(([moduleKey, module]) => {
+                const status = getModuleStatus(moduleKey)
+                const score = getModuleScore(moduleKey)
+                const IconComponent = module.icon
                 
-                <CardHeader className="relative pb-3">
-                  <div className="flex items-start justify-between">
-                    <div className="flex items-center gap-3">
-                      <div className={`p-2 rounded-lg ${
-                        module.color === 'blue' ? 'bg-blue-100 text-blue-600' :
-                        module.color === 'purple' ? 'bg-purple-100 text-purple-600' :
-                        'bg-green-100 text-green-600'
-                      }`}>
-                        <IconComponent className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <CardTitle className="text-base font-semibold text-slate-900">
-                          {module.name}
-                        </CardTitle>
-                        <p className="text-xs text-slate-500 mt-0.5">
-                          {module.description}
-                        </p>
-                      </div>
-                    </div>
+                return (
+                  <div 
+                    key={moduleKey}
+                    className={`group relative overflow-hidden rounded-2xl border border-border/50 
+                                bg-gradient-to-br from-background via-background to-muted/20 p-6 
+                                transition-all duration-300 hover:shadow-xl hover:scale-[1.02] ${
+                      module.color === 'blue'
+                        ? 'hover:border-blue-400'
+                        : module.color === 'purple'
+                        ? 'hover:border-purple-400'
+                        : 'hover:border-green-400'
+                    }`}
+                  >
+                    {/* Animated gradient overlay */}
+                    <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300 ${
+                      module.color === 'blue' ? 'bg-gradient-to-br from-blue-500 via-blue-400 to-cyan-400' :
+                      module.color === 'purple' ? 'bg-gradient-to-br from-purple-500 via-purple-400 to-pink-400' :
+                      'bg-gradient-to-br from-green-500 via-green-400 to-emerald-400'
+                    }`} />
                     
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setSelectedModule(moduleKey)}
-                      className="opacity-0 group-hover:opacity-100 transition-opacity h-8 w-8 p-0 text-slate-500 hover:text-slate-700 hover:bg-slate-200"
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </div>
-                </CardHeader>
-                
-                <CardContent className="relative pt-0">
-                  {/* Progress */}
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between text-sm">
-                      <span className="text-slate-600">Progress</span>
-                      <span className="font-medium text-slate-900">
-                        {status.completed}/{status.total} domains
-                      </span>
-                    </div>
-                    <Progress value={status.percentage} className="h-1.5" />
-                    
-                    {/* Score */}
-                    {score !== undefined && (
-                      <div className="pt-2 border-t border-slate-100">
-                        <div className="flex items-center justify-between">
-                          <span className="text-sm text-slate-600">Score</span>
-                          <div className="flex items-center gap-2">
-                            <TrendingUp className="w-4 h-4 text-green-500" />
-                            <span className="text-lg font-bold text-slate-900">
-                              {score.toFixed(1)}
-                            </span>
+                    <div className="relative space-y-6">
+                      {/* Header */}
+                      <div className="flex items-start justify-between">
+                        <div className="flex items-center gap-4">
+                          <div className={`p-3 rounded-xl bg-white shadow-sm border border-border/30 group-hover:shadow-md transition-shadow ${
+                            module.color === 'blue' ? 'text-blue-600' :
+                            module.color === 'purple' ? 'text-purple-600' :
+                            'text-green-600'
+                          }`}>
+                            <IconComponent className="w-7 h-7" />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold text-foreground">
+                              {module.name}
+                            </h3>
+                            <p className="text-sm text-muted-foreground mt-1">
+                              {module.description}
+                            </p>
                           </div>
                         </div>
+                        
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setSelectedModule(moduleKey)}
+                          className="opacity-0 group-hover:opacity-100 transition-all duration-200 h-10 w-10 p-0 text-muted-foreground hover:text-primary hover:bg-primary/10 hover:scale-110"
+                        >
+                          <Eye className="h-5 w-5" />
+                        </Button>
                       </div>
-                    )}
-                    
-                    {/* Domain-specific content */}
-                    <div className="pt-2">
-                      {moduleKey === 'human_centricity' && (
-                        <HumanCentricityPanel data={assessmentData.domain_data.human_centricity} />
-                      )}
-                      {moduleKey === 'resilience' && (
-                        <ResiliencePanel data={assessmentData.domain_data.resilience} />
-                      )}
-                      {moduleKey === 'sustainability' && (
-                        <SustainabilityPanel 
-                          elcaData={assessmentData.domain_data.elca}
-                          slcaData={assessmentData.domain_data.slca}
-                          lccData={assessmentData.domain_data.lcc}
-                          moduleScore={score}
-                        />
-                      )}
+                      
+                      {/* Progress Section */}
+                      <div className="space-y-4">
+                        
+                        {/* Score Display */}
+                        {score !== undefined && (
+                          <div className="pt-4 border-t border-border/30">
+                            <div className="flex items-center justify-between">
+                              <span className="text-sm font-medium text-muted-foreground">Score</span>
+                              <div className="flex items-center gap-3">
+                                <div className={`p-1.5 rounded-lg ${
+                                  score >= 80 ? 'bg-green-100 text-green-600' :
+                                  score >= 60 ? 'bg-yellow-100 text-yellow-600' :
+                                  'bg-orange-100 text-orange-600'
+                                }`}>
+                                  <TrendingUp className="w-4 h-4" />
+                                </div>
+                                <span className="text-2xl font-bold text-foreground">
+                                  {score.toFixed(1)}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+                        
+                        {/* Domain-specific content panels */}
+                        <div className="pt-4 border-t border-border/30">
+                          {moduleKey === 'human_centricity' && (
+                            <HumanCentricityPanel data={assessmentData.domain_data.human_centricity} />
+                          )}
+                          {moduleKey === 'resilience' && (
+                            <ResiliencePanel data={assessmentData.domain_data.resilience} />
+                          )}
+                          {moduleKey === 'sustainability' && (
+                            <SustainabilityPanel data={assessmentData.domain_data.sustainability} />
+                          )}
+                        </div>
+                      </div>
                     </div>
                   </div>
-                </CardContent>
-              </Card>
-            )
-          })}
-        </div>
+                )
+              })}
+            </div>
+          </CardContent>
+        </Card>
 
         {/* Detailed Module View Modal */}
         {selectedModule && (

@@ -17,10 +17,28 @@ const COLOR_CLASSES: Record<string, { bg: string; ring: string; text: string; ac
   green: { bg: 'bg-green-600', ring: 'ring-green-200', text: 'text-green-600', accent: 'border-green-500' }
 }
 
+interface ExtendedStepDefinition extends StepDefinition {
+  icon: React.ComponentType<{ className?: string }>
+  color: keyof typeof COLOR_CLASSES
+}
+
+interface StepProps {
+  onSubmit: (data: any) => void
+  initialData?: any
+}
+
+interface StepDefinition {
+  title: string
+  description: string
+  component: React.ComponentType<StepProps>
+}
+
+
+
 // ------------------------------
 // Step 1: Core Usability
 // ------------------------------
-const CoreUsabilityStep: React.FC<any> = ({ onSubmit, initialData }: any) => {
+const CoreUsabilityStep: React.FC<StepProps> = ({ onSubmit, initialData }) => {
   const [responses, setResponses] = useState<any[]>(
     initialData?.core_usability_responses || new Array(8).fill(null).map(() => ({ rating: 4 }))
   )
@@ -123,7 +141,7 @@ const CoreUsabilityStep: React.FC<any> = ({ onSubmit, initialData }: any) => {
 // ------------------------------
 // Step 2: Trust & Transparency
 // ------------------------------
-const TrustTransparencyStep: React.FC<any> = ({ onSubmit, initialData }: any) => {
+const TrustTransparencyStep: React.FC<StepProps> = ({ onSubmit, initialData }) => {
   const [responses, setResponses] = useState<any[]>(
     initialData?.trust_transparency_responses || new Array(4).fill(null).map(() => ({ rating: 4 }))
   )
@@ -222,7 +240,7 @@ const TrustTransparencyStep: React.FC<any> = ({ onSubmit, initialData }: any) =>
 // ------------------------------
 // Step 3: Workload & Performance
 // ------------------------------
-const WorkloadPerformanceStep: React.FC<any> = ({ onSubmit, initialData }: any) => {
+const WorkloadPerformanceStep: React.FC<StepProps> = ({ onSubmit, initialData }) => {
   const [workloadMetrics, setWorkloadMetrics] = useState({
     mental_demand: initialData?.workload_metrics?.mental_demand || 3,
     effort_required: initialData?.workload_metrics?.effort_required || 3,
@@ -526,7 +544,7 @@ export const HumanCentricityForm: React.FC<{
   const [formData, setFormData] = useState(initialData.form_data || {})
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set())
 
-  const steps = [
+  const steps: ExtendedStepDefinition[] = [
     {
       title: "Core Usability",
       description: "Evaluate basic usability and system integration",
@@ -675,20 +693,20 @@ export const HumanCentricityForm: React.FC<{
   )
 }
 
-export const getHumanCentricitySteps = () => [
+export const getHumanCentricitySteps = (): StepDefinition[] => [
   {
     title: "Core Usability",
     description: "Evaluate basic usability and system integration",
-    component: <CoreUsabilityStep />
+    component: CoreUsabilityStep
   },
   {
     title: "Trust & Transparency",
     description: "Assess trust in system outputs and transparency",
-    component: <TrustTransparencyStep />
+    component: TrustTransparencyStep
   },
   {
     title: "Workload & Performance",
     description: "Measure workload, cybersickness, emotions, and performance",
-    component: <WorkloadPerformanceStep />
+    component: WorkloadPerformanceStep
   }
 ]
