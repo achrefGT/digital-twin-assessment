@@ -12,6 +12,7 @@ from .config import settings
 from .database import DatabaseManager
 from .kafka_service import KafkaService
 from .routers import assessments, health, websockets
+from .auth.router import router as auth_router
 from .exceptions import create_http_exception
 from shared.models.exceptions import DigitalTwinAssessmentException
 from .dependencies import get_db_manager, get_kafka_service
@@ -204,6 +205,7 @@ async def log_requests(request: Request, call_next):
 app.include_router(assessments.router)
 app.include_router(health.router)
 app.include_router(websockets.router, prefix="/api")
+app.include_router(auth_router)
 
 @app.get("/")
 async def root():

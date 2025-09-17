@@ -16,8 +16,15 @@ from ..database import DatabaseManager
 from ..kafka_service import KafkaService
 from ..config import settings
 from ..models import AssessmentCreate, AssessmentResponse, FormSubmission
-from ..dependencies import get_db_manager, get_kafka_service, get_current_user, handle_exceptions
-# from ..exceptions import AssessmentNotFoundException
+from ..dependencies import (
+    get_db_manager, 
+    get_kafka_service, 
+    get_current_user_optional,
+    get_current_user_required,
+    handle_exceptions,
+    require_roles
+)
+from ..auth.models import TokenData
 
 router = APIRouter(prefix="/assessments", tags=["assessments"])
 
@@ -35,11 +42,11 @@ async def create_assessment(
     assessment_data: AssessmentCreate,
     db_manager: DatabaseManager = Depends(get_db_manager),
     kafka_service: KafkaService = Depends(get_kafka_service),
-    current_user: Optional[str] = Depends(get_current_user)
+    current_user: TokenData = Depends(get_current_user_required)
 ):
     """Create a new assessment with event publishing"""
     # Use authenticated user if available, otherwise use provided user_id
-    user_id = current_user or assessment_data.user_id
+    user_id = current_user.user_id if current_user else assessment_data.user_id
     
     # Create assessment using shared model logic
     progress = AssessmentProgress(
@@ -69,17 +76,21 @@ async def create_assessment(
 async def get_assessment(
     assessment_id: str,
     db_manager: DatabaseManager = Depends(get_db_manager),
-    current_user: Optional[str] = Depends(get_current_user)
+    current_user: Optional[TokenData] = Depends(get_current_user_optional)
 ):
     """Get assessment by ID"""
     assessment = db_manager.get_assessment(assessment_id)
     
-    # Basic authorization check (when auth is implemented)
-    # if current_user and assessment.user_id and assessment.user_id != current_user:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail="Access denied"
-    #     )
+    # Authorization check - users can only access their own assessments unless admin
+    if current_user:
+        if (assessment.user_id and 
+            assessment.user_id != current_user.user_id and 
+            current_user.role not in ["admin", "assessor"]):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
+    
     
     return AssessmentResponse.from_orm(assessment)
 
@@ -91,7 +102,7 @@ async def submit_form(
     form_submission: FormSubmission,
     db_manager: DatabaseManager = Depends(get_db_manager),
     kafka_service: KafkaService = Depends(get_kafka_service),
-    current_user: Optional[str] = Depends(get_current_user)
+    current_user: Optional[TokenData] = Depends(get_current_user_optional)
 ):
     """Submit a domain form for an assessment with event-driven processing"""
     
@@ -100,12 +111,15 @@ async def submit_form(
     progress = db_assessment.to_progress_model()
     previous_status = progress.status.value
     
-    # Authorization check (when auth is implemented)
-    # if current_user and progress.user_id and progress.user_id != current_user:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail="Access denied"
-    #     )
+    # Authorization check - users can only submit for their own assessments
+    if current_user:
+        if (progress.user_id and 
+            progress.user_id != current_user.user_id and 
+            current_user.role not in ["admin", "assessor"]):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
     
     # Use shared model business logic to validate submission
     if not _can_submit_domain(progress, form_submission.domain):
@@ -172,21 +186,42 @@ async def get_user_assessments(
     limit: int = 10,
     status_filter: Optional[AssessmentStatus] = None,
     db_manager: DatabaseManager = Depends(get_db_manager),
-    current_user: Optional[str] = Depends(get_current_user)
+    current_user: Optional[TokenData] = Depends(get_current_user_optional)
 ):
     """Get assessments for a user with optional status filtering"""
     
-    # Authorization check (when auth is implemented)
-    # if current_user and current_user != user_id:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail="Access denied"
-    #     )
+    # Authorization check - users can only see their own assessments unless admin/assessor
+    if current_user:
+        if (user_id != current_user.user_id and 
+            current_user.role not in ["admin", "assessor"]):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
     
-    # Use shared enum for status filtering
     assessments = db_manager.get_user_assessments(
         user_id, 
         min(limit, 50),  # Cap limit
+        status_filter=status_filter.value if status_filter else None
+    )
+    
+    return [AssessmentResponse.from_orm(assessment) for assessment in assessments]
+
+
+# New endpoint: Get current user's assessments
+@router.get("/my/assessments", response_model=List[AssessmentResponse])
+@handle_exceptions
+async def get_my_assessments(
+    limit: int = 10,
+    status_filter: Optional[AssessmentStatus] = None,
+    db_manager: DatabaseManager = Depends(get_db_manager),
+    current_user: TokenData = Depends(get_current_user_required)
+):
+    """Get assessments for the current authenticated user"""
+    
+    assessments = db_manager.get_user_assessments(
+        current_user.user_id, 
+        min(limit, 50),
         status_filter=status_filter.value if status_filter else None
     )
     
@@ -198,45 +233,41 @@ async def get_user_assessments(
 async def get_assessment_progress(
     assessment_id: str,
     db_manager: DatabaseManager = Depends(get_db_manager),
-    current_user: Optional[str] = Depends(get_current_user)
+    current_user: Optional[TokenData] = Depends(get_current_user_optional)
 ):
     """Get detailed assessment progress using shared model"""
     
     db_assessment = db_manager.get_assessment(assessment_id)
     progress = db_assessment.to_progress_model()
     
-    # Authorization check (when auth is implemented)
-    # if current_user and progress.user_id and progress.user_id != current_user:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail="Access denied"
-    #     )
+    # Authorization check
+    if current_user:
+        if (progress.user_id and 
+            progress.user_id != current_user.user_id and 
+            current_user.role not in ["admin", "assessor"]):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
     
     return progress
 
 
 @router.patch("/{assessment_id}/status")
 @handle_exceptions
+@require_roles("admin", "assessor")  # Only admins and assessors can change status
 async def update_assessment_status(
     assessment_id: str,
     new_status: AssessmentStatus,
     db_manager: DatabaseManager = Depends(get_db_manager),
     kafka_service: KafkaService = Depends(get_kafka_service),
-    current_user: Optional[str] = Depends(get_current_user)
+    current_user: TokenData = Depends(get_current_user_required)
 ):
-    """Update assessment status (admin endpoint) with event publishing"""
+    """Update assessment status (admin/assessor endpoint) with event publishing"""
     
-    # This would typically require admin permissions
     db_assessment = db_manager.get_assessment(assessment_id)
     progress = db_assessment.to_progress_model()
     previous_status = progress.status.value
-    
-    # Authorization check (when auth is implemented)
-    # if current_user and progress.user_id and progress.user_id != current_user:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail="Access denied"
-    #     )
     
     # Validate status transition using shared logic
     if not _is_valid_status_transition(progress.status, new_status):
@@ -264,9 +295,8 @@ async def update_assessment_status(
         )
         
     except Exception as e:
-        # Publish error event
+        # Publish error event (async)
         try:
-        # Don't await this to avoid blocking the response
             import asyncio
             asyncio.create_task(kafka_service._publish_error_event(
                 assessment_id=assessment_id,
@@ -275,15 +305,14 @@ async def update_assessment_status(
                 error_details={"error": str(e), "previous_status": previous_status, "new_status": new_status.value},
                 user_id=progress.user_id
             ))
-            
         except Exception as publish_error:
-            import logging
-            logging.getLogger(__name__).error(f"Failed to publish error event: {publish_error}")
+            logger.error(f"Failed to publish error event: {publish_error}")
         
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"Failed to update status: {str(e)}"
         )
+
 
 
 @router.delete("/{assessment_id}")
@@ -292,41 +321,47 @@ async def delete_assessment(
     assessment_id: str,
     db_manager: DatabaseManager = Depends(get_db_manager),
     kafka_service: KafkaService = Depends(get_kafka_service),
-    current_user: Optional[str] = Depends(get_current_user)
+    current_user: TokenData = Depends(get_current_user_required)
 ):
-    """Delete an assessment (soft delete) with event publishing"""
+    """Delete an assessment (hard delete) with event publishing"""
     
     assessment = db_manager.get_assessment(assessment_id)
     
-    # Authorization check (when auth is implemented)
-    # if current_user and assessment.user_id and assessment.user_id != current_user:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail="Access denied"
-    #     )
+    # Authorization check - Fixed: use assessment instead of undefined progress
+    if current_user:
+        if (assessment.user_id and 
+            assessment.user_id != current_user.user_id and 
+            current_user.role not in ["admin", "assessor"]):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
     
     try:
-        # Get progress for event publishing
+        # Get progress for event publishing before deletion
         progress = assessment.to_progress_model()
         previous_status = progress.status.value
         
-        # In production, implement soft delete
-        # For now, just publish status change event
-        progress.status = AssessmentStatus.FAILED  # Or create DELETED status
-        progress.updated_at = datetime.utcnow()
+        # Perform hard delete from database
+        success = db_manager.delete_assessment(assessment_id)
         
-        # Publish status update event
-        await kafka_service.publish_assessment_status_update(progress, previous_status)
+        if not success:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Assessment not found or already deleted"
+            )
         
         return JSONResponse(
             status_code=status.HTTP_200_OK,
-            content={"message": "Assessment deletion requested"}
+            content={"message": "Assessment deleted successfully"}
         )
         
+    except HTTPException:
+        # Re-raise HTTP exceptions (like 404)
+        raise
     except Exception as e:
         # Publish error event
         try:
-            # Don't await this to avoid blocking the response
             import asyncio
             asyncio.create_task(kafka_service._publish_error_event(
                 assessment_id=assessment_id,
@@ -352,19 +387,21 @@ async def retry_assessment(
     assessment_id: str,
     db_manager: DatabaseManager = Depends(get_db_manager),
     kafka_service: KafkaService = Depends(get_kafka_service),
-    current_user: Optional[str] = Depends(get_current_user)
+    current_user: TokenData = Depends(get_current_user_required)
 ):
     """Retry a failed assessment with event publishing"""
     
     db_assessment = db_manager.get_assessment(assessment_id)
     progress = db_assessment.to_progress_model()
     
-    # Authorization check (when auth is implemented)
-    # if current_user and progress.user_id and progress.user_id != current_user:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail="Access denied"
-    #     )
+    # Authorization check - users can only submit for their own assessments
+    if current_user:
+        if (progress.user_id and 
+            progress.user_id != current_user.user_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
     
     # Only allow retry for failed assessments
     if progress.status != AssessmentStatus.FAILED:
@@ -510,7 +547,7 @@ def _is_valid_status_transition(current: AssessmentStatus, new: AssessmentStatus
 async def get_assessment_domain_scores(
     assessment_id: str,
     db_manager: DatabaseManager = Depends(get_db_manager),
-    current_user: Optional[str] = Depends(get_current_user)
+    current_user: TokenData = Depends(get_current_user_required)
 ):
     """Get detailed scores for all completed domains in an assessment"""
     
@@ -518,12 +555,14 @@ async def get_assessment_domain_scores(
     assessment = db_manager.get_assessment(assessment_id)
     progress = assessment.to_progress_model()
     
-    # Authorization check (when auth is implemented)
-    # if current_user and progress.user_id and progress.user_id != current_user:
-    #     raise HTTPException(
-    #         status_code=status.HTTP_403_FORBIDDEN,
-    #         detail="Access denied"
-    #     )
+    # Authorization check - users can only submit for their own assessments
+    if current_user:
+        if (progress.user_id and 
+            progress.user_id != current_user.user_id):
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Access denied"
+            )
     
     domain_scores = {
         "assessment_id": assessment_id,

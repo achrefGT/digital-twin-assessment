@@ -12,10 +12,11 @@ from shared.models.assessment import AssessmentProgress
 
 from .config import settings
 from .models import Base, Assessment, UserSession
+# Import auth models
+from .auth.models import User, RefreshToken
 from .exceptions import DatabaseConnectionException, AssessmentNotFoundException
 
 logger = logging.getLogger(__name__)
-
 
 class DatabaseManager:
     def __init__(self):
@@ -29,10 +30,11 @@ class DatabaseManager:
         self.SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=self.engine, expire_on_commit=False)
         
     def create_tables(self):
-        """Create database tables"""
+        """Create database tables including auth tables"""
         try:
+            # This will create all tables including User and RefreshToken
             Base.metadata.create_all(bind=self.engine)
-            logger.info("Database tables created successfully")
+            logger.info("Database tables created successfully (including auth tables)")
         except SQLAlchemyError as e:
             logger.error(f"Failed to create database tables: {e}")
             raise DatabaseConnectionException(f"Database initialization failed: {e}")
@@ -78,6 +80,22 @@ class DatabaseManager:
             
             session.expunge(fresh_assessment)
             return fresh_assessment
+        
+    def delete_assessment(self, assessment_id: str) -> bool:
+        """Hard delete an assessment from the database"""
+        with self.get_session() as session:
+            assessment = session.query(Assessment).filter(
+                Assessment.assessment_id == assessment_id
+            ).first()
+            
+            if not assessment:
+                return False
+            
+            # Delete the assessment record
+            session.delete(assessment)
+            session.commit()
+            
+            return True
     
     def create_assessment_from_progress(self, progress: AssessmentProgress, 
                                       metadata: Dict[str, Any] = None) -> Assessment:

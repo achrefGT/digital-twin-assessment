@@ -13,6 +13,7 @@ import UnifiedDomainSelector from "@/components/UnifiedDomainSelector"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
+import { useAuth } from "@/auth"
 
 const domainInfo = {
   slca: { 
@@ -69,6 +70,7 @@ const Assessment = () => {
   const { domain } = useParams()
   const navigate = useNavigate()
   const { toast } = useToast()
+  const { token, isAuthenticated, user } = useAuth()
   
   // Get assessment from localStorage to persist across domain switches
   const [assessment, setAssessment] = useState<any>(() => {
@@ -225,6 +227,21 @@ const Assessment = () => {
 
   const handleFormSubmit = async (data: any) => {
     setIsSubmitting(true)
+
+    if (!isAuthenticated || !token) {
+      throw new Error('Please log in to submit assessment')
+    }
+
+    // Validate we have proper backend IDs
+    if (!assessment.assessment_id) {
+      toast({
+        title: "Error",
+        description: "Invalid assessment - missing ID",
+        variant: "destructive"
+      })
+      setIsSubmitting(false)
+      return
+    }
     
     // Get browser and device information
     const userAgent = navigator.userAgent
@@ -243,8 +260,8 @@ const Assessment = () => {
     }
 
     const assessmentData = {
-      assessment_id: assessment.assessment_id,
-      user_id: assessment.user_id,
+      assessment_id: assessment.assessment_id, // Use backend-provided ID
+      user_id: assessment.user_id, // Use backend-provided user ID
       system_name: assessment.system_name,
       domain: domain,
       form_data: data,
@@ -267,16 +284,21 @@ const Assessment = () => {
     console.log('Payload:', assessmentData)
     
     try {
-      console.log('Submitting to backend:', `http://localhost:8000/assessments/${assessment.assessment_id}/submit`)
+      console.log('Submitting to backend:', `http://localhost:8000/assessments/${assessment.assessment_id}/submit/`)
       
-      // Submit to backend (same endpoint as ELCAForm)
-      const response = await fetch(`http://localhost:8000/assessments/${assessment.assessment_id}/submit`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(assessmentData)
-      })
+      // Submit to backend 
+      const response = await fetch(
+        `http://localhost:8000/assessments/${assessment.assessment_id}/submit/`, 
+        {
+          method: 'POST',
+          headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+          body: JSON.stringify(assessmentData)
+        }
+      )
+
+      if (response.status === 401) {
+        throw new Error('Session expired. Please log in again.')
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
@@ -296,17 +318,10 @@ const Assessment = () => {
       })
       
     } catch (error) {
-      console.error('Backend submission failed:', error)
-      
-      // Fallback: keep local data
-      setFormData(assessmentData)
-      setIsCompleted(true)
-      
+      console.error('Submission failed:', error)
       toast({
-        title: "Assessment Saved Locally",
-        description: error instanceof Error ? 
-          `Backend unavailable: ${error.message}. Assessment data saved locally.` : 
-          "Backend unavailable. Assessment data saved locally.",
+        title: error.message.includes('log in') ? "Authentication Required" : "Submission Failed",
+        description: error instanceof Error ? error.message : "Failed to submit assessment",
         variant: "destructive"
       })
     } finally {

@@ -455,17 +455,18 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
                 
                 return (
                   <div 
-                    key={moduleKey}
-                    className={`group relative overflow-hidden rounded-2xl border border-border/50 
-                                bg-gradient-to-br from-background via-background to-muted/20 p-6 
-                                transition-all duration-300 hover:shadow-xl hover:scale-[1.02] ${
-                      module.color === 'blue'
-                        ? 'hover:border-blue-400'
-                        : module.color === 'purple'
-                        ? 'hover:border-purple-400'
-                        : 'hover:border-green-400'
-                    }`}
-                  >
+  key={moduleKey}
+  className={`group relative overflow-hidden rounded-2xl border border-border/50 
+              bg-gradient-to-br from-background via-background to-muted/20 p-6 
+              transition-all duration-300 hover:shadow-xl hover:scale-[1.02] ${
+    module.color === 'blue'
+      ? 'hover:border-blue-400'
+      : module.color === 'purple'
+      ? 'hover:border-purple-400'
+      : 'hover:border-green-400'
+  }`}
+>
+
                     {/* Animated gradient overlay */}
                     <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300 ${
                       module.color === 'blue' ? 'bg-gradient-to-br from-blue-500 via-blue-400 to-cyan-400' :

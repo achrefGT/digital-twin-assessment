@@ -67,6 +67,13 @@ class Settings(BaseSettings):
     # Logging
     log_level: str = "INFO"
     service_name: str = "api-gateway"
+
+    # Auth settings
+    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+    jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
+    access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+    refresh_token_expire_days: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+        
         
     @field_validator('cors_origins', mode='before')
     @classmethod

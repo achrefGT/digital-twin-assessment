@@ -7,6 +7,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { useToast } from "@/hooks/use-toast"
 import { ArrowRight, FileText } from "lucide-react"
+import { useAuth } from "@/auth"
 
 interface CreateAssessmentProps {
   onAssessmentCreated: (assessment: any) => void
@@ -19,15 +20,19 @@ export const CreateAssessment = ({ onAssessmentCreated, domain, userId }: Create
   const { toast } = useToast()
   const [isCreating, setIsCreating] = useState(false)
 
+  // Use existing auth system
+  const { token, isAuthenticated, user } = useAuth()
+
   const createAssessment = async (data: any) => {
     setIsCreating(true)
     
     try {
-      // Generate user ID if not provided
-      const finalUserId = userId || `user-${Math.random().toString(36).substr(2, 9)}`
+
+      if (!isAuthenticated || !token) {
+        throw new Error('Please log in to create an assessment')
+      }
       
       const payload = {
-        user_id: finalUserId,
         system_name: data.systemName,
         metadata: {
           assessment_type: domain || "full",
@@ -38,37 +43,46 @@ export const CreateAssessment = ({ onAssessmentCreated, domain, userId }: Create
       console.log('Creating assessment with payload:', payload) // For debugging
       
       // Submit to backend
-      const response = await fetch('http://localhost:8000/assessments', {
+      const response = await fetch('http://localhost:8000/assessments/', {
         method: 'POST',
         headers: {
-          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
         },
         body: JSON.stringify(payload)
       })
+
+      if (response.status === 401) {
+        throw new Error('Session expired. Please log in again.')
+      }
 
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}))
         throw new Error(errorData.message || `HTTP error! status: ${response.status}`)
       }
 
-      const result = await response.json()
+      const backendAssessment = await response.json()
       
       // Create assessment object with backend response + additional data for form
       const assessment = {
-        assessment_id: result.assessment_id || result.id, // Backend should return the ID
-        user_id: finalUserId,
+        assessment_id: backendAssessment.assessment_id || backendAssessment.id,
+        user_id: backendAssessment.user_id, // Use backend user_id
         system_name: data.systemName,
         domain: domain,
         description: data.description,
         organization: data.organization,
-        metadata: {
+        created_at: backendAssessment.created_at,
+        metadata: backendAssessment.metadata || {
           assessment_type: domain || "full",
-          version: "1.0",
-          created_at: result.created_at || new Date().toISOString(),
-          submission_source: "web_form"
+          version: "1.0"
         }
       }
       
+      // Validate required IDs exist
+      if (!assessment.assessment_id || !assessment.user_id) {
+        throw new Error('Backend did not provide required IDs')
+      }
+
       onAssessmentCreated(assessment)
       
       toast({
@@ -78,46 +92,17 @@ export const CreateAssessment = ({ onAssessmentCreated, domain, userId }: Create
       
     } catch (error) {
       console.error('Error creating assessment:', error)
-      
-      // Fallback to client-side creation if backend fails
-      const fallbackAssessment = {
-        assessment_id: `assessment-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
-        user_id: userId || `user-${Math.random().toString(36).substr(2, 9)}`,
-        system_name: data.systemName,
-        domain: domain,
-        description: data.description,
-        organization: data.organization,
-        metadata: {
-          assessment_type: domain || "full",
-          version: "1.0",
-          created_at: new Date().toISOString(),
-          submission_source: "web_form"
-        }
-      }
-      
-      onAssessmentCreated(fallbackAssessment)
-      
+
       toast({
-        title: "Assessment Created Locally",
-        description: error instanceof Error ? 
-          `Backend unavailable: ${error.message}. Assessment created locally.` : 
-          "Backend unavailable. Assessment created locally.",
-        variant: "default"
+        title: error.message.includes('log in') ? "Authentication Required" : "Assessment Creation Failed",
+        description: error instanceof Error ? error.message : "Failed to create assessment",
+        variant: "destructive"
       })
+      
+      throw error // Don't create local assessment
     } finally {
       setIsCreating(false)
     }
-  }
-
-  const getDomainTitle = () => {
-    const titles = {
-      elca: "Environmental Life Cycle Assessment",
-      slca: "Social Life Cycle Assessment", 
-      lcc: "Life Cycle Costing",
-      human_centricity: "Human Centricity Assessment",
-      resilience: "Resilience Assessment"
-    }
-    return titles[domain as keyof typeof titles] || "Assessment"
   }
 
   return (

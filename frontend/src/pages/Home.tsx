@@ -4,44 +4,14 @@ import { Badge } from "@/components/ui/badge"
 import { useNavigate } from "react-router-dom"
 import { Leaf, DollarSign, Globe, Users, Shield, Activity, ArrowRight, CheckCircle, Sparkles, Brain } from "lucide-react"
 import { useState, useEffect, useRef } from "react"
+import { UserNavigation } from "@/components/UserNavigation"
 
 const assessmentDomains = [
-  /*{
-    id: "LCA",
-    title: "SustainabilityLCA",
-    tagline: "Environmental & Economic Impact",
-    description: "Evaluate environmental footprint, social responsibility, and economic viability throughout the system lifecycle",
-    icon: Sparkles,
-    gradient: "from-green-500 to-emerald-600",
-    bgGradient: "from-green-50 to-emerald-50",
-    borderColor: "border-green-200 hover:border-green-400",
-    features: ["Environmental LCA (ELCA)", "Social LCA (SLCA)", "Life Cycle Costing (LCC)"],
-    subDomains: [
-      {
-        id: "elca",
-        title: "Environmental Life Cycle Assessment",
-        description: "Carbon footprint and environmental impact analysis",
-        features: ["Carbon intensity", "Energy consumption", "Regional parameters"]
-      },
-      {
-        id: "slca", 
-        title: "Social Life Cycle Assessment",
-        description: "Social impacts including worker safety and community engagement",
-        features: ["Worker satisfaction", "Community engagement", "Stakeholder analysis"]
-      },
-      {
-        id: "lcc",
-        title: "Life Cycle Costing",
-        description: "Financial assessment of costs and benefits over system lifetime",
-        features: ["CAPEX/OPEX analysis", "ROI calculations", "Benefit tracking"]
-      }
-    ]
-  },*/
- {
+  {
     id: "sustainability",
     title: "Sustainability",
     tagline: "Balancing environmental, economic, and social impact",
-    description: "Evaluate the system’s long-term resilience and performance across environmental, economic, and social dimensions.",
+    description: "Evaluate the system's long-term resilience and performance across environmental, economic, and social dimensions.",
     icon: Sparkles,
     gradient: "from-green-500 to-emerald-600",
     bgGradient: "from-green-50 to-emerald-50",
@@ -72,7 +42,7 @@ const assessmentDomains = [
   }
 ]
 
-// Animated Background Component
+// Animated Background Component (same as before)
 const AnimatedBackground = () => {
   const containerRef = useRef(null)
 
@@ -453,21 +423,7 @@ const Home = () => {
               <span className="text-xl font-bold text-gray-900">Digital Twin Platform</span>
             </div>
             
-            <div className="flex items-center gap-3">
-              <Button
-                variant="outline"
-                onClick={() => navigate('/dashboard')}
-                className="border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
-              >
-                Dashboard
-              </Button>
-              <Button
-                onClick={() => navigate('/assessment')}
-                className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white"
-              >
-                Create Assessment
-              </Button>
-            </div>
+            <UserNavigation />
           </div>
         </div>
       </nav>
