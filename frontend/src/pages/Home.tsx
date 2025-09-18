@@ -3,8 +3,9 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge"
 import { useNavigate } from "react-router-dom"
 import { Leaf, DollarSign, Globe, Users, Shield, Activity, ArrowRight, CheckCircle, Sparkles, Brain } from "lucide-react"
-import { useState, useEffect, useRef } from "react"
+import { useState, useEffect } from "react"
 import { UserNavigation } from "@/components/UserNavigation"
+import AnimatedBackground from "@/components/AnimatedBackground"
 
 const assessmentDomains = [
   {
@@ -42,363 +43,21 @@ const assessmentDomains = [
   }
 ]
 
-// Animated Background Component (same as before)
-const AnimatedBackground = () => {
-  const containerRef = useRef(null)
-
-  useEffect(() => {
-    const container = containerRef.current
-    if (!container) return
-
-    // Generate resilience network nodes
-    const createResilienceNodes = () => {
-      for (let i = 0; i < 12; i++) {
-        const node = document.createElement('div')
-        node.className = 'resilience-node'
-        node.style.cssText = `
-          position: absolute;
-          width: 12px;
-          height: 12px;
-          background: radial-gradient(circle, #3b82f6, #1e40af);
-          border: 2px solid rgba(34, 197, 94, 0.6);
-          border-radius: 50%;
-          box-shadow: 0 0 15px rgba(59, 130, 246, 0.8), 0 0 25px rgba(34, 197, 94, 0.4);
-          animation: resilienceFloat 8s ease-in-out infinite;
-          left: ${Math.random() * 100}%;
-          top: ${Math.random() * 100}%;
-          animation-delay: ${Math.random() * 8}s;
-        `
-        
-        const pulse = document.createElement('div')
-        pulse.style.cssText = `
-          position: absolute;
-          top: -4px;
-          left: -4px;
-          width: 16px;
-          height: 16px;
-          border: 1px solid rgba(34, 197, 94, 0.3);
-          border-radius: 50%;
-          animation: resiliencePulse 3s ease-in-out infinite;
-        `
-        node.appendChild(pulse)
-        container.appendChild(node)
-      }
-    }
-
-    // Generate human-centric icons
-    const createHumanIcons = () => {
-      for (let i = 0; i < 8; i++) {
-        const icon = document.createElement('div')
-        icon.className = 'human-icon'
-        icon.style.cssText = `
-          position: absolute;
-          width: 20px;
-          height: 20px;
-          animation: humanGlow 4s ease-in-out infinite;
-          left: ${Math.random() * 100}%;
-          top: ${Math.random() * 100}%;
-          animation-delay: ${Math.random() * 4}s;
-        `
-        
-        const head = document.createElement('div')
-        head.style.cssText = `
-          position: absolute;
-          top: 0;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 8px;
-          height: 8px;
-          background: #f59e0b;
-          border-radius: 50%;
-          box-shadow: 0 0 10px rgba(245, 158, 11, 0.8);
-        `
-        
-        const body = document.createElement('div')
-        body.style.cssText = `
-          position: absolute;
-          top: 10px;
-          left: 50%;
-          transform: translateX(-50%);
-          width: 12px;
-          height: 10px;
-          background: #f59e0b;
-          border-radius: 0 0 6px 6px;
-          box-shadow: 0 0 8px rgba(245, 158, 11, 0.6);
-        `
-        
-        icon.appendChild(head)
-        icon.appendChild(body)
-        container.appendChild(icon)
-      }
-    }
-
-    // Generate industrial hexagons
-    const createIndustrialHexagons = () => {
-      for (let i = 0; i < 6; i++) {
-        const hex = document.createElement('div')
-        hex.className = 'industrial-hex'
-        hex.style.cssText = `
-          position: absolute;
-          width: 80px;
-          height: 80px;
-          background: transparent;
-          border: 2px solid rgba(34, 197, 94, 0.3);
-          transform: rotate(30deg);
-          animation: industrialRotate 12s linear infinite;
-          left: ${Math.random() * 100}%;
-          top: ${Math.random() * 100}%;
-          animation-delay: ${Math.random() * 12}s;
-        `
-        
-        const before = document.createElement('div')
-        before.style.cssText = `
-          position: absolute;
-          width: 80px;
-          height: 80px;
-          background: transparent;
-          border: 2px solid rgba(59, 130, 246, 0.25);
-          transform: rotate(60deg);
-        `
-        
-        const after = document.createElement('div')
-        after.style.cssText = `
-          position: absolute;
-          width: 80px;
-          height: 80px;
-          background: transparent;
-          border: 2px solid rgba(245, 158, 11, 0.2);
-          transform: rotate(-60deg);
-        `
-        
-        hex.appendChild(before)
-        hex.appendChild(after)
-        container.appendChild(hex)
-      }
-    }
-
-    // Generate assessment metric bars
-    const createMetricBars = () => {
-      for (let i = 0; i < 10; i++) {
-        const bar = document.createElement('div')
-        bar.className = 'metric-bar'
-        bar.style.cssText = `
-          position: absolute;
-          height: 4px;
-          background: linear-gradient(90deg, #ef4444 0%, #f59e0b 33%, #22c55e 66%, #3b82f6 100%);
-          border-radius: 2px;
-          animation: metricsFlow 5s ease-in-out infinite;
-          box-shadow: 0 0 8px rgba(34, 197, 94, 0.5);
-          left: ${Math.random() * 100}%;
-          top: ${Math.random() * 100}%;
-          animation-delay: ${Math.random() * 5}s;
-        `
-        container.appendChild(bar)
-      }
-    }
-
-    // Generate eco flow lines
-    const createEcoFlowLines = () => {
-      const interval = setInterval(() => {
-        const line = document.createElement('div')
-        line.className = 'eco-flow-line'
-        line.style.cssText = `
-          position: absolute;
-          height: 2px;
-          background: linear-gradient(90deg, transparent, #22c55e 20%, #3b82f6 50%, #22c55e 80%, transparent);
-          animation: ecoDataFlow 4s linear infinite;
-          opacity: 0.7;
-          top: ${Math.random() * 100}%;
-          width: ${Math.random() * 400 + 150}px;
-        `
-        container.appendChild(line)
-        
-        setTimeout(() => {
-          if (line.parentNode) line.remove()
-        }, 4000)
-      }, 2000)
-
-      return () => clearInterval(interval)
-    }
-
-    // Generate eco particles
-    const createEcoParticles = () => {
-      const interval = setInterval(() => {
-        const particle = document.createElement('div')
-        particle.className = 'eco-particle'
-        particle.style.cssText = `
-          position: absolute;
-          width: 3px;
-          height: 3px;
-          background: #22c55e;
-          border-radius: 50%;
-          box-shadow: 0 0 6px #22c55e;
-          animation: ecoParticleFloat 10s linear infinite;
-          left: ${Math.random() * 100}%;
-        `
-        container.appendChild(particle)
-        
-        setTimeout(() => {
-          if (particle.parentNode) particle.remove()
-        }, 10000)
-      }, 1200)
-
-      return () => clearInterval(interval)
-    }
-
-    // Initialize all elements
-    createResilienceNodes()
-    createHumanIcons()
-    createIndustrialHexagons()
-    createMetricBars()
-    const cleanupFlowLines = createEcoFlowLines()
-    const cleanupParticles = createEcoParticles()
-
-    // Mouse interaction
-    const handleMouseMove = (e) => {
-      const mouseX = e.clientX / window.innerWidth
-      const mouseY = e.clientY / window.innerHeight
-      
-      // Adjust grid based on mouse position
-      const grid = container.querySelector('.sustainability-grid')
-      if (grid) {
-        grid.style.transform = `translate(${mouseX * 15}px, ${mouseY * 15}px)`
-      }
-    }
-
-    container.addEventListener('mousemove', handleMouseMove)
-
-    return () => {
-      cleanupFlowLines()
-      cleanupParticles()
-      container.removeEventListener('mousemove', handleMouseMove)
-    }
-  }, [])
-
-  return (
-    <>
-      <style>
-        {`
-          @keyframes sustainabilityPulse {
-            0%, 100% { opacity: 0.4; }
-            33% { opacity: 0.8; }
-            66% { opacity: 0.6; }
-          }
-          
-          @keyframes resilienceFloat {
-            0%, 100% { transform: translateY(0px) scale(1); }
-            25% { transform: translateY(-15px) scale(1.1); }
-            75% { transform: translateY(8px) scale(0.95); }
-          }
-          
-          @keyframes resiliencePulse {
-            0%, 100% { transform: scale(1); opacity: 0.4; }
-            50% { transform: scale(2); opacity: 0.8; }
-          }
-          
-          @keyframes humanGlow {
-            0%, 100% { opacity: 0.6; filter: brightness(1); }
-            50% { opacity: 1; filter: brightness(1.3); }
-          }
-          
-          @keyframes ecoDataFlow {
-            0% { transform: translateX(-100%); opacity: 0; }
-            15% { opacity: 0.7; }
-            85% { opacity: 0.7; }
-            100% { transform: translateX(100vw); opacity: 0; }
-          }
-          
-          @keyframes industrialRotate {
-            0% { transform: rotate(30deg); opacity: 0.3; }
-            50% { opacity: 0.7; }
-            100% { transform: rotate(390deg); opacity: 0.3; }
-          }
-          
-          @keyframes metricsFlow {
-            0%, 100% { width: 50px; opacity: 0.4; filter: blur(0px); }
-            50% { width: 200px; opacity: 0.9; filter: blur(1px); }
-          }
-          
-          @keyframes coreAssessment {
-            0%, 100% { transform: translate(-50%, -50%) scale(1) rotate(0deg); opacity: 0.6; }
-            33% { transform: translate(-50%, -50%) scale(1.1) rotate(120deg); opacity: 0.9; }
-            66% { transform: translate(-50%, -50%) scale(0.95) rotate(240deg); opacity: 0.8; }
-          }
-          
-          @keyframes ecoParticleFloat {
-            0% { transform: translateY(100vh) translateX(0px) scale(0); opacity: 0; }
-            10% { opacity: 1; transform: translateY(90vh) translateX(20px) scale(1); }
-            90% { opacity: 0.8; transform: translateY(10vh) translateX(100px) scale(1.2); }
-            100% { transform: translateY(-10px) translateX(150px) scale(0); opacity: 0; }
-          }
-        `}
-      </style>
-      
-      <div 
-        ref={containerRef}
-        className="absolute inset-0 overflow-hidden"
-        style={{
-          background: 'linear-gradient(135deg, #0a0f0a 0%, #1a2e1a 20%, #16213e 50%, #2e3a1a 80%, #0f1f23 100%)'
-        }}
-      >
-        {/* Sustainability Grid */}
-        <div 
-          className="sustainability-grid absolute inset-0"
-          style={{
-            backgroundImage: `
-              linear-gradient(rgba(34, 197, 94, 0.15) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(34, 197, 94, 0.15) 1px, transparent 1px),
-              linear-gradient(rgba(59, 130, 246, 0.1) 1px, transparent 1px),
-              linear-gradient(90deg, rgba(59, 130, 246, 0.1) 1px, transparent 1px)
-            `,
-            backgroundSize: '60px 60px, 60px 60px, 20px 20px, 20px 20px',
-            animation: 'sustainabilityPulse 6s ease-in-out infinite'
-          }}
-        />
-        
-        {/* Central Assessment Symbol */}
-        <div 
-          className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
-          style={{
-            width: '120px',
-            height: '120px',
-            border: '3px solid rgba(34, 197, 94, 0.4)',
-            borderRadius: '50%',
-            animation: 'coreAssessment 6s ease-in-out infinite'
-          }}
-        >
-          <div 
-            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
-            style={{
-              width: '80px',
-              height: '80px',
-              border: '2px solid rgba(59, 130, 246, 0.5)',
-              borderRadius: '50%',
-              animation: 'coreAssessment 6s ease-in-out infinite reverse'
-            }}
-          />
-          <div 
-            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2"
-            style={{
-              width: '40px',
-              height: '40px',
-              border: '2px solid rgba(245, 158, 11, 0.6)',
-              borderRadius: '50%',
-              animation: 'coreAssessment 6s ease-in-out infinite'
-            }}
-          />
-        </div>
-      </div>
-    </>
-  )
-}
-
 const Home = () => {
-  const [showNavbar, setShowNavbar] = useState(false)
+  const [showNavbarButtons, setShowNavbarButtons] = useState(false)
   const navigate = useNavigate()
 
   useEffect(() => {
     const handleScroll = () => {
-      setShowNavbar(window.scrollY > 400)
+      const scrollPosition = window.scrollY
+      const triggerPoint = 300
+      
+      // Show navbar action buttons after scroll trigger point
+      if (scrollPosition > triggerPoint) {
+        setShowNavbarButtons(true)
+      } else {
+        setShowNavbarButtons(false)
+      }
     }
 
     window.addEventListener('scroll', handleScroll, { passive: true })
@@ -410,20 +69,120 @@ const Home = () => {
 
   return (
     <div className="min-h-screen bg-white">
-      {/* Scroll Navbar */}
-      <nav className={`fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-none border-b border-gray-200 transition-all duration-300 ${
-        showNavbar ? 'translate-y-0 opacity-100' : '-translate-y-full opacity-0'
-      }`}>
+      {/* Navbar: visible from the start, profile always shown; action buttons animate in after scroll */}
+      <nav className="fixed top-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-sm border-b border-gray-200 transition-all duration-300">
+        <style>{`
+          /* CTA / navbar animations */
+          .nav-button { 
+            transition: transform .36s cubic-bezier(.2,.9,.2,1), opacity .36s; 
+            transform: translateY(-8px); 
+            opacity: 0; 
+          }
+          .nav-button.show { 
+            transform: translateY(0); 
+            opacity: 1; 
+          }
+          
+          /* Hero CTA animations - matching navbar style but using non-Tailwind state class names */
+          .hero-ctas {
+            transition: transform .36s cubic-bezier(.2,.9,.2,1), opacity .36s;
+            transform: translateY(0);
+            opacity: 1;
+          }
+          /* hidden state (animates out) */
+          .hero-ctas.hide {
+            transform: translateY(-12px) scale(.98);
+            opacity: 0;
+            pointer-events: none;
+          }
+          /* visible state (animates in) */
+          .hero-ctas.show {
+            transform: translateY(0) scale(1);
+            opacity: 1;
+            pointer-events: auto;
+          }
+          
+          /* Individual CTA button animations - matching navbar exactly */
+          .hero-cta-button {
+            transition: transform .36s cubic-bezier(.2,.9,.2,1), opacity .36s;
+            transform: translateY(-8px);
+            opacity: 0;
+          }
+          
+          /* when container has .show, reveal buttons with no override to display */
+          .hero-ctas.show .hero-cta-button {
+            transform: translateY(0);
+            opacity: 1;
+          }
+
+          /* small stagger so the second button appears slightly after the first */
+          .hero-ctas.show .hero-cta-button:nth-child(1) {
+            transition-delay: 0ms;
+          }
+          .hero-ctas.show .hero-cta-button:nth-child(2) {
+            transition-delay: 50ms;
+          }
+        `}</style>
+
         <div className="container mx-auto px-6">
           <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-blue-600 rounded-lg flex items-center justify-center">
-                <Sparkles className="w-5 h-5 text-white" />
+            {/* Logo */}
+            <div 
+              className="flex items-center gap-3 cursor-pointer group"
+              onClick={() => navigate('/')}
+            >
+              <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-blue-600 rounded-lg flex items-center justify-center shadow-lg group-hover:shadow-xl transition-all duration-300 group-hover:scale-105">
+                <Sparkles className="w-5 h-5 text-white group-hover:rotate-12 transition-transform duration-300" />
               </div>
-              <span className="text-xl font-bold text-gray-900">Digital Twin Platform</span>
+              <span className="text-l font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent group-hover:from-green-600 group-hover:to-blue-600 transition-all duration-300">
+                Digital Twin Assesor
+              </span>
             </div>
-            
-            <UserNavigation />
+
+            {/* Navigation Actions */}
+            <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3" aria-hidden={!showNavbarButtons}>
+                <Button
+                  size="sm"
+                  onClick={showNavbarButtons ? () => navigate('/assessment') : undefined}
+                  className={`group relative px-4 py-2.5 rounded-xl font-semibold text-white shadow-lg hover:shadow-xl transition-all duration-300 overflow-hidden nav-button ${
+                    showNavbarButtons ? 'show' : ''
+                  }`}
+                  style={{
+                    background: 'linear-gradient(135deg, #10b981 0%, #3b82f6 100%)',
+                    boxShadow: '0 4px 16px rgba(16, 185, 129, 0.3)',
+                    pointerEvents: showNavbarButtons ? 'auto' : 'none'
+                  }}
+                  aria-label="Create assessment"
+                >
+                  <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-blue-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
+                  <div className="relative flex items-center gap-2">
+                    <Sparkles className="w-4 h-4 group-hover:rotate-12 transition-transform duration-300" />
+                    <span>Create Assessment</span>
+                  </div>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={showNavbarButtons ? () => navigate('/dashboard') : undefined}
+                  className={`group relative px-4 py-2.5 rounded-xl font-semibold transition-all duration-300 hover:scale-105 bg-white/10 border-2 border-gray-200 text-gray-900 hover:text-gray-900 backdrop-blur-sm hover:bg-gray-50 hover:border-gray-300 nav-button ${
+                    showNavbarButtons ? 'show' : ''
+                  }`}
+                  style={{
+                    pointerEvents: showNavbarButtons ? 'auto' : 'none'
+                  }}
+                  aria-label="Open dashboard"
+                >
+                  <div className="relative flex items-center gap-2">
+                    <Activity className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    <span>Dashboard</span>
+                  </div>
+                </Button>
+              </div>
+
+              <UserNavigation />
+            </div>
           </div>
         </div>
       </nav>
@@ -452,22 +211,34 @@ const Home = () => {
               human centricity, and resilience dimensions with advanced analytics and insights.
             </p>
             
-            <div className="flex flex-col sm:flex-row gap-4 justify-center">
+            {/* Hero CTAs with scroll-based visibility and improved animations */}
+            <div
+              className={`flex flex-col sm:flex-row gap-4 justify-center hero-ctas ${
+                showNavbarButtons ? 'hide' : 'show'
+              }`}
+              aria-hidden={showNavbarButtons}
+            >
               <Button 
                 size="lg"
                 onClick={() => navigate('/assessment')}
-                className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 backdrop-blur-sm"
+                className="hero-cta-button bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 text-white px-8 py-3 rounded-xl font-semibold shadow-lg hover:shadow-xl transition-all duration-300 backdrop-blur-sm hover:scale-105"
               >
-                Start Assessment
-                <ArrowRight className="ml-2 h-5 w-5" />
+                <div className="relative flex items-center justify-center">
+                  <Sparkles className="w-5 h-5 mr-2 group-hover:rotate-12 transition-transform duration-300" />
+                  Start Assessment
+                  <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
+                </div>
               </Button>
               <Button 
                 variant="outline"
                 size="lg"
                 onClick={() => navigate('/dashboard')}
-                className="border-2 border-white/30 bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 hover:border-white/50 px-8 py-3 rounded-xl font-semibold transition-all duration-300"
+                className="hero-cta-button border-2 border-white/30 bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 hover:border-white/50 px-8 py-3 rounded-xl font-semibold transition-all duration-300 hover:scale-105"
               >
-                View Dashboard
+                <div className="relative flex items-center justify-center">
+                  <Activity className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
+                  View Dashboard
+                </div>
               </Button>
             </div>
           </div>

@@ -1,14 +1,17 @@
 from datetime import datetime, timedelta
+import logging
 from typing import List, Optional, Dict, Any
 from uuid import uuid4
 from sqlalchemy.orm import Session
 from sqlalchemy import or_
 
-from .models import User, RefreshToken, UserCreate, UserLogin, TokenData, UserRole
+from .models import User, RefreshToken, UserCreate, UserLogin, TokenData, UserRole, ProfileUpdate
 from .security import security_manager
 from ..database import DatabaseManager
 from ..exceptions import DatabaseConnectionException
 from shared.models.exceptions import DigitalTwinAssessmentException
+
+logger = logging.getLogger(__name__)
 
 class AuthenticationException(DigitalTwinAssessmentException):
     """Authentication-related exceptions"""
@@ -101,6 +104,41 @@ class AuthService:
             user = session.query(User).filter(User.user_id == user_id).first()
             if user:
                 session.expunge(user)
+            return user
+    
+    def update_user_profile(self, user_id: str, profile_data: ProfileUpdate) -> Optional[User]:
+        """Update user profile information"""
+        logger.info(f"Updating profile for user: {user_id}")
+        
+        with self.db_manager.get_session() as session:
+            user = session.query(User).filter(User.user_id == user_id).first()
+            
+            if not user:
+                logger.error(f"User not found: {user_id}")
+                raise UserNotFoundException("User not found")
+            
+            # Update fields only if they are provided and different
+            updated = False
+            
+            if profile_data.first_name is not None and profile_data.first_name != user.first_name:
+                user.first_name = profile_data.first_name
+                updated = True
+                logger.info(f"Updated first_name for user {user_id}: {profile_data.first_name}")
+            
+            if profile_data.last_name is not None and profile_data.last_name != user.last_name:
+                user.last_name = profile_data.last_name
+                updated = True
+                logger.info(f"Updated last_name for user {user_id}: {profile_data.last_name}")
+            
+            if updated:
+                user.updated_at = datetime.utcnow()
+                session.commit()
+                logger.info(f"Profile update committed for user: {user_id}")
+            else:
+                logger.info(f"No profile changes detected for user: {user_id}")
+            
+            # Detach from session
+            session.expunge(user)
             return user
     
     def create_tokens(self, user: User, device_info: Optional[str] = None,
@@ -231,25 +269,36 @@ class AuthService:
         )
     
     def change_password(self, user_id: str, current_password: str, new_password: str) -> bool:
-        """Change user password"""
+        """Change user password with debug logging"""
+        logger.info(f"Attempting password change for user: {user_id}")
+        
         with self.db_manager.get_session() as session:
             user = session.query(User).filter(User.user_id == user_id).first()
             
             if not user:
+                logger.error(f"User not found: {user_id}")
                 raise UserNotFoundException("User not found")
             
             # Verify current password
             if not self.security.verify_password(current_password, user.hashed_password):
+                logger.warning(f"Invalid current password for user: {user_id}")
                 raise InvalidCredentialsException("Current password is incorrect")
+            
+            # Validate new password
+            if len(new_password) < 8:
+                logger.error(f"New password too short for user: {user_id}")
+                raise ValueError("New password must be at least 8 characters long")
             
             # Update password
             user.hashed_password = self.security.get_password_hash(new_password)
             user.updated_at = datetime.utcnow()
             
             session.commit()
+            logger.info(f"Password changed successfully for user: {user_id}")
             
             # Revoke all refresh tokens for security
-            self.revoke_all_user_tokens(user_id)
+            revoked_count = self.revoke_all_user_tokens(user_id)
+            logger.info(f"Revoked {revoked_count} refresh tokens for user: {user_id}")
             
             return True
     

@@ -1,5 +1,5 @@
 import React, { createContext, useState, useEffect, ReactNode } from 'react';
-import { AuthContextType, User, RegisterData } from './auth.types';
+import { AuthContextType, User, RegisterData, ProfileUpdateData } from './auth.types';
 import authService from './authService';
 import { useToast } from '@/hooks/use-toast';
 
@@ -20,6 +20,52 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   useEffect(() => {
     initializeAuth();
   }, []);
+
+  // Session timeout checker
+  useEffect(() => {
+    if (!token) return;
+
+    const checkTokenExpiry = () => {
+      if (authService.isTokenExpired()) {
+        console.warn('🕒 Token expired, logging out automatically');
+        logout();
+      }
+    };
+
+    // Check immediately
+    checkTokenExpiry();
+
+    // Check every minute
+    const interval = setInterval(checkTokenExpiry, 60000);
+    return () => clearInterval(interval);
+  }, [token]);
+
+  // Clear all assessment-related data from localStorage
+  const clearAllAssessmentData = () => {
+    try {
+      const keys = Object.keys(localStorage);
+      
+      // Assessment-related keys to clear
+      const assessmentKeys = keys.filter(key => 
+        key.startsWith('currentAssessment') ||
+        key.startsWith('lastAssessmentId') ||
+        key.startsWith('assessmentProgress_') ||
+        key.startsWith('domainData_') ||
+        key === 'currentAssessment' ||
+        key === 'lastAssessmentId'
+      );
+      
+      // Remove all assessment-related data
+      assessmentKeys.forEach(key => {
+        localStorage.removeItem(key);
+        console.log(`🗑️ Removed: ${key}`);
+      });
+      
+      console.log(`🗑️ Cleared ${assessmentKeys.length} assessment data items on logout`);
+    } catch (error) {
+      console.error('⚠️ Failed to clear assessment data:', error);
+    }
+  };
 
   const initializeAuth = async () => {
     try {
@@ -72,6 +118,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
   const login = async (username: string, password: string) => {
     try {
+      // Clear any existing assessment data before login
+      clearAllAssessmentData();
+      
       const tokens = await authService.login({ username, password });
       
       // Save tokens
@@ -116,8 +165,13 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     } catch (error) {
       console.error('Logout API call failed:', error);
     } finally {
-      // Clear local state regardless of API call result
+      // Clear authentication tokens
       authService.clearTokens();
+      
+      // Clear all assessment-related data
+      clearAllAssessmentData();
+      
+      // Clear auth state
       setUser(null);
       setToken(null);
       setRefreshToken(null);
@@ -158,6 +212,31 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
+  const updateProfile = async (profileData: ProfileUpdateData): Promise<User> => {
+    if (!token) {
+      throw new Error('Not authenticated');
+    }
+
+    try {
+      console.log('Updating profile with data:', profileData);
+      
+      const updatedUser = await authService.updateProfile(token, profileData);
+      
+      // Update the user state with the new data
+      setUser(updatedUser);
+      
+      toast({
+        title: "Profile Updated",
+        description: "Your profile has been updated successfully.",
+      });
+      
+      return updatedUser;
+    } catch (error) {
+      console.error('Profile update failed:', error);
+      throw error;
+    }
+  };
+
   const value: AuthContextType = {
     user,
     token,
@@ -169,6 +248,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     logout,
     refreshAccessToken,
     changePassword,
+    updateProfile,
   };
 
   return (

@@ -1,4 +1,4 @@
-// Create this as src/components/UserNavigation.tsx
+// src/components/UserNavigation.tsx
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
@@ -17,8 +17,6 @@ import { Badge } from '@/components/ui/badge';
 import { 
   User, 
   LogOut, 
-  Settings, 
-  Shield, 
   Crown,
   Users,
   ChevronDown,
@@ -60,11 +58,11 @@ export const UserNavigation: React.FC<UserNavigationProps> = ({ className = '' }
   const getRoleColor = (role: UserRole) => {
     switch (role) {
       case 'admin':
-        return 'bg-red-100 text-red-800 border-red-200';
+        return 'bg-gradient-to-r from-red-100 to-red-200 text-red-800 border border-red-300';
       case 'assessor':
-        return 'bg-blue-100 text-blue-800 border-blue-200';
+        return 'bg-gradient-to-r from-blue-100 to-cyan-100 text-blue-800 border border-blue-300';
       default:
-        return 'bg-green-100 text-green-800 border-green-200';
+        return 'bg-gradient-to-r from-green-100 to-emerald-100 text-green-800 border border-green-300';
     }
   };
 
@@ -93,7 +91,7 @@ export const UserNavigation: React.FC<UserNavigationProps> = ({ className = '' }
         <Button
           variant="outline"
           onClick={() => navigate('/auth/login')}
-          className="border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900"
+          className="rounded-xl border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900 shadow-sm transition-all"
         >
           <LogIn className="w-4 h-4 mr-2" />
           Sign In
@@ -104,27 +102,20 @@ export const UserNavigation: React.FC<UserNavigationProps> = ({ className = '' }
 
   return (
     <div className={`flex items-center gap-3 ${className}`}>
-      {/* Role Badge */}
-      <Badge className={`${getRoleColor(user.role)} border font-medium text-xs px-2 py-1 hidden sm:flex items-center gap-1`}>
-        {getRoleIcon(user.role)}
-        {user.role.toUpperCase()}
-      </Badge>
-
-      {/* User Dropdown */}
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
           <Button 
             variant="ghost" 
-            className="flex items-center gap-2 h-auto p-2 hover:bg-gray-100 rounded-xl"
+            className="flex items-center gap-2 h-auto px-2 py-1.5 rounded-xl hover:bg-gray-100/70 transition-colors"
           >
-            <Avatar className="w-8 h-8">
+            <Avatar className="w-8 h-8 ring-2 ring-transparent hover:ring-green-400 transition-shadow duration-300">
               <AvatarImage src={user.avatar_url} alt={user.username} />
               <AvatarFallback className="bg-gradient-to-br from-green-500 to-blue-500 text-white text-sm font-semibold">
                 {getUserInitials(user)}
               </AvatarFallback>
             </Avatar>
             <div className="hidden sm:block text-left">
-              <div className="text-sm font-semibold text-gray-900">
+              <div className="text-sm font-semibold text-gray-900 leading-tight">
                 {user.first_name && user.last_name 
                   ? `${user.first_name} ${user.last_name}` 
                   : user.username
@@ -132,11 +123,14 @@ export const UserNavigation: React.FC<UserNavigationProps> = ({ className = '' }
               </div>
               <div className="text-xs text-gray-500">{user.email}</div>
             </div>
-            <ChevronDown className="w-4 h-4 text-gray-400" />
+            <ChevronDown className="w-4 h-4 text-gray-400 transition-transform group-data-[state=open]:rotate-180" />
           </Button>
         </DropdownMenuTrigger>
 
-        <DropdownMenuContent align="end" className="w-64">
+        <DropdownMenuContent 
+          align="end" 
+          className="w-64 rounded-xl shadow-lg border border-gray-200 p-2 animate-in fade-in-0 zoom-in-95"
+        >
           <DropdownMenuLabel>
             <div className="flex items-center gap-3">
               <Avatar className="w-10 h-10">
@@ -153,9 +147,9 @@ export const UserNavigation: React.FC<UserNavigationProps> = ({ className = '' }
                   }
                 </div>
                 <div className="text-sm text-gray-500">{user.email}</div>
-                <Badge className={`${getRoleColor(user.role)} border text-xs mt-1 inline-flex items-center gap-1`}>
+                <Badge className={`${getRoleColor(user.role)} border text-xs mt-1 inline-flex items-center gap-1 px-2 py-0.5`}>
                   {getRoleIcon(user.role)}
-                  {user.role}
+                  <span className="capitalize">{user.role}</span>
                 </Badge>
               </div>
             </div>
@@ -163,21 +157,16 @@ export const UserNavigation: React.FC<UserNavigationProps> = ({ className = '' }
 
           <DropdownMenuSeparator />
 
-          <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer">
-            <User className="w-4 h-4 mr-3" />
+          <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer rounded-lg px-3 py-2 hover:bg-gray-100">
+            <User className="w-4 h-4 mr-3 text-gray-600" />
             View Profile
-          </DropdownMenuItem>
-
-          <DropdownMenuItem onClick={() => navigate('/dashboard')} className="cursor-pointer">
-            <Settings className="w-4 h-4 mr-3" />
-            Dashboard
           </DropdownMenuItem>
 
           {user.role === 'admin' && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate('/admin')} className="cursor-pointer">
-                <Crown className="w-4 h-4 mr-3" />
+              <DropdownMenuItem onClick={() => navigate('/admin')} className="cursor-pointer rounded-lg px-3 py-2 hover:bg-gray-100">
+                <Crown className="w-4 h-4 mr-3 text-gray-600" />
                 Admin Panel
               </DropdownMenuItem>
             </>
@@ -186,8 +175,8 @@ export const UserNavigation: React.FC<UserNavigationProps> = ({ className = '' }
           {user.role === 'assessor' && (
             <>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => navigate('/assessor')} className="cursor-pointer">
-                <Users className="w-4 h-4 mr-3" />
+              <DropdownMenuItem onClick={() => navigate('/assessor')} className="cursor-pointer rounded-lg px-3 py-2 hover:bg-gray-100">
+                <Users className="w-4 h-4 mr-3 text-gray-600" />
                 Assessor Tools
               </DropdownMenuItem>
             </>
@@ -198,7 +187,7 @@ export const UserNavigation: React.FC<UserNavigationProps> = ({ className = '' }
           <DropdownMenuItem 
             onClick={handleLogout}
             disabled={isLoggingOut}
-            className="cursor-pointer text-red-600 focus:text-red-600"
+            className="cursor-pointer rounded-lg px-3 py-2 text-red-600 hover:bg-red-50 focus:bg-red-50 focus:text-red-700"
           >
             {isLoggingOut ? (
               <>

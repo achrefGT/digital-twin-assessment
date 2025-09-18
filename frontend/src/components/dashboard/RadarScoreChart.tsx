@@ -143,49 +143,61 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
             <CardContent className="p-8">
               <div className="h-96">
                 <ResponsiveContainer width="100%" height="100%">
-                  <RadarChart data={radarData} margin={{ top: 40, right: 60, bottom: 40, left: 60 }}>
+                  {/* 
+                    Key changes to make the plotted area larger while keeping wrapper size:
+                      - Reduce chart margins (less whitespace).
+                      - Increase outerRadius so the radar expands to fill more of the container.
+                      - Increase strokeWidth and dot radius to make shapes feel larger.
+                      - Increase label font sizes and tweak label offsets.
+                  */}
+                  <RadarChart
+                    data={radarData}
+                    // outerRadius in px — increase to let the polygon expand
+                    outerRadius={140}
+                    // tighter margins so the drawing area is larger
+                    margin={{ top: 8, right: 12, bottom: 8, left: 12 }}
+                  >
                     <defs>
                       <linearGradient id="radarGradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.3} />
-                        <stop offset="50%" stopColor="#8b5cf6" stopOpacity={0.2} />
-                        <stop offset="100%" stopColor="#10b981" stopOpacity={0.3} />
+                        <stop offset="0%" stopColor="#3b82f6" stopOpacity={0.35} />
+                        <stop offset="50%" stopColor="#8b5cf6" stopOpacity={0.25} />
+                        <stop offset="100%" stopColor="#10b981" stopOpacity={0.35} />
                       </linearGradient>
                     </defs>
+
                     <PolarGrid 
                       gridType="polygon" 
                       stroke="#e2e8f0" 
-                      strokeWidth={1}
-                      strokeDasharray="2 2"
+                      strokeWidth={1.5}
+                      strokeDasharray="3 3"
                     />
                     <PolarAngleAxis
                       dataKey="domain"
                       tick={({ x, y, payload }) => {
-                        // Define which label to move higher and by how much
+                        // Slightly larger label font + bigger offsets so they don't collide with a bigger polygon
                         const getLabelAdjustment = (label: string) => {
                           switch (label) {
-                            case 'Human Centricity': return -8; // Move up 10px
-                            case 'Sustainability': return 18;
-                            case 'Resilience': return 18;  
-                            default: return 0;                    // No adjustment
+                            case 'Human Centricity': return -12; // move up more
+                            case 'Sustainability': return 28;    // move down more
+                            case 'Resilience': return 28;  
+                            default: return 0;
                           }
                         };
 
                         const adjustedY = y + getLabelAdjustment(payload.value);
-                        
-                        // Split multi-line labels
                         const lines = payload.value.split('\n');
-                        
+
                         return (
                           <g>
                             {lines.map((line, index) => (
                               <text
                                 key={index}
                                 x={x}
-                                y={adjustedY - 3 + (index * 16)} // Use adjustedY instead of y
+                                y={adjustedY - 3 + (index * 18)} // increased line-height for larger font
                                 textAnchor="middle"
-                                fontSize={15}
+                                fontSize={16} // bumped font size
                                 fill="#475569"
-                                fontWeight={600}
+                                fontWeight={700}
                               >
                                 {line}
                               </text>
@@ -199,25 +211,26 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
                       angle={90} 
                       domain={[0, 100]} 
                       tick={{ 
-                        fontSize: 11, 
+                        fontSize: 12, 
                         fill: '#94a3b8',
                         fontWeight: 400
                       }}
                       tickCount={6}
                     />
+
                     <Radar
                       name="Score"
                       dataKey="score"
                       stroke="#3b82f6"
                       fill="url(#radarGradient)"
-                      fillOpacity={0.4}
-                      strokeWidth={3}
-                      dot={{ 
-                        fill: '#3b82f6', 
-                        strokeWidth: 3, 
-                        r: 6,
+                      fillOpacity={0.55}
+                      strokeWidth={4} // thicker stroke
+                      // Larger, more prominent dots
+                      dot={{
+                        r: 8,
                         stroke: '#ffffff',
-                        filter: 'drop-shadow(0px 2px 4px rgba(59, 130, 246, 0.3))'
+                        strokeWidth: 3,
+                        fill: '#3b82f6'
                       }}
                     />
                   </RadarChart>

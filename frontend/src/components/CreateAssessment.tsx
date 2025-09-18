@@ -40,7 +40,7 @@ export const CreateAssessment = ({ onAssessmentCreated, domain, userId }: Create
         }
       }
       
-      console.log('Creating assessment with payload:', payload) // For debugging
+      console.log('[CreateAssessment] Creating assessment with payload:', payload)
       
       // Submit to backend
       const response = await fetch('http://localhost:8000/assessments/', {
@@ -62,6 +62,7 @@ export const CreateAssessment = ({ onAssessmentCreated, domain, userId }: Create
       }
 
       const backendAssessment = await response.json()
+      console.log('[CreateAssessment] Backend response:', backendAssessment)
       
       // Create assessment object with backend response + additional data for form
       const assessment = {
@@ -72,9 +73,16 @@ export const CreateAssessment = ({ onAssessmentCreated, domain, userId }: Create
         description: data.description,
         organization: data.organization,
         created_at: backendAssessment.created_at,
+        status: backendAssessment.status || 'IN_PROGRESS',
         metadata: backendAssessment.metadata || {
           assessment_type: domain || "full",
           version: "1.0"
+        },
+        progress: {
+          completed_domains: [],
+          completion_percentage: 0,
+          domain_scores: {},
+          domain_data: {}
         }
       }
       
@@ -83,6 +91,19 @@ export const CreateAssessment = ({ onAssessmentCreated, domain, userId }: Create
         throw new Error('Backend did not provide required IDs')
       }
 
+      console.log('[CreateAssessment] Final assessment object:', assessment)
+
+      // CRITICAL FIX: Store both keys that the system expects
+      try {
+        localStorage.setItem('currentAssessment', JSON.stringify(assessment))
+        localStorage.setItem('lastAssessmentId', assessment.assessment_id)
+        console.log('[CreateAssessment] ✅ Stored assessment in localStorage with both keys')
+        console.log('[CreateAssessment] ✅ Verification - lastAssessmentId:', localStorage.getItem('lastAssessmentId'))
+      } catch (storageError) {
+        console.error('[CreateAssessment] ❌ Failed to store in localStorage:', storageError)
+      }
+
+      // Call the callback to update parent component state
       onAssessmentCreated(assessment)
       
       toast({
@@ -91,7 +112,7 @@ export const CreateAssessment = ({ onAssessmentCreated, domain, userId }: Create
       })
       
     } catch (error) {
-      console.error('Error creating assessment:', error)
+      console.error('[CreateAssessment] Error creating assessment:', error)
 
       toast({
         title: error.message.includes('log in') ? "Authentication Required" : "Assessment Creation Failed",

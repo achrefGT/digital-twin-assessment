@@ -1,5 +1,5 @@
 from datetime import datetime, timedelta
-from typing import Optional, List, Dict, Any
+from typing import Optional, List, Dict, Any, Union
 from sqlalchemy import Column, String, DateTime, Boolean, Integer, Text, JSON, ForeignKey
 from sqlalchemy.orm import relationship
 from pydantic import BaseModel, EmailStr, Field, validator
@@ -118,3 +118,28 @@ class RefreshTokenRequest(BaseModel):
 class PasswordChange(BaseModel):
     current_password: str
     new_password: str = Field(..., min_length=8)
+
+# Fixed model for profile updates
+class ProfileUpdate(BaseModel):
+    first_name: Optional[Union[str, None]] = Field(None, max_length=100)
+    last_name: Optional[Union[str, None]] = Field(None, max_length=100)
+    
+    @validator('first_name', pre=True)
+    def validate_first_name(cls, v):
+        # Handle None, empty strings, and whitespace-only strings
+        if v is None:
+            return None
+        if isinstance(v, str):
+            stripped = v.strip()
+            return None if stripped == '' else stripped
+        return v
+    
+    @validator('last_name', pre=True) 
+    def validate_last_name(cls, v):
+        # Handle None, empty strings, and whitespace-only strings
+        if v is None:
+            return None
+        if isinstance(v, str):
+            stripped = v.strip()
+            return None if stripped == '' else stripped
+        return v

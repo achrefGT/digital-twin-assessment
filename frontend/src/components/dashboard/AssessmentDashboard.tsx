@@ -11,24 +11,14 @@ import { HumanCentricityPanel } from './panels/HumanCentricityPanel'
 import { ResiliencePanel } from './panels/ResiliencePanel'
 import { SustainabilityPanel } from './panels/SustainabilityPanel'
 import { DetailedModuleView } from './DetailedModuleView'
-import { ConnectionIndicator } from './ConnectionIndicator'
 import { 
-  Wifi, 
-  WifiOff, 
   AlertCircle, 
   Eye, 
   Activity, 
-  CheckCircle2, 
-  Clock, 
   TrendingUp,
-  Zap,
   Shield,
-  Leaf,
-  Users,
   Brain,
-  Sparkles,
-  BarChart3,
-  RefreshCw
+  Sparkles
 } from 'lucide-react'
 
 interface AssessmentData {
@@ -78,185 +68,41 @@ const MODULES = {
   }
 }
 
-// Note: Removed localStorage functions as per artifact restrictions
-// Using in-memory storage only
-let dashboardDataCache: Record<string, AssessmentData> = {}
-
-const persistDashboardData = (assessmentId: string, data: AssessmentData) => {
-  try {
-    dashboardDataCache[assessmentId] = { ...data }
-    console.log('💾 Cached dashboard data for:', assessmentId)
-  } catch (error) {
-    console.error('⚠ Failed to cache dashboard data:', error)
-  }
-}
-
-const loadPersistedDashboardData = (assessmentId: string): Partial<AssessmentData> => {
-  try {
-    const stored = dashboardDataCache[assessmentId]
-    if (stored) {
-      console.log('🔥 Loaded cached dashboard data for:', assessmentId)
-      return stored
-    }
-  } catch (error) {
-    console.error('⚠ Failed to load cached dashboard data:', error)
-  }
-  return {}
-}
-
 export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({ 
   assessmentId 
 }) => {
   const { connectionStatus, messages, subscribeToEvents } = useWebSocket(assessmentId)
-  const { currentAssessment, updateProgress, refreshAssessmentData } = useAssessment()
-  
-  const lastPersistedDataRef = useRef<string>('')
-  const lastProgressUpdateRef = useRef<string>('')
-  const [isRefreshing, setIsRefreshing] = useState(false)
+  const { 
+    currentAssessment, 
+    updateProgress, 
+    refreshAssessmentData, 
+    isLoading
+  } = useAssessment()
   
   const [selectedModule, setSelectedModule] = useState<string | null>(null)
-  
-  // Initialize with cached data
-  const [assessmentData, setAssessmentData] = useState<AssessmentData>(() => {
-    const persistedData = loadPersistedDashboardData(assessmentId)
+  const lastMessageRef = useRef<string>('')
+
+  // Convert currentAssessment to AssessmentData format for compatibility
+  const assessmentData: AssessmentData = React.useMemo(() => {
+    if (!currentAssessment) {
+      return {
+        completed_domains: [],
+        domain_data: {},
+        assessment_id: assessmentId
+      }
+    }
+
     return {
-      completed_domains: [],
-      domain_data: {},
-      assessment_id: assessmentId,
-      ...persistedData
-    }
-  })
-
-  // Updated initialization to sync with useAssessment
-  useEffect(() => {
-    console.log('🎯 AssessmentDashboard mounted with ID:', assessmentId)
-    
-    // If useAssessment has data for this assessment, use it
-    if (currentAssessment?.assessment_id === assessmentId && currentAssessment.progress) {
-      console.log('📊 Syncing with useAssessment data')
-      const assessmentProgress = currentAssessment.progress
-      
-      setAssessmentData(prev => ({
-        ...prev,
-        assessment_id: assessmentId,
-        completed_domains: assessmentProgress.completed_domains || [],
-        completion_percentage: assessmentProgress.completion_percentage || 0,
-        overall_score: assessmentProgress.overall_score,
-        domain_scores: assessmentProgress.domain_scores || {},
-        domain_data: assessmentProgress.domain_data || {},
-        status: currentAssessment.status,
-        summary_statistics: assessmentProgress.summary_statistics
-      }))
-      return
-    }
-    
-    // Otherwise load cached data
-    const persistedData = loadPersistedDashboardData(assessmentId)
-    if (Object.keys(persistedData).length > 0) {
-      console.log('📊 Using cached data from memory')
-      setAssessmentData(prev => ({
-        ...prev,
-        assessment_id: assessmentId,
-        ...persistedData
-      }))
-    }
-    
-    // If no data available and this matches current assessment, trigger a refresh
-    if (currentAssessment?.assessment_id === assessmentId && 
-        Object.keys(persistedData).length === 0) {
-      console.log('🔄 No cached data found, triggering refresh')
-      refreshAssessmentData(assessmentId)
-    }
-  }, [assessmentId, currentAssessment, refreshAssessmentData])
-
-  // Also sync when currentAssessment updates
-  useEffect(() => {
-    if (currentAssessment?.assessment_id === assessmentId && currentAssessment.progress) {
-      console.log('🔄 Syncing dashboard with updated assessment data')
-      const assessmentProgress = currentAssessment.progress
-      
-      setAssessmentData(prev => ({
-        ...prev,
-        assessment_id: assessmentId,
-        completed_domains: assessmentProgress.completed_domains || [],
-        completion_percentage: assessmentProgress.completion_percentage || 0,
-        overall_score: assessmentProgress.overall_score,
-        domain_scores: assessmentProgress.domain_scores || {},
-        domain_data: assessmentProgress.domain_data || {},
-        status: currentAssessment.status,
-        summary_statistics: assessmentProgress.summary_statistics
-      }))
+      assessment_id: currentAssessment.assessment_id,
+      overall_score: currentAssessment.progress?.overall_score,
+      domain_scores: currentAssessment.progress?.domain_scores || {},
+      completed_domains: currentAssessment.progress?.completed_domains || [],
+      domain_data: currentAssessment.progress?.domain_data || {},
+      status: currentAssessment.status,
+      completion_percentage: currentAssessment.progress?.completion_percentage || 0,
+      summary_statistics: currentAssessment.progress?.summary_statistics
     }
   }, [currentAssessment, assessmentId])
-
-  // Simplified manual refresh function
-  const handleRefresh = async () => {
-    setIsRefreshing(true)
-    try {
-      await refreshAssessmentData(assessmentId)
-      console.log('🔄 Manual refresh completed')
-    } catch (error) {
-      console.error('⚠ Manual refresh failed:', error)
-    } finally {
-      setIsRefreshing(false)
-    }
-  }
-
-  // Persistence logic
-  useEffect(() => {
-    if (!assessmentData.assessment_id) return
-
-    const currentDataHash = JSON.stringify({
-      id: assessmentData.assessment_id,
-      domains: assessmentData.completed_domains,
-      completion: assessmentData.completion_percentage,
-      scores: assessmentData.domain_scores,
-      overall: assessmentData.overall_score,
-      status: assessmentData.status
-    })
-
-    if (currentDataHash !== lastPersistedDataRef.current) {
-      lastPersistedDataRef.current = currentDataHash
-      persistDashboardData(assessmentData.assessment_id, assessmentData)
-    }
-  }, [assessmentData])
-
-  // Progress update logic
-  useEffect(() => {
-    if (!assessmentData.assessment_id) return
-
-    const progressHash = JSON.stringify({
-      domains: assessmentData.completed_domains.length,
-      completion: assessmentData.completion_percentage,
-      overall: assessmentData.overall_score,
-      status: assessmentData.status
-    })
-
-    if (progressHash !== lastProgressUpdateRef.current && 
-        (assessmentData.completed_domains.length > 0 || 
-         assessmentData.overall_score !== undefined ||
-         assessmentData.status)) {
-      
-      lastProgressUpdateRef.current = progressHash
-      
-      updateProgress({
-        completed_domains: assessmentData.completed_domains,
-        completion_percentage: assessmentData.completion_percentage,
-        domain_scores: assessmentData.domain_scores,
-        overall_score: assessmentData.overall_score,
-        status: assessmentData.status,
-        domain_data: assessmentData.domain_data,
-        summary_statistics: assessmentData.summary_statistics
-      })
-    }
-  }, [
-    assessmentData.assessment_id,
-    assessmentData.completed_domains.length,
-    assessmentData.completion_percentage,
-    assessmentData.overall_score,
-    assessmentData.status,
-    updateProgress
-  ])
 
   // WebSocket event subscription
   useEffect(() => {
@@ -265,131 +111,124 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
     }
   }, [connectionStatus.isConnected, subscribeToEvents, assessmentId])
 
-  // Process WebSocket messages - ENHANCED with better handling
+  // Process WebSocket messages with React Query integration
   useEffect(() => {
     const latestMessage = messages[messages.length - 1]
     if (!latestMessage || latestMessage.assessment_id !== assessmentId) return
 
-    console.log('📨 Processing WebSocket message:', latestMessage.type, 'for domain:', latestMessage.domain)
+    // Avoid processing the same message twice
+    const messageKey = `${latestMessage.type}-${latestMessage.timestamp}-${latestMessage.domain || 'no-domain'}`
+    if (messageKey === lastMessageRef.current) return
+    lastMessageRef.current = messageKey
+
+    console.log('Processing WebSocket message:', latestMessage.type, 'for domain:', latestMessage.domain)
 
     if (latestMessage.type === 'score_update') {
-      setAssessmentData(prev => {
-        const newData = { ...prev }
+      // Build progress update from WebSocket message
+      const progressUpdate: any = {}
+      
+      if (latestMessage.domain) {
+        // Update completed domains
+        const currentCompleted = assessmentData.completed_domains || []
+        progressUpdate.completed_domains = [...new Set([...currentCompleted, latestMessage.domain])]
         
-        if (latestMessage.domain) {
-          // Add to completed domains if not already present
-          newData.completed_domains = [...new Set([...prev.completed_domains, latestMessage.domain])]
-          
-          // Update domain data with WebSocket-specific information (like processing time)
-          newData.domain_data = {
-            ...prev.domain_data,
-            [latestMessage.domain]: {
-              // Preserve any existing API data
-              ...prev.domain_data[latestMessage.domain],
-              // Add/update with WebSocket data
-              scores: latestMessage.scores || {},
-              score_value: latestMessage.score_value,
-              processing_time_ms: latestMessage.processing_time_ms
-            }
-          }
-          
-          // Update domain scores
-          if (latestMessage.score_value !== undefined) {
-            newData.domain_scores = {
-              ...prev.domain_scores,
-              [latestMessage.domain]: latestMessage.score_value
-            }
+        // Update domain data
+        progressUpdate.domain_data = {
+          ...assessmentData.domain_data,
+          [latestMessage.domain]: {
+            ...assessmentData.domain_data[latestMessage.domain],
+            scores: latestMessage.scores || {},
+            score_value: latestMessage.score_value,
+            processing_time_ms: latestMessage.processing_time_ms
           }
         }
+        
+        // Update domain scores
+        if (latestMessage.score_value !== undefined) {
+          progressUpdate.domain_scores = {
+            ...assessmentData.domain_scores,
+            [latestMessage.domain]: latestMessage.score_value
+          }
+        }
+      }
 
-        if (latestMessage.overall_score !== undefined) {
-          newData.overall_score = latestMessage.overall_score
+      if (latestMessage.overall_score !== undefined) {
+        progressUpdate.overall_score = latestMessage.overall_score
+      }
+      
+      if (latestMessage.domain_scores) {
+        progressUpdate.domain_scores = { 
+          ...assessmentData.domain_scores, 
+          ...latestMessage.domain_scores 
         }
-        
-        if (latestMessage.domain_scores) {
-          newData.domain_scores = { ...newData.domain_scores, ...latestMessage.domain_scores }
-        }
-        
-        if (latestMessage.completion_percentage !== undefined) {
-          newData.completion_percentage = latestMessage.completion_percentage
-        }
-        
-        if (latestMessage.status) {
-          newData.status = latestMessage.status
-        }
+      }
+      
+      if (latestMessage.completion_percentage !== undefined) {
+        progressUpdate.completion_percentage = latestMessage.completion_percentage
+      }
+      
+      if (latestMessage.status) {
+        progressUpdate.status = latestMessage.status
+      }
 
-        console.log('🔄 Updated assessment data from WebSocket')
-        return newData
-      })
+      // Update using React Query
+      updateProgress(progressUpdate)
+      
     } else if (latestMessage.type === 'assessment_completed') {
-      setAssessmentData(prev => {
-        // Get all domains with scores from the completion message
-        const allDomainsWithScores = latestMessage.domain_scores ? 
-          Object.keys(latestMessage.domain_scores) : []
-        
-        // Merge with existing completed domains
-        const mergedCompletedDomains = [...new Set([
-          ...prev.completed_domains,
-          ...allDomainsWithScores
-        ])]
-        
-        console.log('🎯 Assessment completed - final domain count:', mergedCompletedDomains.length)
+      // Handle assessment completion
+      const allDomainsWithScores = latestMessage.domain_scores ? 
+        Object.keys(latestMessage.domain_scores) : []
+      
+      const mergedCompletedDomains = [...new Set([
+        ...assessmentData.completed_domains,
+        ...allDomainsWithScores
+      ])]
+      
+      console.log('Assessment completed - final domain count:', mergedCompletedDomains.length)
 
-        // Gather domain data from recent WebSocket messages to avoid data loss
-        const messagesSnapshot = messages.slice()
-        const domainDataFromMessages: Record<string, any> = messagesSnapshot.reduce((acc, msg) => {
-          if (msg.type === 'score_update' && msg.domain && allDomainsWithScores.includes(msg.domain)) {
-            acc[msg.domain] = {
-              // Preserve existing data
-              ...prev.domain_data[msg.domain],
-              // Add WebSocket-specific data
-              scores: msg.scores || {},
-              score_value: msg.score_value,
-              processing_time_ms: msg.processing_time_ms
-            }
+      // Gather domain data from recent WebSocket messages
+      const domainDataFromMessages: Record<string, any> = {}
+      messages.forEach(msg => {
+        if (msg.type === 'score_update' && msg.domain && allDomainsWithScores.includes(msg.domain)) {
+          domainDataFromMessages[msg.domain] = {
+            ...assessmentData.domain_data[msg.domain],
+            scores: msg.scores || {},
+            score_value: msg.score_value,
+            processing_time_ms: msg.processing_time_ms
           }
-          return acc
-        }, {} as Record<string, any>)
+        }
+      })
 
-        // Merge domain data from completion message if provided
-        const completedPayloadDomainData = (latestMessage as any).domain_data || {}
-
-        const mergedDomainData = {
-          ...prev.domain_data,
+      // Final progress update for completion
+      updateProgress({
+        completed_domains: mergedCompletedDomains,
+        domain_data: {
+          ...assessmentData.domain_data,
           ...domainDataFromMessages,
-          ...completedPayloadDomainData
-        }
-
-        return {
-          ...prev,
-          completed_domains: mergedCompletedDomains,
-          domain_data: mergedDomainData,
-          overall_score: latestMessage.overall_score,
-          domain_scores: latestMessage.domain_scores,
-          final_results: {
-            weighted_score: latestMessage.overall_score,
-            weights: latestMessage.final_weights_used
-          },
-          assessment_id: latestMessage.assessment_id,
-          status: 'COMPLETED',
-          completion_percentage: 100
-        }
+          ...((latestMessage as any).domain_data || {})
+        },
+        overall_score: latestMessage.overall_score,
+        domain_scores: latestMessage.domain_scores,
+        status: 'COMPLETED',
+        completion_percentage: 100
       })
     }
-  }, [messages, assessmentId])
+  }, [messages, assessmentId, assessmentData, updateProgress])
 
-  // Debug logging for assessment data changes
-  useEffect(() => {
-    console.log('📊 Assessment Data Debug:', {
-      assessment_id: assessmentData.assessment_id,
-      completed_domains: assessmentData.completed_domains,
-      domain_data_keys: Object.keys(assessmentData.domain_data),
-      domain_scores: assessmentData.domain_scores,
-      overall_score: assessmentData.overall_score,
-      latest_message_type: messages[messages.length - 1]?.type,
-      latest_message_domain: messages[messages.length - 1]?.domain
-    })
-  }, [assessmentData, messages])
+  // Show loading state
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-50 via-background to-muted/20 flex items-center justify-center">
+        <div className="text-center">
+          <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mx-auto mb-6 flex items-center justify-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
+          </div>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">Loading Assessment</h3>
+          <p className="text-gray-600">Fetching your assessment data...</p>
+        </div>
+      </div>
+    )
+  }
 
   const allDomains = ['human_centricity', 'resilience', 'sustainability']
   const completionPercentage = assessmentData.completion_percentage || 
@@ -455,18 +294,17 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
                 
                 return (
                   <div 
-  key={moduleKey}
-  className={`group relative overflow-hidden rounded-2xl border border-border/50 
-              bg-gradient-to-br from-background via-background to-muted/20 p-6 
-              transition-all duration-300 hover:shadow-xl hover:scale-[1.02] ${
-    module.color === 'blue'
-      ? 'hover:border-blue-400'
-      : module.color === 'purple'
-      ? 'hover:border-purple-400'
-      : 'hover:border-green-400'
-  }`}
->
-
+                    key={moduleKey}
+                    className={`group relative overflow-hidden rounded-2xl border border-border/50 
+                                bg-gradient-to-br from-background via-background to-muted/20 p-6 
+                                transition-all duration-300 hover:shadow-xl hover:scale-[1.02] ${
+                      module.color === 'blue'
+                        ? 'hover:border-blue-400'
+                        : module.color === 'purple'
+                        ? 'hover:border-purple-400'
+                        : 'hover:border-green-400'
+                    }`}
+                  >
                     {/* Animated gradient overlay */}
                     <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300 ${
                       module.color === 'blue' ? 'bg-gradient-to-br from-blue-500 via-blue-400 to-cyan-400' :

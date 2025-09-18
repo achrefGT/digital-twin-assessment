@@ -34,6 +34,7 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   refreshAccessToken: () => Promise<void>;
   changePassword: (currentPassword: string, newPassword: string) => Promise<void>;
+  updateProfile: (profileData: ProfileUpdateData) => Promise<User>;
 }
 
 export interface RegisterData {
@@ -65,7 +66,13 @@ export interface PasswordChangeRequest {
   new_password: string;
 }
 
+export interface ProfileUpdateData {
+  first_name?: string;
+  last_name?: string;
+}
+
 export interface AuthError {
+  message: string;
   detail: string;
   status_code?: number;
 }

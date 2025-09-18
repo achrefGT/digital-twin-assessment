@@ -1,14 +1,23 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AssessmentDashboard } from '@/components/dashboard/AssessmentDashboard'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { ArrowLeft, Plus, Activity, Sparkles, CheckCircle, BarChart3 } from 'lucide-react'
+import { ArrowLeft, Plus, Activity, Sparkles, CheckCircle, BarChart3, AlertTriangle } from 'lucide-react'
 import { useAssessment } from '@/hooks/useAssessment'
 
 export default function Dashboard() {
   const navigate = useNavigate()
-  const { currentAssessment, isLoading, clearAssessment, createAssessment } = useAssessment()
+  const { 
+    currentAssessment, 
+    isLoading, 
+    clearAssessment, 
+    createAssessment
+  } = useAssessment()
+
+  // Local state for create assessment operations
+  const [isCreating, setIsCreating] = useState(false)
+  const [createError, setCreateError] = useState<Error | null>(null)
 
   // Show loading state
   if (isLoading) {
@@ -27,6 +36,21 @@ export default function Dashboard() {
 
   // If no assessment exists, show create assessment prompt
   if (!currentAssessment) {
+    const handleCreateAssessment = async () => {
+      try {
+        setIsCreating(true)
+        setCreateError(null)
+        await createAssessment()
+        // Assessment will be automatically updated via React Query
+        console.log('Assessment created successfully')
+      } catch (error) {
+        console.error('Failed to create assessment:', error)
+        setCreateError(error instanceof Error ? error : new Error('Failed to create assessment'))
+      } finally {
+        setIsCreating(false)
+      }
+    }
+
     return (
       <div className="min-h-screen bg-white">
         {/* Navigation Header */}
@@ -75,6 +99,15 @@ export default function Dashboard() {
                 You need to create an assessment before viewing the dashboard. 
                 Get started with your digital twin evaluation today.
               </p>
+              
+              {/* Error display for create assessment */}
+              {createError && (
+                <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
+                  <p className="text-red-600 text-sm">
+                    {createError.message || 'Failed to create assessment'}
+                  </p>
+                </div>
+              )}
               
               {/* Action Cards */}
               <div className="grid md:grid-cols-2 gap-6 mb-12">
@@ -128,7 +161,7 @@ export default function Dashboard() {
                 <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-violet-600 rounded-2xl mx-auto mb-4 flex items-center justify-center">
                   <Sparkles className="w-8 h-8 text-white" />
                 </div>
-                <h3 className="text-lg font-semibold text-gray-900 mb-2">💡 Getting Started</h3>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Getting Started</h3>
                 <p className="text-gray-600 leading-relaxed">
                   The dashboard provides real-time insights into your digital twin assessment progress. 
                   Create an assessment to unlock comprehensive analytics, scoring, and domain-specific evaluations.
@@ -144,37 +177,50 @@ export default function Dashboard() {
   return (
     <div className="min-h-screen bg-white">
       {/* Modern Header with assessment info and actions */}
-        <nav className="border-b border-gray-200 bg-white/95 backdrop-blur-sm">
-          <div className="container mx-auto px-6">
-            <div className="flex items-center justify-between h-16">
+      <nav className="border-b border-gray-200 bg-white/95 backdrop-blur-sm">
+        <div className="container mx-auto px-6">
+          <div className="flex items-center justify-between h-16">
+            <div className="flex items-center gap-3">
+              <Button 
+                variant="ghost" 
+                onClick={() => navigate('/')}
+                className="-ml-2 p-2 hover:translate-x-[-4px] transition-transform duration-200 hover:bg-white"
+              >
+                <ArrowLeft className="w-5 h-5 text-black" />
+              </Button>
+              <div className="h-6 w-px bg-gray-300" />
               <div className="flex items-center gap-3">
-                <Button 
-                  variant="ghost" 
-                  onClick={() => navigate('/')}
-                  className="-ml-2 p-2 hover:translate-x-[-4px] transition-transform duration-200 hover:bg-white"
-                >
-                  <ArrowLeft className="w-5 h-5 text-black" />
-                </Button>
-                <div className="h-6 w-px bg-gray-300" />
-                <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-blue-600 rounded-lg flex items-center justify-center">
-                    <BarChart3 className="w-5 h-5 text-white" />
-                  </div>
+                <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-blue-600 rounded-lg flex items-center justify-center">
+                  <BarChart3 className="w-5 h-5 text-white" />
+                </div>
+                <div className="flex flex-col">
                   <span className="text-xl font-bold text-gray-900">Dashboard</span>
+                  <span className="text-xs text-gray-500">
+                    Assessment: {currentAssessment.assessment_id.slice(0, 8)}...
+                  </span>
                 </div>
               </div>
             </div>
+            
+            <div className="flex items-center gap-2">
+              <Button
+                variant="outline" 
+                size="sm"
+                onClick={() => {
+                  clearAssessment()
+                  navigate('/assessment')
+                }}
+              >
+                <Plus className="w-4 h-4 mr-2" />
+                New Assessment
+              </Button>
+            </div>
           </div>
-        </nav>
+        </div>
+      </nav>
       
-      {/* Dashboard Content - Remove extra background since AssessmentDashboard handles it */}
+      {/* Dashboard Content */}
       <AssessmentDashboard assessmentId={currentAssessment.assessment_id} />
     </div>
   )
 }
-<div className="flex items-center gap-3">
-  <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-blue-600 rounded-lg flex items-center justify-center">
-    <BarChart3 className="w-5 h-5 text-white" />
-  </div>
-  <span className="text-xl font-bold text-gray-900">Dashboard</span>
-</div>
