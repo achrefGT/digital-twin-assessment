@@ -14,6 +14,17 @@ class Settings(BaseSettings):
         env_file=".env",
         case_sensitive=False
     )
+
+    # Weight calculation settings - database-based
+    weighting_alpha: float = 0.8  # Compromise parameter (0=objective, 1=subjective)
+    weight_update_interval_hours: int = 24  # How often to update weights
+    weight_calculation_lookback_days: int = 30  # How many days back to look for assessments
+    max_assessments_for_weights: int = 1000  # Maximum assessments to use for weight calculation
+    min_assessments_for_objective: int = 10  # Minimum assessments needed for objective weighting
+    
+    # Additional database performance settings
+    weight_calculation_batch_size: int = 100  # Batch size for processing large numbers of assessments
+    enable_weight_calculation_caching: bool = True  # Cache weight calculations for performance
     
     # Microservice URLs
     resilience_service_url: str = "http://resilience-service:8001"

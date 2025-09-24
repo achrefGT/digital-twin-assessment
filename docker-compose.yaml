@@ -147,6 +147,8 @@ services:
       - RESILIENCE_API_PORT=8001
       - RESILIENCE_LOG_LEVEL=${LOG_LEVEL:-INFO}
     depends_on:
+      api-gateway:
+        condition: service_healthy
       postgres:
         condition: service_healthy
       kafka:

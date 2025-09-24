@@ -1,7 +1,8 @@
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import json
-from sqlalchemy import Column, String, Float, DateTime, JSON, Integer, create_engine, text
+import uuid
+from sqlalchemy import Column, String, Float, DateTime, JSON, Integer, Boolean, create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import logging
@@ -9,6 +10,7 @@ import logging
 from shared.database import get_database_url
 from shared.models.exceptions import DatabaseConnectionException, AssessmentNotFoundException
 from .config import settings
+from .models import DEFAULT_RESILIENCE_SCENARIOS, RESILIENCE_SCENARIOS
 
 logger = logging.getLogger(__name__)
 Base = declarative_base()
@@ -74,6 +76,18 @@ class ResilienceAssessment(Base):
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 
+class ResilienceScenario(Base):
+    __tablename__ = "resilience_scenarios"
+    
+    id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
+    domain = Column(String, nullable=False, index=True)
+    scenario_text = Column(String, nullable=False)
+    description = Column(String)
+    is_default = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
 class DatabaseManager:
     def __init__(self):
         try:
@@ -93,9 +107,46 @@ class DatabaseManager:
         try:
             Base.metadata.create_all(bind=self.engine)
             logger.info("Database tables created successfully")
+            
+            # Initialize default scenarios if they don't exist
+            self._initialize_default_scenarios()
+            
         except Exception as e:
             logger.error(f"Failed to create tables: {e}")
             raise DatabaseConnectionException(f"Failed to create tables: {e}")
+    
+    def _initialize_default_scenarios(self):
+        """Initialize default scenarios in database if they don't exist"""
+        db = self.get_session()
+        try:
+            # Check if default scenarios already exist
+            existing_count = db.query(ResilienceScenario).filter(
+                ResilienceScenario.is_default == True
+            ).count()
+            
+            if existing_count == 0:
+                logger.info("Initializing default resilience scenarios...")
+                
+                for domain, domain_data in DEFAULT_RESILIENCE_SCENARIOS.items():
+                    for scenario_text in domain_data['scenarios']:
+                        scenario = ResilienceScenario(
+                            domain=domain,
+                            scenario_text=scenario_text,
+                            description=domain_data['description'],
+                            is_default=True
+                        )
+                        db.add(scenario)
+                
+                db.commit()
+                logger.info("Default scenarios initialized successfully")
+            else:
+                logger.info(f"Found {existing_count} existing default scenarios")
+                
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to initialize default scenarios: {e}")
+        finally:
+            db.close()
         
     def get_session(self):
         """Get database session"""
@@ -168,3 +219,147 @@ class DatabaseManager:
             raise DatabaseConnectionException(f"Failed to retrieve assessment: {e}")
         finally:
             db.close()
+    
+    # Scenario management methods
+    def get_all_scenarios(self) -> List[ResilienceScenario]:
+        """Get all scenarios from database"""
+        db = self.get_session()
+        try:
+            scenarios = db.query(ResilienceScenario).order_by(
+                ResilienceScenario.domain, ResilienceScenario.created_at
+            ).all()
+            return scenarios
+        except Exception as e:
+            logger.error(f"Failed to retrieve scenarios: {e}")
+            raise DatabaseConnectionException(f"Failed to retrieve scenarios: {e}")
+        finally:
+            db.close()
+    
+    def get_scenarios_by_domain(self, domain: str) -> List[ResilienceScenario]:
+        """Get scenarios for a specific domain"""
+        db = self.get_session()
+        try:
+            scenarios = db.query(ResilienceScenario).filter(
+                ResilienceScenario.domain == domain
+            ).order_by(ResilienceScenario.created_at).all()
+            return scenarios
+        except Exception as e:
+            logger.error(f"Failed to retrieve scenarios for domain {domain}: {e}")
+            raise DatabaseConnectionException(f"Failed to retrieve scenarios: {e}")
+        finally:
+            db.close()
+    
+    def create_scenario(self, scenario_data: Dict[str, Any]) -> ResilienceScenario:
+        """Create a new scenario"""
+        db = self.get_session()
+        try:
+            scenario = ResilienceScenario(
+                domain=scenario_data['domain'],
+                scenario_text=scenario_data['scenario_text'],
+                description=scenario_data.get('description'),
+                is_default=scenario_data.get('is_default', False)
+            )
+            
+            db.add(scenario)
+            db.commit()
+            db.refresh(scenario)
+            
+            # Update in-memory scenarios
+            self._refresh_scenarios_cache()
+            
+            logger.info(f"Created scenario {scenario.id} for domain {scenario.domain}")
+            return scenario
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to create scenario: {e}")
+            raise DatabaseConnectionException(f"Failed to create scenario: {e}")
+        finally:
+            db.close()
+    
+    def update_scenario(self, scenario_id: str, update_data: Dict[str, Any]) -> Optional[ResilienceScenario]:
+        """Update an existing scenario"""
+        db = self.get_session()
+        try:
+            scenario = db.query(ResilienceScenario).filter(
+                ResilienceScenario.id == scenario_id
+            ).first()
+            
+            if not scenario:
+                return None
+            
+            # Update fields
+            for field, value in update_data.items():
+                if hasattr(scenario, field) and value is not None:
+                    setattr(scenario, field, value)
+            
+            scenario.updated_at = datetime.utcnow()
+            db.commit()
+            db.refresh(scenario)
+            
+            # Update in-memory scenarios
+            self._refresh_scenarios_cache()
+            
+            logger.info(f"Updated scenario {scenario_id}")
+            return scenario
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to update scenario {scenario_id}: {e}")
+            raise DatabaseConnectionException(f"Failed to update scenario: {e}")
+        finally:
+            db.close()
+    
+    def delete_scenario(self, scenario_id: str) -> bool:
+        """Delete a scenario"""
+        db = self.get_session()
+        try:
+            scenario = db.query(ResilienceScenario).filter(
+                ResilienceScenario.id == scenario_id
+            ).first()
+            
+            if not scenario:
+                return False
+            
+            db.delete(scenario)
+            db.commit()
+            
+            # Update in-memory scenarios
+            self._refresh_scenarios_cache()
+            
+            logger.info(f"Deleted scenario {scenario_id}")
+            return True
+            
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to delete scenario {scenario_id}: {e}")
+            raise DatabaseConnectionException(f"Failed to delete scenario: {e}")
+        finally:
+            db.close()
+    
+    def _refresh_scenarios_cache(self):
+        """Refresh the in-memory scenarios cache from database"""
+        try:
+            scenarios = self.get_all_scenarios()
+            
+            # Rebuild RESILIENCE_SCENARIOS dict
+            new_scenarios = {}
+            
+            for scenario in scenarios:
+                if scenario.domain not in new_scenarios:
+                    new_scenarios[scenario.domain] = {
+                        'description': scenario.description or DEFAULT_RESILIENCE_SCENARIOS.get(scenario.domain, {}).get('description', ''),
+                        'scenarios': []
+                    }
+                
+                new_scenarios[scenario.domain]['scenarios'].append(scenario.scenario_text)
+            
+            # Update global variable
+            global RESILIENCE_SCENARIOS
+            RESILIENCE_SCENARIOS.clear()
+            RESILIENCE_SCENARIOS.update(new_scenarios)
+            
+            logger.info("Scenarios cache refreshed successfully")
+            
+        except Exception as e:
+            logger.error(f"Failed to refresh scenarios cache: {e}")

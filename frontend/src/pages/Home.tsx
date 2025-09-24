@@ -2,7 +2,7 @@ import { Button } from "@/components/ui/enhanced-button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { useNavigate } from "react-router-dom"
-import { Leaf, DollarSign, Globe, Users, Shield, Activity, ArrowRight, CheckCircle, Sparkles, Brain } from "lucide-react"
+import { Leaf, DollarSign, Globe, Users, Shield, Activity, ArrowRight, CheckCircle, Sparkles, Brain, List } from "lucide-react"
 import { useState, useEffect } from "react"
 import { UserNavigation } from "@/components/UserNavigation"
 import AnimatedBackground from "@/components/AnimatedBackground"
@@ -122,6 +122,9 @@ const Home = () => {
           .hero-ctas.show .hero-cta-button:nth-child(2) {
             transition-delay: 50ms;
           }
+          .hero-ctas.show .hero-cta-button:nth-child(3) {
+            transition-delay: 100ms;
+          }
         `}</style>
 
         <div className="container mx-auto px-6">
@@ -165,18 +168,18 @@ const Home = () => {
                 <Button
                   variant="outline"
                   size="sm"
-                  onClick={showNavbarButtons ? () => navigate('/dashboard') : undefined}
+                  onClick={showNavbarButtons ? () => navigate('/assessments') : undefined}
                   className={`group relative px-4 py-2.5 rounded-xl font-semibold transition-all duration-300 hover:scale-105 bg-white/10 border-2 border-gray-200 text-gray-900 hover:text-gray-900 backdrop-blur-sm hover:bg-gray-50 hover:border-gray-300 nav-button ${
                     showNavbarButtons ? 'show' : ''
                   }`}
                   style={{
                     pointerEvents: showNavbarButtons ? 'auto' : 'none'
                   }}
-                  aria-label="Open dashboard"
+                  aria-label="View assessments"
                 >
                   <div className="relative flex items-center gap-2">
-                    <Activity className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    <span>Dashboard</span>
+                    <List className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
+                    <span>My Assessments</span>
                   </div>
                 </Button>
               </div>
@@ -229,17 +232,19 @@ const Home = () => {
                   <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
                 </div>
               </Button>
+              
               <Button 
                 variant="outline"
                 size="lg"
-                onClick={() => navigate('/dashboard')}
+                onClick={() => navigate('/assessments')}
                 className="hero-cta-button border-2 border-white/30 bg-white/10 backdrop-blur-sm text-white hover:bg-white/20 hover:border-white/50 px-8 py-3 rounded-xl font-semibold transition-all duration-300 hover:scale-105"
               >
                 <div className="relative flex items-center justify-center">
-                  <Activity className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
-                  View Dashboard
+                  <List className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
+                  My Assessments
                 </div>
               </Button>
+              
             </div>
           </div>
         </div>

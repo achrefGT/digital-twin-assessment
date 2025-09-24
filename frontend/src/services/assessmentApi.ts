@@ -22,6 +22,7 @@ export interface Assessment {
   status: string
   created_at: string
   updated_at?: string
+  completed_at?: string
   user_id?: string
   progress?: AssessmentProgress
   [key: string]: any
@@ -121,6 +122,38 @@ export class AssessmentAPI {
     return response.json()
   }
 
+  // NEW: Fetch user assessments from the backend
+  static async fetchUserAssessments(token: string, limit: number = 10): Promise<Assessment[]> {
+    const response = await fetch(`${API_BASE_URL}/assessments/my/assessments?limit=${limit}`, {
+      headers: this.getHeaders(token)
+    })
+    
+    if (!response.ok) {
+      if (response.status === 401) {
+        throw new Error('Authentication required')
+      }
+      if (response.status === 403) {
+        throw new Error('Access denied')
+      }
+      throw new Error(`Failed to fetch user assessments: ${response.status}`)
+    }
+    
+    const assessments = await response.json()
+    
+    // Enhance assessments with progress data
+    return assessments.map((assessment: any) => ({
+      ...assessment,
+      progress: {
+        completed_domains: this.extractCompletedDomains(assessment),
+        completion_percentage: this.calculateCompletionPercentage(assessment),
+        domain_scores: assessment.domain_scores || {},
+        overall_score: assessment.overall_score,
+        domain_data: assessment.domain_data || {},
+        ...assessment.progress
+      }
+    }))
+  }
+
   static async fetchDomainScores(assessmentId: string, token?: string): Promise<DomainScoresResponse> {
     const response = await fetch(`${API_BASE_URL}/assessments/${assessmentId}/domain-scores/`, {
       headers: this.getHeaders(token)
@@ -150,7 +183,7 @@ export class AssessmentAPI {
       headers: this.getHeaders(token),
       body: JSON.stringify({
         domain,
-        responses
+        form_data: responses
       })
     })
 
@@ -176,6 +209,21 @@ export class AssessmentAPI {
       }
       throw new Error(`Failed to delete assessment: ${response.status}`)
     }
+  }
+
+  // Helper methods for processing assessment data
+  private static extractCompletedDomains(assessment: any): string[] {
+    const domains = []
+    if (assessment.resilience_submitted) domains.push('resilience')
+    if (assessment.sustainability_submitted) domains.push('sustainability') 
+    if (assessment.human_centricity_submitted) domains.push('human_centricity')
+    return domains
+  }
+
+  private static calculateCompletionPercentage(assessment: any): number {
+    const totalDomains = 3
+    const completedDomains = this.extractCompletedDomains(assessment)
+    return (completedDomains.length / totalDomains) * 100
   }
 
   // Utility function to convert domain scores to assessment format
@@ -227,6 +275,7 @@ export const assessmentKeys = {
   detail: (id: string) => [...assessmentKeys.details(), id] as const,
   domainScores: (id: string) => [...assessmentKeys.detail(id), 'domain-scores'] as const,
   currentAssessmentId: () => ['current-assessment-id'] as const,
+  userAssessments: (userId?: string) => [...assessmentKeys.all, 'user', userId] as const,
 }
 
 // React Query query functions
@@ -235,6 +284,13 @@ export const assessmentQueries = {
     queryKey: assessmentKeys.detail(assessmentId),
     queryFn: () => AssessmentAPI.fetchAssessment(assessmentId, token),
     staleTime: 30 * 1000, // 30 seconds
+  }),
+
+  userAssessments: (token: string, limit: number = 10) => ({
+    queryKey: assessmentKeys.userAssessments(),
+    queryFn: () => AssessmentAPI.fetchUserAssessments(token, limit),
+    staleTime: 30 * 1000, // 30 seconds
+    enabled: !!token,
   }),
 
   domainScores: (assessmentId: string, token?: string) => ({
@@ -334,44 +390,6 @@ export const createQueryClient = () => {
         }
       }
     }
-  })
-}
-
-// Note: These utility hooks should be implemented in separate hook files
-// This is just the configuration - actual hooks should import useQuery/useMutation directly
-
-// Query configurations for use with useQuery hook
-export const assessmentQueryConfigs = {
-  // Configuration for fetching assessment with domain scores
-  detailWithScores: (assessmentId: string, token?: string) => ({
-    queryKey: assessmentKeys.detail(assessmentId),
-    queryFn: async () => {
-      try {
-        const domainScores = await AssessmentAPI.fetchDomainScores(assessmentId, token)
-        return AssessmentAPI.convertDomainScoresToAssessment(assessmentId, domainScores)
-      } catch (domainError) {
-        console.warn('Failed to fetch domain scores, falling back to basic assessment:', domainError)
-        return AssessmentAPI.fetchAssessment(assessmentId, token)
-      }
-    },
-    staleTime: 30 * 1000,
-    retry: (failureCount: number, error: any) => {
-      if (error?.message?.includes('Authentication required') || 
-          error?.message?.includes('not found')) {
-        return false
-      }
-      return failureCount < 2
-    }
-  }),
-
-  // Configuration for current assessment ID
-  currentAssessmentId: () => ({
-    queryKey: assessmentKeys.currentAssessmentId(),
-    queryFn: () => {
-      return (window as any).__currentAssessmentId__ || null
-    },
-    staleTime: Infinity,
-    gcTime: Infinity,
   })
 }
 

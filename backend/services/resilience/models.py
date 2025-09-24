@@ -65,9 +65,42 @@ class ResilienceScenarios(BaseModel):
     domain_descriptions: Dict[str, str]
     scenario_categories: Dict[str, List[str]]
 
+class ScenarioCreate(BaseModel):
+    domain: str
+    scenario_text: str
+    description: Optional[str] = None
+    is_default: bool = False
+
+    @validator('domain')
+    def validate_domain(cls, v):
+        if v not in [domain.value for domain in ResilienceDomain]:
+            raise ValueError(f"Domain must be one of: {[d.value for d in ResilienceDomain]}")
+        return v
+
+
+class ScenarioUpdate(BaseModel):
+    scenario_text: Optional[str] = None
+    domain: Optional[str] = None
+
+    @validator('domain')
+    def validate_domain(cls, v):
+        if v and v not in [domain.value for domain in ResilienceDomain]:
+            raise ValueError(f"Domain must be one of: {[d.value for d in ResilienceDomain]}")
+        return v
+
+
+class ScenarioResponse(BaseModel):
+    id: str
+    domain: str
+    scenario_text: str
+    description: Optional[str] = None
+    is_default: bool = False
+    created_at: datetime
+    updated_at: datetime
+
 
 # Enhanced resilience scenarios configuration with original domains only
-RESILIENCE_SCENARIOS = {
+DEFAULT_RESILIENCE_SCENARIOS = {
     'Robustness': {
         'description': 'System ability to withstand stresses and continue operating',
         'scenarios': [
@@ -114,6 +147,9 @@ RESILIENCE_SCENARIOS = {
         ]
     }
 }
+
+# This will be dynamically updated
+RESILIENCE_SCENARIOS = DEFAULT_RESILIENCE_SCENARIOS.copy()
 
 
 class DomainSelectionHelper:

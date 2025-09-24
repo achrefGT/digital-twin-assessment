@@ -102,8 +102,20 @@ class KafkaService:
             settings.final_results_topic,
         ]
         
-        # Initialize weighting service
-        self.weighting_service = WeightingService()
+        # Initialize weighting service with configurable alpha
+        alpha = getattr(settings, 'weighting_alpha', 0.8)
+        self.weighting_service = WeightingService(alpha=alpha)
+        
+        # Weight update management - REMOVED cached assessments
+        self.weight_update_interval = getattr(settings, 'weight_update_interval_hours', 24)
+        self.last_weight_update = None
+        
+        # Database-based weight calculation settings
+        self.weight_calculation_lookback_days = getattr(settings, 'weight_calculation_lookback_days', 30)
+        self.max_assessments_for_weights = getattr(settings, 'max_assessments_for_weights', 1000)
+        
+        # Background task management
+        self._weight_update_task = None
         
     @backoff.on_exception(
         backoff.expo,
@@ -133,6 +145,13 @@ class KafkaService:
             self._producer_failures = 0
             self._producer_circuit_open = False
             
+            # Start background weight update task
+            self._weight_update_task = asyncio.create_task(self._periodic_weight_update())
+            logger.info("Started periodic weight update task")
+            
+            # Perform initial weight update with database data
+            await self._update_weights_from_database()
+            
             logger.info("Kafka service started successfully using shared utilities")
             
         except Exception as e:
@@ -146,6 +165,15 @@ class KafkaService:
         logger.info("Stopping Kafka service...")
         self.running = False
         self._shutdown_event.set()
+        
+        # Stop background weight update task
+        if self._weight_update_task:
+            self._weight_update_task.cancel()
+            try:
+                await self._weight_update_task
+            except asyncio.CancelledError:
+                pass
+            logger.info("Stopped periodic weight update task")
         
         # Stop consumer first to prevent new message processing
         if self.consumer:
@@ -180,6 +208,257 @@ class KafkaService:
                 logger.error(f"Error stopping producer: {e}")
         
         logger.info("Kafka service stopped")
+
+    async def _periodic_weight_update(self):
+        """Background task to periodically update weights based on completed assessments"""
+        logger.info(f"Starting periodic weight updates every {self.weight_update_interval} hours")
+        
+        while self.running and not self._shutdown_event.is_set():
+            try:
+                # Wait for the update interval or until shutdown
+                await asyncio.wait_for(
+                    self._shutdown_event.wait(), 
+                    timeout=self.weight_update_interval * 3600  # Convert hours to seconds
+                )
+                break  # Shutdown event was set
+                
+            except asyncio.TimeoutError:
+                # Normal timeout - time to update weights
+                try:
+                    await self._update_weights_from_database()
+                except Exception as e:
+                    logger.error(f"Error in periodic weight update: {e}")
+                    self.metrics.record_error("periodic_weight_update_error")
+
+    async def _update_weights_from_database(self):
+        """Update weights using completed assessments from database"""
+        try:
+            logger.info("Updating weights from database...")
+            
+            # Calculate cutoff date for recent assessments
+            cutoff_date = datetime.utcnow() - timedelta(days=self.weight_calculation_lookback_days)
+            
+            # Fetch completed assessments from database
+            db_assessments = self.db_manager.get_completed_assessments_for_weighting(
+                cutoff_date=cutoff_date,
+                limit=self.max_assessments_for_weights
+            )
+            
+            # FIX: Use weighting_service's min_assessments instead of self
+            min_assessments_needed = self.weighting_service.min_assessments_for_objective
+            
+            if len(db_assessments) < min_assessments_needed:
+                logger.info(f"Insufficient completed assessments in database ({len(db_assessments)}) for weight update. "
+                          f"Need at least {min_assessments_needed}. "
+                          f"Using lookback period of {self.weight_calculation_lookback_days} days.")
+                return
+            
+            # Convert database assessments to weight calculation format
+            assessment_data = []
+            for assessment in db_assessments:
+                if assessment.domain_scores and isinstance(assessment.domain_scores, dict):
+                    # Ensure all required domains are present with valid scores
+                    domain_scores = {}
+                    for domain in ['resilience', 'sustainability', 'human_centricity']:
+                        if (domain in assessment.domain_scores and 
+                            assessment.domain_scores[domain] is not None and
+                            isinstance(assessment.domain_scores[domain], (int, float))):
+                            domain_scores[domain] = float(assessment.domain_scores[domain])
+                    
+                    # Only include if all domains are present
+                    if len(domain_scores) == 3:
+                        assessment_data.append(domain_scores)
+            
+            logger.info(f"Converted {len(assessment_data)} database assessments to weight calculation format")
+            
+            if len(assessment_data) < min_assessments_needed:
+                logger.info(f"Insufficient valid assessment data ({len(assessment_data)}) for weight update after filtering.")
+                return
+            
+            # Update weights using the collected data
+            success = self.weighting_service.update_weights_from_data(assessment_data)
+            
+            if success:
+                self.last_weight_update = datetime.utcnow()
+                logger.info(f"Successfully updated weights using {len(assessment_data)} database assessments")
+                logger.info(f"New weights: {self.weighting_service.weights}")
+                logger.info(f"Weight type: {self.weighting_service.weights_type}")
+                
+                # Log database statistics
+                try:
+                    stats = self.db_manager.get_assessment_statistics()
+                    logger.info(f"Database assessment statistics: {stats}")
+                except Exception as e:
+                    logger.warning(f"Could not retrieve database statistics: {e}")
+            else:
+                logger.warning("Failed to update weights from database data")
+                
+        except Exception as e:
+            logger.error(f"Error updating weights from database: {e}")
+            self.metrics.record_error("weight_update_error")
+            
+
+    async def _fetch_completed_assessments(self, cutoff_date: datetime) -> List[Dict[str, float]]:
+        """
+        Fetch completed assessments from database since cutoff_date
+        
+        Parameters:
+        -----------
+        cutoff_date : datetime
+            Only fetch assessments completed after this date
+            
+        Returns:
+        --------
+        List[Dict[str, float]]
+            List of assessment data with domain scores
+        """
+        try:
+            # This would need to be implemented in the database manager
+            # For now, we'll use a simple approach
+            
+            # Get completed assessments from cache first
+            recent_assessments = [
+                assessment for assessment in self.completed_assessments_cache
+                if assessment.get('completed_at', datetime.min) >= cutoff_date
+            ]
+            
+            # If we need more data, query the database
+            # Note: This would require adding a method to DatabaseManager
+            # For now, we'll work with cached data and suggest the database addition
+            
+            assessment_data = []
+            for assessment in recent_assessments:
+                domain_scores = assessment.get('domain_scores', {})
+                
+                # Only include assessments with all domain scores
+                if all(domain in domain_scores and domain_scores[domain] is not None 
+                       for domain in ['resilience', 'sustainability', 'human_centricity']):
+                    assessment_data.append(domain_scores)
+            
+            logger.info(f"Retrieved {len(assessment_data)} complete assessments for weight calculation")
+            return assessment_data
+            
+        except Exception as e:
+            logger.error(f"Error fetching completed assessments: {e}")
+            return []
+
+    def _cache_completed_assessment(self, progress: AssessmentProgress):
+        """Cache completed assessment for weight calculation"""
+        if progress.status != AssessmentStatus.COMPLETED or not progress.domain_scores:
+            return
+        
+        # Create assessment data entry
+        assessment_entry = {
+            'assessment_id': progress.assessment_id,
+            'completed_at': progress.completed_at or datetime.utcnow(),
+            'domain_scores': progress.domain_scores.copy(),
+            'overall_score': progress.overall_score
+        }
+        
+        # Add to cache
+        self.completed_assessments_cache.append(assessment_entry)
+        
+        # Maintain cache size
+        if len(self.completed_assessments_cache) > self.max_cache_size:
+            # Remove oldest entries
+            self.completed_assessments_cache = sorted(
+                self.completed_assessments_cache, 
+                key=lambda x: x['completed_at'], 
+                reverse=True
+            )[:self.max_cache_size]
+        
+        logger.debug(f"Cached completed assessment {progress.assessment_id} for weight calculation")
+
+    async def _periodic_weight_update(self):
+        """Background task to periodically update weights based on database assessments"""
+        logger.info(f"Starting periodic weight updates every {self.weight_update_interval} hours")
+        
+        while self.running and not self._shutdown_event.is_set():
+            try:
+                # Wait for the update interval or until shutdown
+                await asyncio.wait_for(
+                    self._shutdown_event.wait(), 
+                    timeout=self.weight_update_interval * 3600  # Convert hours to seconds
+                )
+                break  # Shutdown event was set
+                
+            except asyncio.TimeoutError:
+                # Normal timeout - time to update weights
+                try:
+                    await self._update_weights_from_database()
+                except Exception as e:
+                    logger.error(f"Error in periodic weight update: {e}")
+                    self.metrics.record_error("periodic_weight_update_error")
+
+    async def _update_weights_from_database(self):
+        """Update weights using completed assessments from database"""
+        try:
+            logger.info("Updating weights from database...")
+            
+            # Calculate cutoff date for recent assessments
+            cutoff_date = datetime.utcnow() - timedelta(days=self.weight_calculation_lookback_days)
+            
+            # Fetch completed assessments from database
+            db_assessments = self.db_manager.get_completed_assessments_for_weighting(
+                cutoff_date=cutoff_date,
+                limit=self.max_assessments_for_weights
+            )
+            
+            logger.info(f"Retrieved {len(db_assessments)} complete assessments for weight calculation from database")
+            
+            # FIX: Use weighting_service's min_assessments instead of self
+            min_assessments_needed = self.weighting_service.min_assessments_for_objective
+            
+            if len(db_assessments) < min_assessments_needed:
+                logger.info(f"Insufficient completed assessments in database ({len(db_assessments)}) for weight update. "
+                        f"Need at least {min_assessments_needed}. "
+                        f"Using lookback period of {self.weight_calculation_lookback_days} days.")
+                return
+            
+            # Convert database assessments to weight calculation format
+            assessment_data = []
+            for assessment in db_assessments:
+                if assessment.domain_scores and isinstance(assessment.domain_scores, dict):
+                    # Ensure all required domains are present with valid scores
+                    domain_scores = {}
+                    for domain in ['resilience', 'sustainability', 'human_centricity']:
+                        if (domain in assessment.domain_scores and 
+                            assessment.domain_scores[domain] is not None and
+                            isinstance(assessment.domain_scores[domain], (int, float))):
+                            domain_scores[domain] = float(assessment.domain_scores[domain])
+                    
+                    # Only include if all domains are present
+                    if len(domain_scores) == 3:
+                        assessment_data.append(domain_scores)
+            
+            logger.info(f"Converted {len(assessment_data)} database assessments to weight calculation format")
+            
+            if len(assessment_data) < min_assessments_needed:
+                logger.info(f"Insufficient valid assessment data ({len(assessment_data)}) for weight update after filtering.")
+                return
+            
+            # Update weights using the collected data
+            success = self.weighting_service.update_weights_from_data(assessment_data)
+            
+            if success:
+                self.last_weight_update = datetime.utcnow()
+                logger.info(f"Successfully updated weights using {len(assessment_data)} database assessments")
+                logger.info(f"New weights: {self.weighting_service.weights}")
+                logger.info(f"Weight type: {self.weighting_service.weights_type}")
+                
+                # Log database statistics
+                try:
+                    stats = self.db_manager.get_assessment_statistics()
+                    logger.info(f"Database assessment statistics: {stats}")
+                except Exception as e:
+                    logger.warning(f"Could not retrieve database statistics: {e}")
+            else:
+                logger.warning("Failed to update weights from database data")
+                
+        except Exception as e:
+            logger.error(f"Error updating weights from database: {e}")
+            self.metrics.record_error("weight_update_error")
+
 
     def _is_producer_available(self) -> bool:
         """Check if producer is available (circuit breaker pattern)"""
@@ -475,6 +754,14 @@ class KafkaService:
                 progress.overall_score = overall_score
                 progress.status = AssessmentStatus.COMPLETED
                 progress.completed_at = datetime.utcnow()
+                
+                # NO LONGER CACHE - the database is our source of truth
+                logger.info(f"Assessment {assessment_id} completed with overall score {overall_score}")
+                
+                # Trigger weight update if we have significant new completions
+                # Check if it's time for a weight update (every N completions or time-based)
+                await self._check_and_trigger_weight_update()
+                
             elif overall_score is not None:
                 progress.overall_score = overall_score
                 if progress.status != AssessmentStatus.PROCESSING:
@@ -519,6 +806,29 @@ class KafkaService:
             raise
         finally:
             self._processing_assessments.discard(assessment_id)
+
+
+    async def _check_and_trigger_weight_update(self):
+        """Check if weight update is needed and trigger if necessary"""
+        try:
+            # Time-based trigger: update if it's been long enough
+            if self.last_weight_update is None:
+                logger.info("Triggering initial weight update from database")
+                await self._update_weights_from_database()
+                return
+            
+            time_since_last_update = datetime.utcnow() - self.last_weight_update
+            if time_since_last_update.total_seconds() >= (self.weight_update_interval * 3600):
+                logger.info(f"Triggering scheduled weight update (last update: {time_since_last_update})")
+                await self._update_weights_from_database()
+                return
+            
+            # Completion-based trigger: check if we have significant new data
+            # This is optional - you could add logic here to check if there are enough new
+            # completed assessments since the last update to warrant recalculating weights
+            
+        except Exception as e:
+            logger.error(f"Error in weight update trigger check: {e}")
     
     async def _send_websocket_updates(self, assessment_id: str, domain: str, score_value: float,
                                     message_data: Dict, overall_score: Optional[float],
@@ -540,14 +850,17 @@ class KafkaService:
                 "overall_score": overall_score,
                 "completion_percentage": self.weighting_service.get_completion_percentage(progress.domain_scores),
                 "status": progress.status.value,
-                "domain_scores": progress.domain_scores
+                "domain_scores": progress.domain_scores,
+                "weights_used": self.weighting_service.weights,
+                "weights_type": self.weighting_service.weights_type,
+                "data_source": "database"
             }
             
             logger.info(f"[WEBSOCKET_DEBUG] Sending score update for assessment '{assessment_id}': "
                     f"domain='{domain}', score_value={score_value}, "
                     f"overall_score={overall_score}, "
                     f"completion_percentage={self.weighting_service.get_completion_percentage(progress.domain_scores):.2f}%, "
-                    f"status='{progress.status.value}'")
+                    f"status='{progress.status.value}', weights_type='{self.weighting_service.weights_type}'")
 
             # Actually send the message
             await connection_manager.send_to_assessment(assessment_id, websocket_message)
@@ -563,7 +876,9 @@ class KafkaService:
                     "domain_scores": progress.domain_scores,
                     "status": "COMPLETED",
                     "completion_percentage": 100.0,
-                    "final_weights_used": self.weighting_service.weights
+                    "final_weights_used": self.weighting_service.weights,
+                    "weights_info": self.weighting_service.get_weights_info(),
+                    "data_source": "database"
                 }
                 
                 logger.info(f"[WEBSOCKET_DEBUG] Sending completion message for assessment '{assessment_id}'")
@@ -574,21 +889,7 @@ class KafkaService:
             logger.error(f"[WEBSOCKET_DEBUG] Error sending WebSocket updates for assessment {assessment_id}: {e}")
             logger.exception("Full WebSocket error traceback:")
 
-    # Also add a debug endpoint to check WebSocket status
-    async def debug_websocket_status(self, assessment_id: str) -> Dict[str, Any]:
-        """Debug method to check WebSocket connection status"""
-        stats = connection_manager.get_stats()
-        
-        return {
-            "assessment_id": assessment_id,
-            "has_connections": assessment_id in connection_manager.assessment_connections,
-            "connection_count": len(connection_manager.assessment_connections.get(assessment_id, set())),
-            "queued_messages": len(connection_manager.message_queue.get(assessment_id, [])),
-            "total_active_connections": len(connection_manager.active_connections),
-            "connection_manager_stats": stats,
-            "currently_processing": assessment_id in self._processing_assessments
-        }
-    
+
     async def _send_error_websocket_notification(self, assessment_id: str, domain: str, error_message: str):
         """Send error notification via WebSocket"""
         try:
@@ -607,7 +908,6 @@ class KafkaService:
         except Exception as e:
             logger.error(f"Failed to send error WebSocket notification: {e}")
 
-    
     async def _publish_domain_events(self, assessment_id: str, domain: str, score_value: float,
                                    message_data: Dict, progress: AssessmentProgress,
                                    previous_status: str, overall_score: Optional[float],
@@ -635,12 +935,81 @@ class KafkaService:
                     progress=progress,
                     overall_score=overall_score,
                     domain_scores=progress.domain_scores,
-                    final_results={"weighted_score": overall_score, "weights": self.weighting_service.weights}
+                    final_results={
+                        "weighted_score": overall_score, 
+                        "weights": self.weighting_service.weights,
+                        "weights_type": self.weighting_service.weights_type,
+                        "alpha": self.weighting_service.alpha
+                    }
                 )
                 await self._publish_event(settings.assessment_status_topic, completed_event, key=assessment_id)
                 
         except Exception as e:
             logger.error(f"Error publishing domain events: {e}")
+    
+    # API methods for manual weight management
+    async def update_weighting_alpha(self, alpha: float) -> bool:
+        """Update the compromise parameter alpha"""
+        success = self.weighting_service.set_alpha(alpha)
+        if success:
+            logger.info(f"Updated weighting alpha to {alpha}")
+            # Trigger immediate weight recalculation
+            await self._update_weights_from_database()
+        return success
+    
+    async def get_weighting_info(self) -> Dict[str, Any]:
+        """Get comprehensive weighting information including database statistics"""
+        weights_info = self.weighting_service.get_weights_info()
+        
+        # Add database-based information
+        try:
+            db_stats = self.db_manager.get_assessment_statistics()
+            weights_info.update({
+                "last_weight_update": self.last_weight_update.isoformat() if self.last_weight_update else None,
+                "weight_update_interval_hours": self.weight_update_interval,
+                "lookback_days_for_weights": self.weight_calculation_lookback_days,
+                "max_assessments_for_weights": self.max_assessments_for_weights,
+                "database_stats": db_stats,
+                "data_source": "database"  # Indicate we're using database now
+            })
+        except Exception as e:
+            logger.error(f"Error getting database statistics: {e}")
+            weights_info.update({
+                "database_stats": {"error": str(e)},
+                "data_source": "database_error"
+            })
+        
+        return weights_info
+
+    async def force_weight_update(self) -> Dict[str, Any]:
+        """Force an immediate weight update from database"""
+        try:
+            await self._update_weights_from_database()
+            return {
+                "success": True,
+                "message": "Weight update completed from database",
+                "weights_info": await self.get_weighting_info()
+            }
+        except Exception as e:
+            return {
+                "success": False,
+                "message": f"Weight update failed: {e}",
+                "weights_info": await self.get_weighting_info()
+            }
+        
+    async def debug_websocket_status(self, assessment_id: str) -> Dict[str, Any]:
+        """Debug method to check WebSocket connection status"""
+        stats = connection_manager.get_stats()
+        
+        return {
+            "assessment_id": assessment_id,
+            "has_connections": assessment_id in connection_manager.assessment_connections,
+            "connection_count": len(connection_manager.assessment_connections.get(assessment_id, set())),
+            "queued_messages": len(connection_manager.message_queue.get(assessment_id, [])),
+            "total_active_connections": len(connection_manager.active_connections),
+            "connection_manager_stats": stats,
+            "currently_processing": assessment_id in self._processing_assessments
+        }
     
     async def health_check(self) -> bool:
         """Check Kafka service health"""
@@ -667,7 +1036,9 @@ class KafkaService:
             "configured_score_topics": len(self.score_topics),
             "processing_assessments_count": len(self._processing_assessments),
             "message_cache_size": len(self._message_cache),
-            "health_check": await self.health_check()
+            "health_check": await self.health_check(),
+            "weighting_info": await self.get_weighting_info(),
+            "data_source": "database"  # Indicate using database
         }
         
         # Add detailed metrics
@@ -675,7 +1046,6 @@ class KafkaService:
         
         return base_metrics
     
-
     async def test_websocket_send(self, assessment_id: str):
         """Test method to manually send a WebSocket message"""
         test_message = {

@@ -273,3 +273,86 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Database health check failed: {e}")
             return False
+        
+    def get_completed_assessments_for_weighting(self, cutoff_date: datetime = None, limit: int = 1000) -> List[Assessment]:
+        """
+        Get completed assessments for weight calculation from database
+        
+        Parameters:
+        -----------
+        cutoff_date : datetime, optional
+            Only fetch assessments completed after this date
+        limit : int, default=1000
+            Maximum number of assessments to fetch
+            
+        Returns:
+        --------
+        List[Assessment]
+            List of completed assessments with domain scores
+        """
+        with self.get_session() as session:
+            query = session.query(Assessment).filter(
+                Assessment.status == "completed",
+                Assessment.domain_scores.isnot(None),
+                Assessment.overall_score.isnot(None)
+            )
+            
+            if cutoff_date:
+                query = query.filter(Assessment.completed_at >= cutoff_date)
+            
+            # Order by completion date (most recent first) and limit results
+            assessments = query.order_by(Assessment.completed_at.desc()).limit(limit).all()
+            
+            # Filter out assessments that don't have all required domain scores
+            filtered_assessments = []
+            required_domains = {"resilience", "sustainability", "human_centricity"}
+            
+            for assessment in assessments:
+                if (assessment.domain_scores and 
+                    isinstance(assessment.domain_scores, dict) and
+                    required_domains.issubset(set(assessment.domain_scores.keys())) and
+                    all(assessment.domain_scores.get(domain) is not None for domain in required_domains)):
+                    
+                    session.expunge(assessment)
+                    filtered_assessments.append(assessment)
+            
+            logger.info(f"Retrieved {len(filtered_assessments)} complete assessments for weight calculation from database")
+            return filtered_assessments
+
+    def get_assessment_statistics(self) -> Dict[str, Any]:
+        """
+        Get statistics about assessments in the database for monitoring
+        
+        Returns:
+        --------
+        Dict[str, Any]
+            Statistics about assessments
+        """
+        with self.get_session() as session:
+            total_assessments = session.query(Assessment).count()
+            completed_assessments = session.query(Assessment).filter(
+                Assessment.status == "completed"
+            ).count()
+            assessments_with_scores = session.query(Assessment).filter(
+                Assessment.domain_scores.isnot(None)
+            ).count()
+            
+            # Get date range of completed assessments
+            oldest_completed = session.query(Assessment.completed_at).filter(
+                Assessment.status == "completed",
+                Assessment.completed_at.isnot(None)
+            ).order_by(Assessment.completed_at.asc()).first()
+            
+            newest_completed = session.query(Assessment.completed_at).filter(
+                Assessment.status == "completed",
+                Assessment.completed_at.isnot(None)
+            ).order_by(Assessment.completed_at.desc()).first()
+            
+            return {
+                "total_assessments": total_assessments,
+                "completed_assessments": completed_assessments,
+                "assessments_with_scores": assessments_with_scores,
+                "oldest_completed": oldest_completed[0].isoformat() if oldest_completed and oldest_completed[0] else None,
+                "newest_completed": newest_completed[0].isoformat() if newest_completed and newest_completed[0] else None,
+                "completion_rate": (completed_assessments / total_assessments * 100) if total_assessments > 0 else 0
+            }
