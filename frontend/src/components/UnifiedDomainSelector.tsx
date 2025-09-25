@@ -2,13 +2,17 @@ import React from "react"
 import { Button } from "@/components/ui/enhanced-button"
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Check, ChevronRight, Sparkles } from "lucide-react"
+import { Check, ChevronRight, Sparkles, AlertCircle } from "lucide-react"
+import { Alert, AlertDescription } from "@/components/ui/alert"
+import { Skeleton } from "@/components/ui/skeleton"
 import { PaginatedForm } from "./PaginatedForm"
+import { useScenarios } from "@/hooks/useScenarios"
+import { useSustainability } from "@/hooks/useSustainability"
 
 // Step getter function map
 const stepGetters = {
   sustainability: () => import("./forms/SustainabilityFormSteps").then(m => m.getSustainabilitySteps()),
-  resilience: () => import("./forms/ResilienceFormSteps").then(m => m.getResilienceSteps()),
+  // Remove the static resilience import - we'll handle this dynamically
   human_centricity: () => import("./forms/HumanCentricityFormSteps").then(m => m.getHumanCentricitySteps()),
 } as const
 
@@ -61,8 +65,13 @@ export default function UnifiedDomainSelector({
 }: UnifiedDomainSelectorProps) {
   const [allSteps, setAllSteps] = React.useState<any[]>([])
   const [loading, setLoading] = React.useState(true)
+  const [error, setError] = React.useState<string | null>(null)
   const [selectedDomains, setSelectedDomains] = React.useState<Set<string>>(new Set())
   const [started, setStarted] = React.useState(false)
+  
+  // ALWAYS call both hooks to maintain hook order - this is crucial for Rules of Hooks
+  const resilienceHook = useScenarios()
+  const sustainabilityHook = useSustainability()
   
   const config = assessmentConfig[assessmentType]
 
@@ -70,13 +79,72 @@ export default function UnifiedDomainSelector({
   React.useEffect(() => {
     const loadSteps = async () => {
       setLoading(true)
+      setError(null)
+      
       try {
-        const steps = await stepGetters[assessmentType]()
+        let steps: any[] = []
+        
+        if (assessmentType === 'resilience') {
+          // Handle resilience assessment with dynamic scenarios
+          if (!resilienceHook.isReady) {
+            // Wait for scenarios to load
+            if (resilienceHook.error) {
+              throw new Error(`Failed to load resilience scenarios: ${resilienceHook.error.message}`)
+            }
+            return // Still loading scenarios
+          }
+          
+          // Import resilience steps and get dynamic steps
+          const resilienceModule = await import("./forms/ResilienceFormSteps")
+          
+          // Use dynamic steps if available
+          if (resilienceModule.getDynamicResilienceSteps && resilienceHook.availableDomains?.length > 0) {
+            steps = resilienceModule.getDynamicResilienceSteps(resilienceHook.availableDomains)
+          } else {
+            // Fallback to static steps
+            steps = resilienceModule.getResilienceSteps()
+          }
+          
+        } else if (assessmentType === 'sustainability') {
+          // Handle sustainability assessment with dynamic scenarios
+          if (!sustainabilityHook.isReady) {
+            // Wait for scenarios to load
+            if (sustainabilityHook.error) {
+              throw new Error(`Failed to load sustainability scenarios: ${sustainabilityHook.error.message}`)
+            }
+            return // Still loading scenarios
+          }
+          
+          // Import sustainability steps and get dynamic steps
+          const sustainabilityModule = await import("./forms/SustainabilityFormSteps")
+          
+          // Use dynamic steps if available
+          if (sustainabilityModule.getDynamicSustainabilitySteps && sustainabilityHook.availableDomains?.length > 0) {
+            steps = sustainabilityModule.getDynamicSustainabilitySteps(sustainabilityHook.availableDomains)
+          } else if (sustainabilityModule.getSustainabilitySteps) {
+            // Fallback to static steps
+            steps = sustainabilityModule.getSustainabilitySteps()
+          } else {
+            throw new Error('No sustainability steps available')
+          }
+          
+        } else {
+          // Handle other assessment types normally
+          const stepGetter = stepGetters[assessmentType as keyof typeof stepGetters]
+          if (stepGetter) {
+            steps = await stepGetter()
+          } else {
+            throw new Error(`No step getter found for assessment type: ${assessmentType}`)
+          }
+        }
+        
         setAllSteps(steps)
-        // Default: all selected
+        // Default: all domains selected
         setSelectedDomains(new Set(steps.map(s => s.title)))
+        
       } catch (error) {
         console.error('Failed to load steps:', error)
+        setError(error instanceof Error ? error.message : 'Failed to load assessment steps')
         setAllSteps([])
       } finally {
         setLoading(false)
@@ -84,7 +152,30 @@ export default function UnifiedDomainSelector({
     }
     
     loadSteps()
-  }, [assessmentType])
+  }, [
+    assessmentType, 
+    resilienceHook.isReady, 
+    resilienceHook.error?.message, 
+    resilienceHook.availableDomains?.length,
+    sustainabilityHook.isReady,
+    sustainabilityHook.error?.message,
+    sustainabilityHook.availableDomains?.length
+  ])
+
+  // Build the steps array for PaginatedForm - MOVED BEFORE EARLY RETURNS
+  const stepsToUse = React.useMemo(() => {
+    return allSteps
+      .filter(step => selectedDomains.has(step.title))
+      .map(step => ({
+        title: step.title,
+        description: step.description,
+        component: React.createElement(step.component as any, {
+          // Pass scenarios data to components that need it
+          ...(assessmentType === 'resilience' && { scenariosData: resilienceHook.scenarios }),
+          ...(assessmentType === 'sustainability' && { scenariosData: sustainabilityHook.scenarios })
+        })
+      }))
+  }, [allSteps, selectedDomains, assessmentType, resilienceHook.scenarios, sustainabilityHook.scenarios])
 
   const domainTitles = allSteps.map(s => s.title)
 
@@ -105,17 +196,6 @@ export default function UnifiedDomainSelector({
     setStarted(true)
   }
 
-  // Build the steps array for PaginatedForm
-  const stepsToUse = React.useMemo(() => {
-    return allSteps
-      .filter(step => selectedDomains.has(step.title))
-      .map(step => ({
-        title: step.title,
-        description: step.description,
-        component: React.createElement(step.component as any, {})
-      }))
-  }, [allSteps, selectedDomains])
-
   // Show PaginatedForm when started
   if (started) {
     return (
@@ -127,17 +207,136 @@ export default function UnifiedDomainSelector({
     )
   }
 
-  // Loading state
-  if (loading) {
+  // Determine loading state based on assessment type
+  const isLoadingAny = loading || 
+    (assessmentType === 'resilience' && resilienceHook.isLoading) ||
+    (assessmentType === 'sustainability' && sustainabilityHook.isLoading)
+  
+  if (isLoadingAny) {
     return (
-      <div className="flex items-center justify-center p-12">
-        <div className="flex items-center space-x-3">
-          <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
-          <span className="text-sm text-gray-600">Loading domains...</span>
+      <div className="max-w-4xl mx-auto space-y-8">
+        {/* Header Section Skeleton */}
+        <div className="text-center space-y-4">
+          <div className="flex justify-center">
+            <Skeleton className="w-16 h-16 rounded-2xl" />
+          </div>
+          <div className="space-y-2">
+            <Skeleton className="h-8 w-64 mx-auto" />
+            <Skeleton className="h-5 w-96 mx-auto" />
+          </div>
+        </div>
+
+        {/* Main Card Skeleton */}
+        <Card className="border-0 shadow-xl">
+          <CardHeader className="pb-6">
+            <div className="space-y-2">
+              <Skeleton className="h-6 w-48" />
+              <Skeleton className="h-4 w-full max-w-md" />
+            </div>
+          </CardHeader>
+          <CardContent className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+              {[1,2,3,4,5].map(i => (
+                <Skeleton key={i} className="h-16 rounded-xl" />
+              ))}
+            </div>
+            <div className="pt-4">
+              <Skeleton className="h-12 w-full rounded-xl" />
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* Loading Message */}
+        <div className="text-center">
+          <div className="flex items-center justify-center space-x-3">
+            <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
+            <span className="text-sm text-gray-600">
+              {assessmentType === 'resilience' ? 'Loading resilience scenarios...' : 
+               assessmentType === 'sustainability' ? 'Loading sustainability scenarios...' : 
+               'Loading domains...'}
+            </span>
+          </div>
         </div>
       </div>
     )
   }
+
+  // Determine error state based on assessment type
+  const currentError = error || 
+    (assessmentType === 'resilience' && resilienceHook.error) ||
+    (assessmentType === 'sustainability' && sustainabilityHook.error)
+
+  // Error state
+  if (currentError) {
+    const displayError = error || currentError?.message || 'Unknown error'
+    return (
+      <div className="max-w-4xl mx-auto space-y-8">
+        <div className="text-center space-y-4">
+          <div className={`inline-flex items-center justify-center w-16 h-16 rounded-2xl ${config.accentColor} ${config.borderColor} border-2`}>
+            <AlertCircle className={`w-8 h-8 ${config.textColor}`} />
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">{config.title}</h1>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              Unable to load assessment configuration.
+            </p>
+          </div>
+        </div>
+
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="text-base">
+            {displayError}
+          </AlertDescription>
+        </Alert>
+
+        <div className="text-center">
+          <Button 
+            onClick={() => window.location.reload()} 
+            variant="outline"
+            className="px-6 py-2"
+          >
+            Try Again
+          </Button>
+        </div>
+      </div>
+    )
+  }
+
+  // No domains available
+  if (domainTitles.length === 0) {
+    return (
+      <div className="max-w-4xl mx-auto space-y-8">
+        <div className="text-center space-y-4">
+          <div className={`inline-flex items-center justify-center w-16 h-16 rounded-2xl ${config.accentColor} ${config.borderColor} border-2`}>
+            <span className="text-2xl">{config.icon}</span>
+          </div>
+          <div>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">{config.title}</h1>
+            <p className="text-lg text-gray-600 max-w-2xl mx-auto">
+              No domains are currently available for this assessment type.
+            </p>
+          </div>
+        </div>
+
+        <Alert>
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription className="text-base">
+            {assessmentType === 'resilience' 
+              ? 'No resilience scenarios are currently configured. Please contact your administrator.'
+              : assessmentType === 'sustainability'
+              ? 'No sustainability scenarios are currently configured. Please contact your administrator.'
+              : 'No domains are available for this assessment type.'
+            }
+          </AlertDescription>
+        </Alert>
+      </div>
+    )
+  }
+
+  // Get the appropriate scenarios for the info alert
+  const currentScenarios = assessmentType === 'resilience' ? resilienceHook.scenarios : 
+                          assessmentType === 'sustainability' ? sustainabilityHook.scenarios : null
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -153,6 +352,27 @@ export default function UnifiedDomainSelector({
           </p>
         </div>
       </div>
+
+      {/* Assessment-specific info */}
+      {assessmentType === 'resilience' && currentScenarios && (
+        <Alert className="max-w-2xl mx-auto">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Using dynamic scenario configuration with {Object.keys(currentScenarios.scenarios).length} domains 
+            and {Object.values(currentScenarios.scenarios).reduce((sum, arr) => sum + arr.length, 0)} total scenarios.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {assessmentType === 'sustainability' && currentScenarios && (
+        <Alert className="max-w-2xl mx-auto">
+          <AlertCircle className="h-4 w-4" />
+          <AlertDescription>
+            Using dynamic sustainability configuration with {Object.keys(currentScenarios.scenarios).length} domains 
+            and {Object.values(currentScenarios.scenarios).reduce((sum, domainData) => sum + Object.keys(domainData.criteria).length, 0)} total criteria.
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Main Selection Card */}
       <Card className="border-0 shadow-xl bg-gradient-to-br from-white via-gray-50 to-gray-100">

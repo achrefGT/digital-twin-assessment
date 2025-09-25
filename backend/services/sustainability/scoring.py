@@ -1,25 +1,326 @@
 import numpy as np
-from typing import Dict, Any, List, Union
+from typing import Dict, Any, List, Union, Optional
 import logging
+from enum import Enum
 
 from shared.models.exceptions import ScoringException
 from .models import (
     EnvironmentalAssessment, EconomicAssessment, SocialAssessment,
-    DigitalTwinRealismLevel, FlowTrackingLevel, EnergyVisibilityLevel,
-    EnvironmentalScopeLevel, SimulationPredictionLevel,
-    DigitalizationBudgetLevel, SavingsLevel, PerformanceImprovementLevel,
-    ROITimeframeLevel, EmployeeImpactLevel, WorkplaceSafetyLevel, RegionalBenefitsLevel
+    SUSTAINABILITY_SCENARIOS
 )
 from .config import settings
 
 logger = logging.getLogger(__name__)
 
 
+class ScoringCurveType(str, Enum):
+    """Different types of scoring curves for different criteria"""
+    LINEAR = "linear"           # 0,1,2,3,4,5 -> 0,20,40,60,80,100
+    EXPONENTIAL = "exponential" # Accelerating improvements
+    LOGARITHMIC = "logarithmic" # Diminishing returns
+    SIGMOID = "sigmoid"         # S-curve: slow start, rapid middle, slow end
+    INVERTED_U = "inverted_u"   # Peak in middle (like budget optimization)
+
+
+class DynamicSustainabilityScorer:
+    """Dynamic scoring engine that adapts to current criteria configuration"""
+    
+    def __init__(self):
+        # Default scoring configurations - can be made database-configurable later
+        self.default_scoring_config = {
+            'environmental': {
+                'weights': {
+                    'ENV_01': 0.25,
+                    'ENV_02': 0.20,
+                    'ENV_03': 0.20,
+                    'ENV_04': 0.20,
+                    'ENV_05': 0.15
+                },
+                'curves': {
+                    'ENV_01': ScoringCurveType.SIGMOID,
+                    'ENV_02': ScoringCurveType.LINEAR,
+                    'ENV_03': ScoringCurveType.LINEAR,
+                    'ENV_04': ScoringCurveType.EXPONENTIAL,
+                    'ENV_05': ScoringCurveType.LOGARITHMIC
+                }
+            },
+            'economic': {
+                'weights': {
+                    'ECO_01': 0.20,
+                    'ECO_02': 0.30,
+                    'ECO_03': 0.25,
+                    'ECO_04': 0.25
+                },
+                'curves': {
+                    'ECO_01': ScoringCurveType.INVERTED_U,
+                    'ECO_02': ScoringCurveType.LINEAR,
+                    'ECO_03': ScoringCurveType.LINEAR,
+                    'ECO_04': ScoringCurveType.LINEAR
+                }
+            },
+            'social': {
+                'weights': {
+                    'SOC_01': 0.40,
+                    'SOC_02': 0.35,
+                    'SOC_03': 0.25
+                },
+                'curves': {
+                    'SOC_01': ScoringCurveType.LINEAR,
+                    'SOC_02': ScoringCurveType.EXPONENTIAL,
+                    'SOC_03': ScoringCurveType.LINEAR
+                }
+            }
+        }
+    
+    def calculate_dimension_score(self, domain: str, assessment_data: Dict[str, Any]) -> float:
+        """Calculate score for a specific domain using dynamic criteria"""
+        try:
+            # Get current criteria configuration for this domain
+            if domain not in SUSTAINABILITY_SCENARIOS:
+                raise ScoringException(f"Domain {domain} not found in current configuration")
+            
+            domain_config = SUSTAINABILITY_SCENARIOS[domain]
+            criteria = domain_config.get('criteria', {})
+            
+            if not criteria:
+                raise ScoringException(f"No criteria found for domain {domain}")
+            
+            # Get scoring configuration for this domain
+            scoring_config = self.default_scoring_config.get(domain, {})
+            weights = scoring_config.get('weights', {})
+            curves = scoring_config.get('curves', {})
+            
+            # Calculate scores for each criterion
+            criterion_scores = []
+            total_weight = 0
+            
+            for criterion_key, criterion_value in assessment_data.items():
+                if criterion_key not in criteria:
+                    logger.warning(f"Criterion {criterion_key} not found in domain {domain} configuration")
+                    continue
+                
+                # Get criterion configuration
+                criterion_config = criteria[criterion_key]
+                levels = criterion_config.get('levels', [])
+                
+                if not levels:
+                    logger.warning(f"No levels found for criterion {criterion_key}")
+                    continue
+                
+                # Determine the level index (0-based)
+                level_index = self._get_level_index(criterion_value, levels)
+                max_level = len(levels) - 1
+                
+                # Apply scoring curve
+                curve_type = curves.get(criterion_key, ScoringCurveType.LINEAR)
+                raw_score = self._apply_scoring_curve(level_index, max_level, curve_type)
+                
+                # Apply weight
+                weight = weights.get(criterion_key, 1.0 / len(assessment_data))  # Default to equal weight
+                weighted_score = raw_score * weight
+                
+                criterion_scores.append(weighted_score)
+                total_weight += weight
+                
+                logger.debug(f"Criterion {criterion_key}: level={level_index}/{max_level}, "
+                           f"raw_score={raw_score:.1f}, weight={weight:.2f}, weighted={weighted_score:.1f}")
+            
+            if not criterion_scores:
+                raise ScoringException(f"No valid criteria scores calculated for domain {domain}")
+            
+            # Normalize by total weight
+            if total_weight > 0:
+                final_score = sum(criterion_scores) / total_weight * 100
+            else:
+                final_score = np.mean(criterion_scores) * 100
+            
+            return max(0, min(100, final_score))  # Clamp to 0-100
+            
+        except Exception as e:
+            logger.error(f"Error calculating score for domain {domain}: {e}")
+            raise ScoringException(f"Failed to calculate score for domain {domain}: {e}")
+    
+    def _get_level_index(self, criterion_value: Any, levels: List[str]) -> int:
+        """Get the index of the current level (0-based)"""
+        if hasattr(criterion_value, 'value'):
+            # Enum value
+            value_str = criterion_value.value
+        else:
+            value_str = str(criterion_value)
+        
+        # Try to find matching level by converting enum value to readable format
+        for i, level_desc in enumerate(levels):
+            # Create comparable strings
+            level_normalized = level_desc.lower().replace(' ', '_').replace('-', '_')
+            value_normalized = value_str.lower().replace('-', '_')
+            
+            if level_normalized == value_normalized:
+                return i
+        
+        # Fallback: try direct string matching
+        if value_str in levels:
+            return levels.index(value_str)
+        
+        # If no match found, try to extract from enum name patterns
+        # This handles cases where enum names don't exactly match level descriptions
+        logger.warning(f"Could not find exact match for {value_str} in levels {levels}")
+        
+        # For now, return middle index as fallback
+        return len(levels) // 2
+    
+    def _apply_scoring_curve(self, level_index: int, max_level: int, curve_type: ScoringCurveType) -> float:
+        """Apply different scoring curves based on criterion type"""
+        if max_level == 0:
+            return 0
+        
+        # Normalize to 0-1 range
+        x = level_index / max_level
+        
+        if curve_type == ScoringCurveType.LINEAR:
+            return x
+        
+        elif curve_type == ScoringCurveType.EXPONENTIAL:
+            # Accelerating improvements: score = x^(1/2) (square root for moderate acceleration)
+            return np.power(x, 0.5)
+        
+        elif curve_type == ScoringCurveType.LOGARITHMIC:
+            # Diminishing returns: early improvements matter more
+            if x == 0:
+                return 0
+            return np.log(1 + x * (np.e - 1)) / np.log(np.e)
+        
+        elif curve_type == ScoringCurveType.SIGMOID:
+            # S-curve: slow start, rapid middle, slow end
+            # Using logistic function: 1 / (1 + e^(-k*(x-0.5)))
+            k = 6  # Steepness parameter
+            return 1 / (1 + np.exp(-k * (x - 0.5)))
+        
+        elif curve_type == ScoringCurveType.INVERTED_U:
+            # Peak in middle (for budget optimization)
+            # Using inverted parabola: -4*(x-0.5)^2 + 1
+            return max(0, 1 - 4 * (x - 0.5) ** 2)
+        
+        else:
+            # Default to linear
+            return x
+    
+    def generate_dynamic_recommendations(self, dimension_scores: Dict[str, float], 
+                                       detailed_metrics: Dict[str, Any]) -> List[str]:
+        """Generate recommendations based on current criteria and performance"""
+        recommendations = []
+        
+        if not dimension_scores:
+            return recommendations
+        
+        # Overall performance assessment
+        avg_score = np.mean(list(dimension_scores.values()))
+        min_score = min(dimension_scores.values())
+        max_score = max(dimension_scores.values())
+        score_spread = max_score - min_score
+        
+        # Critical issues (any domain below 40)
+        critical_domains = [domain for domain, score in dimension_scores.items() if score < 40]
+        if critical_domains:
+            recommendations.append(
+                f"Critical sustainability gaps identified in {', '.join(critical_domains)}. "
+                f"Immediate action required to address fundamental deficiencies."
+            )
+        
+        # Moderate issues (any domain below 60)
+        moderate_domains = [domain for domain, score in dimension_scores.items() if 40 <= score < 60]
+        if moderate_domains:
+            recommendations.append(
+                f"Significant improvement opportunities in {', '.join(moderate_domains)}. "
+                f"Focus on upgrading key capabilities and processes."
+            )
+        
+        # Imbalanced performance
+        if score_spread > 30 and len(dimension_scores) > 1:
+            weakest = min(dimension_scores.keys(), key=dimension_scores.get)
+            strongest = max(dimension_scores.keys(), key=dimension_scores.get)
+            recommendations.append(
+                f"Performance imbalance detected: {strongest} ({dimension_scores[strongest]:.1f}) "
+                f"significantly outperforms {weakest} ({dimension_scores[weakest]:.1f}). "
+                f"Consider reallocating resources to strengthen weaker areas."
+            )
+        
+        # Domain-specific recommendations based on detailed metrics
+        for domain, metrics in detailed_metrics.items():
+            domain_recommendations = self._get_domain_specific_recommendations(
+                domain, dimension_scores.get(domain, 0), metrics
+            )
+            recommendations.extend(domain_recommendations)
+        
+        # Incomplete assessment
+        all_domains = {'environmental', 'economic', 'social'}
+        assessed_domains = set(dimension_scores.keys())
+        missing_domains = all_domains - assessed_domains
+        
+        if missing_domains and avg_score > 60:
+            recommendations.append(
+                f"Strong performance in assessed areas. Consider completing evaluation "
+                f"for {', '.join(missing_domains)} to achieve comprehensive sustainability profile."
+            )
+        elif missing_domains:
+            recommendations.append(
+                f"Partial assessment completed. Full evaluation including "
+                f"{', '.join(missing_domains)} recommended for complete sustainability analysis."
+            )
+        
+        # High performance recognition
+        if all(score >= 80 for score in dimension_scores.values()) and len(dimension_scores) >= 2:
+            recommendations.append(
+                "Excellent sustainability performance across assessed domains. "
+                "Focus on continuous improvement and sharing best practices."
+            )
+        
+        return recommendations
+    
+    def _get_domain_specific_recommendations(self, domain: str, score: float, 
+                                           metrics: Dict[str, Any]) -> List[str]:
+        """Generate domain-specific recommendations"""
+        recommendations = []
+        
+        if score >= 70:  # Good performance, focus on optimization
+            return recommendations
+        
+        # Analyze which criteria are underperforming
+        low_performing_criteria = []
+        
+        for criterion_key, criterion_data in metrics.items():
+            if isinstance(criterion_data, dict) and 'level' in criterion_data:
+                # This is simplified - in a real implementation, you'd want to track
+                # the actual scores per criterion
+                level = criterion_data['level']
+                # Heuristic: if level contains basic/simple/no/nothing keywords, it's low performing
+                if any(keyword in level.lower() for keyword in ['no', 'nothing', 'basic', 'simple', 'minimal']):
+                    low_performing_criteria.append(criterion_key.replace('_', ' ').title())
+        
+        if low_performing_criteria and domain == 'environmental':
+            recommendations.append(
+                f"Environmental: Prioritize improvements in {', '.join(low_performing_criteria[:2])}. "
+                f"Consider investing in better monitoring systems and expanding measurement scope."
+            )
+        elif low_performing_criteria and domain == 'economic':
+            recommendations.append(
+                f"Economic: Address {', '.join(low_performing_criteria[:2])} to improve financial sustainability. "
+                f"Focus on demonstrating clear ROI and quantifying benefits."
+            )
+        elif low_performing_criteria and domain == 'social':
+            recommendations.append(
+                f"Social: Enhance {', '.join(low_performing_criteria[:2])} through stakeholder engagement. "
+                f"Develop comprehensive workforce and community benefit programs."
+            )
+        
+        return recommendations
+
+
+# Updated main scoring function
 def calculate_sustainability_score(
     assessments: Dict[str, Union[EnvironmentalAssessment, EconomicAssessment, SocialAssessment]]
 ) -> Dict[str, Any]:
     """
-    Calculate sustainability scores from selected domain assessments
+    Calculate sustainability scores from selected domain assessments using dynamic criteria
     
     Args:
         assessments: Dictionary containing selected domain assessments
@@ -32,27 +333,28 @@ def calculate_sustainability_score(
         if not assessments:
             raise ScoringException("No assessments provided for scoring")
         
+        scorer = DynamicSustainabilityScorer()
         dimension_scores = {}
         detailed_metrics = {}
         
         # Process each provided domain
         for domain_name, assessment in assessments.items():
             try:
-                if domain_name == 'environmental' and isinstance(assessment, EnvironmentalAssessment):
-                    score = _calculate_environmental_score(assessment)
-                    details = _get_environmental_details(assessment)
-                elif domain_name == 'economic' and isinstance(assessment, EconomicAssessment):
-                    score = _calculate_economic_score(assessment)
-                    details = _get_economic_details(assessment)
-                elif domain_name == 'social' and isinstance(assessment, SocialAssessment):
-                    score = _calculate_social_score(assessment)
-                    details = _get_social_details(assessment)
+                # Convert assessment object to dict for processing
+                if hasattr(assessment, 'dict'):
+                    assessment_data = assessment.dict()
+                elif hasattr(assessment, '__dict__'):
+                    assessment_data = assessment.__dict__
                 else:
-                    logger.warning(f"Unknown or invalid domain assessment: {domain_name}")
-                    continue
+                    assessment_data = dict(assessment)
                 
+                # Calculate score using dynamic scorer
+                score = scorer.calculate_dimension_score(domain_name, assessment_data)
                 dimension_scores[domain_name] = round(score, 1)
-                detailed_metrics[domain_name] = details
+                
+                # Generate detailed metrics (maintains original format)
+                detailed_metrics[domain_name] = _get_assessment_details(domain_name, assessment)
+                
                 logger.debug(f"Domain {domain_name}: score={score:.1f}")
                 
             except Exception as e:
@@ -65,7 +367,7 @@ def calculate_sustainability_score(
         # Calculate weighted overall score based on available domains
         overall_score = _calculate_weighted_overall_score(dimension_scores)
         
-        # Generate sustainability metrics
+        # Generate sustainability metrics using dynamic recommendations
         sustainability_metrics = {
             'selected_domains': list(dimension_scores.keys()),
             'domain_count': len(dimension_scores),
@@ -76,7 +378,7 @@ def calculate_sustainability_score(
                 'max': max(dimension_scores.values()) if dimension_scores else 0,
                 'std': round(np.std(list(dimension_scores.values())), 2) if len(dimension_scores) > 1 else 0
             },
-            'recommendations': _generate_recommendations(dimension_scores, detailed_metrics)
+            'recommendations': scorer.generate_dynamic_recommendations(dimension_scores, detailed_metrics)
         }
         
         result = {
@@ -148,286 +450,28 @@ def _get_applied_weights(selected_domains) -> Dict[str, float]:
     }
 
 
-def _generate_recommendations(dimension_scores: Dict[str, float], detailed_metrics: Dict[str, Any]) -> List[str]:
-    """Generate recommendations based on assessment results"""
-    recommendations = []
+def _get_assessment_details(domain: str, assessment: Any) -> Dict[str, Any]:
+    """Get detailed assessment information (maintains original format)"""
+    details = {}
     
-    if not dimension_scores:
-        return recommendations
+    if hasattr(assessment, 'dict'):
+        assessment_data = assessment.dict()
+    elif hasattr(assessment, '__dict__'):
+        assessment_data = assessment.__dict__
+    else:
+        assessment_data = dict(assessment)
     
-    # Find domains with lowest scores
-    min_score = min(dimension_scores.values())
-    weakest_domains = [domain for domain, score in dimension_scores.items() if score == min_score]
+    for field_name, field_value in assessment_data.items():
+        if hasattr(field_value, 'value'):
+            # Enum value
+            details[field_name] = {
+                'level': field_value.value,
+                'description': field_value.value.replace('_', ' ').title()
+            }
+        else:
+            details[field_name] = {
+                'level': str(field_value),
+                'description': str(field_value).replace('_', ' ').title()
+            }
     
-    # Overall recommendations based on score ranges
-    if min_score < 40:
-        recommendations.append(
-            f"Critical improvement needed in {', '.join(weakest_domains)} "
-            f"(score: {min_score}). Consider immediate action plans."
-        )
-    elif min_score < 60:
-        recommendations.append(
-            f"Significant improvements recommended for {', '.join(weakest_domains)} "
-            f"(score: {min_score})"
-        )
-    elif min_score < 80:
-        recommendations.append(
-            f"Moderate improvements possible in {', '.join(weakest_domains)} "
-            f"(score: {min_score})"
-        )
-    
-    # Domain-specific recommendations
-    for domain, score in dimension_scores.items():
-        if score < 70:  # Focus on lower-performing domains
-            if domain == 'environmental':
-                recommendations.append(
-                    "Environmental: Consider enhancing digital twin realism and expanding environmental monitoring scope"
-                )
-            elif domain == 'economic':
-                recommendations.append(
-                    "Economic: Review budget allocation and focus on demonstrable savings and performance improvements"
-                )
-            elif domain == 'social':
-                recommendations.append(
-                    "Social: Prioritize workforce development and enhance regional partnership opportunities"
-                )
-    
-    # If all domains selected and scores are good
-    if len(dimension_scores) == 3 and all(score >= 70 for score in dimension_scores.values()):
-        recommendations.append(
-            "Strong performance across all sustainability dimensions. Focus on maintaining and optimizing current practices."
-        )
-    
-    # If only partial assessment
-    missing_domains = set(['environmental', 'economic', 'social']) - set(dimension_scores.keys())
-    if missing_domains:
-        recommendations.append(
-            f"Consider completing assessment for {', '.join(missing_domains)} dimensions for comprehensive sustainability evaluation"
-        )
-    
-    return recommendations
-
-
-def _calculate_environmental_score(assessment: EnvironmentalAssessment) -> float:
-    """Calculate environmental dimension score (0-100)"""
-    
-    # Score mappings for each criterion (0-5 scale, then normalized to 0-100)
-    realism_scores = {
-        DigitalTwinRealismLevel.STATIC_PLAN: 0,
-        DigitalTwinRealismLevel.SIMPLE_3D: 1,
-        DigitalTwinRealismLevel.BASIC_MOVEMENTS: 2,
-        DigitalTwinRealismLevel.REPRESENTATIVE_SIMULATION: 3,
-        DigitalTwinRealismLevel.HIGH_FIDELITY: 4,
-        DigitalTwinRealismLevel.REAL_TIME_CONNECTION: 5
-    }
-    
-    flow_scores = {
-        FlowTrackingLevel.NOTHING_TRACKED: 0,
-        FlowTrackingLevel.SINGLE_FLOW: 1,
-        FlowTrackingLevel.MULTIPLE_FLOWS: 2,
-        FlowTrackingLevel.GLOBAL_BALANCE: 3,
-        FlowTrackingLevel.DETAILED_TRACEABILITY: 4,
-        FlowTrackingLevel.COMPLETE_SUPPLY_CHAIN: 5
-    }
-    
-    energy_scores = {
-        EnergyVisibilityLevel.NO_DATA: 0,
-        EnergyVisibilityLevel.ANNUAL_BILLS: 1,
-        EnergyVisibilityLevel.MONTHLY_READINGS: 2,
-        EnergyVisibilityLevel.CONTINUOUS_EQUIPMENT: 3,
-        EnergyVisibilityLevel.REAL_TIME_MAJORITY: 4,
-        EnergyVisibilityLevel.PRECISE_SUBSYSTEM_COUNTING: 5
-    }
-    
-    scope_scores = {
-        EnvironmentalScopeLevel.NO_INDICATORS: 0,
-        EnvironmentalScopeLevel.ENERGY_ONLY: 1,
-        EnvironmentalScopeLevel.ENERGY_CARBON: 2,
-        EnvironmentalScopeLevel.ADD_WATER: 3,
-        EnvironmentalScopeLevel.MULTI_INDICATORS: 4,
-        EnvironmentalScopeLevel.COMPLETE_LIFECYCLE: 5
-    }
-    
-    simulation_scores = {
-        SimulationPredictionLevel.OBSERVATION_ONLY: 0,
-        SimulationPredictionLevel.SIMPLE_REPORTS: 1,
-        SimulationPredictionLevel.BASIC_CHANGE_TESTS: 2,
-        SimulationPredictionLevel.PREDICTIVE_SCENARIOS: 3,
-        SimulationPredictionLevel.ASSISTED_OPTIMIZATION: 4,
-        SimulationPredictionLevel.AUTONOMOUS_OPTIMIZATION: 5
-    }
-    
-    # Calculate weighted average (equal weights for simplicity)
-    scores = [
-        realism_scores[assessment.digital_twin_realism],
-        flow_scores[assessment.flow_tracking],
-        energy_scores[assessment.energy_visibility],
-        scope_scores[assessment.environmental_scope],
-        simulation_scores[assessment.simulation_prediction]
-    ]
-    
-    # Convert to 0-100 scale
-    average_score = np.mean(scores)
-    return (average_score / 5) * 100
-
-
-def _calculate_economic_score(assessment: EconomicAssessment) -> float:
-    """Calculate economic dimension score (0-100)"""
-    
-    # Budget scoring (inverse - lower budget is better for sustainability)
-    budget_scores = {
-        DigitalizationBudgetLevel.NO_BUDGET: 0,  # No digitalization = no benefits
-        DigitalizationBudgetLevel.MINIMAL_BUDGET: 4,  # Efficient investment
-        DigitalizationBudgetLevel.CORRECT_BUDGET: 5,  # Optimal investment
-        DigitalizationBudgetLevel.LARGE_BUDGET: 3,  # Higher investment, good returns
-        DigitalizationBudgetLevel.VERY_LARGE_BUDGET: 2,  # Very high investment
-        DigitalizationBudgetLevel.MAXIMUM_BUDGET: 1   # Maximum investment, sustainability concerns
-    }
-    
-    savings_scores = {
-        SavingsLevel.NO_SAVINGS: 0,
-        SavingsLevel.SMALL_SAVINGS: 1,
-        SavingsLevel.CORRECT_SAVINGS: 2,
-        SavingsLevel.GOOD_SAVINGS: 3,
-        SavingsLevel.VERY_GOOD_SAVINGS: 4,
-        SavingsLevel.EXCEPTIONAL_SAVINGS: 5
-    }
-    
-    performance_scores = {
-        PerformanceImprovementLevel.NO_IMPROVEMENT: 0,
-        PerformanceImprovementLevel.SMALL_IMPROVEMENT: 1,
-        PerformanceImprovementLevel.CORRECT_IMPROVEMENT: 2,
-        PerformanceImprovementLevel.GOOD_IMPROVEMENT: 3,
-        PerformanceImprovementLevel.VERY_GOOD_IMPROVEMENT: 4,
-        PerformanceImprovementLevel.EXCEPTIONAL_IMPROVEMENT: 5
-    }
-    
-    roi_scores = {
-        ROITimeframeLevel.NOT_CALCULATED_OR_OVER_5_YEARS: 0,
-        ROITimeframeLevel.PROFITABLE_3_TO_5_YEARS: 1,
-        ROITimeframeLevel.PROFITABLE_2_TO_3_YEARS: 2,
-        ROITimeframeLevel.PROFITABLE_18_TO_24_MONTHS: 3,
-        ROITimeframeLevel.PROFITABLE_12_TO_18_MONTHS: 4,
-        ROITimeframeLevel.PROFITABLE_UNDER_12_MONTHS: 5
-    }
-    
-    # Calculate weighted average
-    scores = [
-        budget_scores[assessment.digitalization_budget],
-        savings_scores[assessment.savings_realized],
-        performance_scores[assessment.performance_improvement],
-        roi_scores[assessment.roi_timeframe]
-    ]
-    
-    # Convert to 0-100 scale
-    average_score = np.mean(scores)
-    return (average_score / 5) * 100
-
-
-def _calculate_social_score(assessment: SocialAssessment) -> float:
-    """Calculate social dimension score (0-100)"""
-    
-    # Employee impact scoring (positive employment effects = higher scores)
-    employee_scores = {
-        EmployeeImpactLevel.JOB_SUPPRESSION_OVER_10_PERCENT: 0,
-        EmployeeImpactLevel.SOME_SUPPRESSIONS_5_TO_10_PERCENT: 1,
-        EmployeeImpactLevel.STABLE_WORKFORCE_SOME_TRAINING: 2,
-        EmployeeImpactLevel.SAME_JOBS_ALL_TRAINED: 3,
-        EmployeeImpactLevel.NEW_POSITIONS_5_TO_10_PERCENT: 4,
-        EmployeeImpactLevel.STRONG_QUALIFIED_JOB_CREATION: 5
-    }
-    
-    safety_scores = {
-        WorkplaceSafetyLevel.NO_CHANGE: 0,
-        WorkplaceSafetyLevel.SLIGHT_REDUCTION_UNDER_10: 1,
-        WorkplaceSafetyLevel.MODERATE_REDUCTION_10_TO_25: 2,
-        WorkplaceSafetyLevel.GOOD_IMPROVEMENT_25_TO_50: 3,
-        WorkplaceSafetyLevel.STRONG_REDUCTION_50_TO_75: 4,
-        WorkplaceSafetyLevel.NEAR_ELIMINATION_OVER_75: 5
-    }
-    
-    regional_scores = {
-        RegionalBenefitsLevel.NO_LOCAL_IMPACT: 0,
-        RegionalBenefitsLevel.SOME_LOCAL_PURCHASES: 1,
-        RegionalBenefitsLevel.PARTNERSHIP_1_2_COMPANIES: 2,
-        RegionalBenefitsLevel.INSTITUTIONAL_COLLABORATION: 3,
-        RegionalBenefitsLevel.NOTABLE_LOCAL_CREATION: 4,
-        RegionalBenefitsLevel.MAJOR_IMPACT: 5
-    }
-    
-    # Calculate weighted average
-    scores = [
-        employee_scores[assessment.employee_impact],
-        safety_scores[assessment.workplace_safety],
-        regional_scores[assessment.regional_benefits]
-    ]
-    
-    # Convert to 0-100 scale
-    average_score = np.mean(scores)
-    return (average_score / 5) * 100
-
-
-def _get_environmental_details(assessment: EnvironmentalAssessment) -> Dict[str, Any]:
-    """Get detailed environmental assessment information"""
-    return {
-        'digital_twin_realism': {
-            'level': assessment.digital_twin_realism.value,
-            'description': assessment.digital_twin_realism.value.replace('_', ' ').title()
-        },
-        'flow_tracking': {
-            'level': assessment.flow_tracking.value,
-            'description': assessment.flow_tracking.value.replace('_', ' ').title()
-        },
-        'energy_visibility': {
-            'level': assessment.energy_visibility.value,
-            'description': assessment.energy_visibility.value.replace('_', ' ').title()
-        },
-        'environmental_scope': {
-            'level': assessment.environmental_scope.value,
-            'description': assessment.environmental_scope.value.replace('_', ' ').title()
-        },
-        'simulation_prediction': {
-            'level': assessment.simulation_prediction.value,
-            'description': assessment.simulation_prediction.value.replace('_', ' ').title()
-        }
-    }
-
-
-def _get_economic_details(assessment: EconomicAssessment) -> Dict[str, Any]:
-    """Get detailed economic assessment information"""
-    return {
-        'digitalization_budget': {
-            'level': assessment.digitalization_budget.value,
-            'description': assessment.digitalization_budget.value.replace('_', ' ').title()
-        },
-        'savings_realized': {
-            'level': assessment.savings_realized.value,
-            'description': assessment.savings_realized.value.replace('_', ' ').title()
-        },
-        'performance_improvement': {
-            'level': assessment.performance_improvement.value,
-            'description': assessment.performance_improvement.value.replace('_', ' ').title()
-        },
-        'roi_timeframe': {
-            'level': assessment.roi_timeframe.value,
-            'description': assessment.roi_timeframe.value.replace('_', ' ').title()
-        }
-    }
-
-
-def _get_social_details(assessment: SocialAssessment) -> Dict[str, Any]:
-    """Get detailed social assessment information"""
-    return {
-        'employee_impact': {
-            'level': assessment.employee_impact.value,
-            'description': assessment.employee_impact.value.replace('_', ' ').title()
-        },
-        'workplace_safety': {
-            'level': assessment.workplace_safety.value,
-            'description': assessment.workplace_safety.value.replace('_', ' ').title()
-        },
-        'regional_benefits': {
-            'level': assessment.regional_benefits.value,
-            'description': assessment.regional_benefits.value.replace('_', ' ').title()
-        }
-    }
+    return details

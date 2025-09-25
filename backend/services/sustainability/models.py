@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any, List, Set, Union
 from uuid import uuid4
 from enum import Enum
 
-from pydantic import BaseModel, ValidationError, Field
+from pydantic import BaseModel, ValidationError, Field, root_validator, validator
 
 
 # Environmental Assessment Levels
@@ -125,26 +125,49 @@ class SustainabilityDomain(str, Enum):
     SOCIAL = "social"
 
 
+class DynamicAssessment(BaseModel):
+    """Generic assessment model that accepts dynamic criterion keys"""
+    
+    class Config:
+        extra = "allow"  # Allow additional fields
+    
+    def __init__(self, **data):
+        # Convert any enum string values to their proper enum types if needed
+        processed_data = {}
+        for key, value in data.items():
+            processed_data[key] = self._process_criterion_value(key, value)
+        super().__init__(**processed_data)
+    
+    def _process_criterion_value(self, key: str, value: Any) -> Any:
+        """Process criterion values, converting strings to enums if applicable"""
+        return value
+    
+    def dict(self, **kwargs) -> Dict[str, Any]:
+        """Override dict to ensure proper serialization"""
+        result = super().dict(**kwargs)
+        return result
+
+
 # Assessment Models
-class EnvironmentalAssessment(BaseModel):
-    digital_twin_realism: DigitalTwinRealismLevel
-    flow_tracking: FlowTrackingLevel
-    energy_visibility: EnergyVisibilityLevel
-    environmental_scope: EnvironmentalScopeLevel
-    simulation_prediction: SimulationPredictionLevel
+class EnvironmentalAssessment(DynamicAssessment):
+    digital_twin_realism: Optional[DigitalTwinRealismLevel] = None
+    flow_tracking: Optional[Any] = None  
+    energy_visibility: Optional[Any] = None
+    environmental_scope: Optional[Any] = None
+    simulation_prediction: Optional[Any] = None
 
 
-class EconomicAssessment(BaseModel):
-    digitalization_budget: DigitalizationBudgetLevel
-    savings_realized: SavingsLevel
-    performance_improvement: PerformanceImprovementLevel
-    roi_timeframe: ROITimeframeLevel
+class EconomicAssessment(DynamicAssessment):
+    digitalization_budget: Optional[Any] = None
+    savings_realized: Optional[Any] = None
+    performance_improvement: Optional[Any] = None
+    roi_timeframe: Optional[Any] = None
 
 
-class SocialAssessment(BaseModel):
-    employee_impact: EmployeeImpactLevel
-    workplace_safety: WorkplaceSafetyLevel
-    regional_benefits: RegionalBenefitsLevel
+class SocialAssessment(DynamicAssessment):
+    employee_impact: Optional[Any] = None
+    workplace_safety: Optional[Any] = None
+    regional_benefits: Optional[Any] = None
 
 
 # Updated SustainabilityInput to support selective domain assessment
@@ -152,8 +175,8 @@ class SustainabilityInput(BaseModel):
     assessmentId: Optional[str] = Field(None, description="Unique identifier for the assessment")
     userId: Optional[str] = Field(None, description="User identifier")
     systemName: Optional[str] = Field(None, description="Name of the system being assessed")
-    # Accept model instances for each domain (so parsed Pydantic models are valid)
-    assessments: Dict[str, Union[EnvironmentalAssessment, EconomicAssessment, SocialAssessment]] = Field(
+    # Accept dynamic assessment instances
+    assessments: Dict[str, DynamicAssessment] = Field(
         ..., description="Selected sustainability domain assessments"
     )
     submittedAt: Optional[datetime] = Field(None, description="Timestamp when assessment was submitted")
@@ -163,22 +186,82 @@ class SustainabilityInput(BaseModel):
 class SustainabilityResult(BaseModel):
     assessmentId: str
     overallScore: float
-    dimensionScores: Dict[str, float]  # environmental, economic, social
+    dimensionScores: Dict[str, float]
     sustainabilityMetrics: Dict[str, Any]
     timestamp: datetime
     processingTimeMs: float
 
 
+
+class CriterionCreate(BaseModel):
+    criterion_key: Optional[str] = Field(None, description="Unique key for the criterion (e.g., 'digital_twin_realism')")
+    name: str = Field(..., description="Display name for the criterion")
+    description: str = Field(..., description="Description of what this criterion measures")
+    domain: str = Field(..., description="Domain this criterion belongs to")
+    level_count: int = Field(default=6, description="Number of levels for this criterion")
+    custom_levels: Optional[List[str]] = Field(None, description="Custom level descriptions")
+    is_default: bool = Field(default=False, description="Whether this is a default criterion")
+
+    @validator('domain')
+    def validate_domain(cls, v):
+        if v not in [domain.value for domain in SustainabilityDomain]:
+            raise ValueError(f"Domain must be one of: {[d.value for d in SustainabilityDomain]}")
+        return v
+
+    @root_validator(pre=True)
+    def ensure_criterion_key(cls, values):
+        # if criterion_key already present, do nothing
+        if values.get('criterion_key'):
+            return values
+
+        domain = values.get('domain')
+        # domain must be present to generate a key
+        if not domain:
+            raise ValueError("domain is required to generate a criterion_key automatically")
+
+        # generate the key using current in-memory scenarios
+        generated_key = DomainSelectionHelper.generate_criterion_key(domain)
+        values['criterion_key'] = generated_key
+        return values
+
+
+
+class CriterionUpdate(BaseModel):
+    name: Optional[str] = None
+    description: Optional[str] = None
+    custom_levels: Optional[List[str]] = None
+    level_count: Optional[int] = None
+    
+    @validator('level_count')
+    def validate_level_count(cls, v):
+        if v is not None and (v < 2 or v > 10):
+            raise ValueError("Level count must be between 2 and 10")
+        return v
+
+
+class CriterionResponse(BaseModel):
+    id: str
+    criterion_key: str
+    name: str
+    description: str
+    domain: str
+    level_count: int
+    custom_levels: Optional[List[str]] = None
+    is_default: bool
+    created_at: datetime
+    updated_at: datetime
+
+
 class SustainabilityScenarios(BaseModel):
-    scenarios: Dict[str, Dict[str, List[str]]]
+    scenarios: Dict[str, Dict[str, Any]]
 
 
-# Enhanced sustainability scenarios configuration
-SUSTAINABILITY_SCENARIOS = {
+# Enhanced sustainability scenarios configuration - now will be dynamically updated
+DEFAULT_SUSTAINABILITY_SCENARIOS = {
     'environmental': {
         'description': 'Environmental impact and resource management assessment',
         'criteria': {
-            'digital_twin_realism': {
+            'ENV_01': {
                 'name': 'Digital Twin Realism',
                 'description': 'Level of digital model accuracy and real-world connection',
                 'levels': [
@@ -190,7 +273,7 @@ SUSTAINABILITY_SCENARIOS = {
                     "Real-time connection: complete digital replica, synchronized in real time"
                 ]
             },
-            'flow_tracking': {
+            'ENV_02': {
                 'name': 'Flow Tracking',
                 'description': 'Material and energy flow monitoring capabilities',
                 'levels': [
@@ -202,7 +285,7 @@ SUSTAINABILITY_SCENARIOS = {
                     "Complete tracking including supply chain (upstream/downstream)"
                 ]
             },
-            'energy_visibility': {
+            'ENV_03': {
                 'name': 'Energy Visibility',
                 'description': 'Level of energy consumption monitoring and visibility',
                 'levels': [
@@ -214,7 +297,7 @@ SUSTAINABILITY_SCENARIOS = {
                     "Precise subsystem and equipment-level metering"
                 ]
             },
-            'environmental_scope': {
+            'ENV_04': {
                 'name': 'Environmental Scope',
                 'description': 'Breadth of environmental indicators tracked',
                 'levels': [
@@ -226,7 +309,7 @@ SUSTAINABILITY_SCENARIOS = {
                     "Full lifecycle analysis (production → use → end of life)"
                 ]
             },
-            'simulation_prediction': {
+            'ENV_05': {
                 'name': 'Simulation & Prediction',
                 'description': 'Predictive and optimization capabilities',
                 'levels': [
@@ -243,7 +326,7 @@ SUSTAINABILITY_SCENARIOS = {
     'economic': {
         'description': 'Economic viability and financial impact assessment',
         'criteria': {
-            'digitalization_budget': {
+            'ECO_01': {
                 'name': 'Digitalization Budget',
                 'description': 'Investment level in digital transformation',
                 'levels': [
@@ -255,7 +338,7 @@ SUSTAINABILITY_SCENARIOS = {
                     "Maximum budget - Perfect real-time connected replica"
                 ]
             },
-            'savings_realized': {
+            'ECO_02': {
                 'name': 'Savings Realized',
                 'description': 'Actual cost savings achieved',
                 'levels': [
@@ -267,7 +350,7 @@ SUSTAINABILITY_SCENARIOS = {
                     "Exceptional savings"
                 ]
             },
-            'performance_improvement': {
+            'ECO_03': {
                 'name': 'Performance Improvement',
                 'description': 'Operational performance gains',
                 'levels': [
@@ -279,7 +362,7 @@ SUSTAINABILITY_SCENARIOS = {
                     "Exceptional improvement"
                 ]
             },
-            'roi_timeframe': {
+            'ECO_04': {
                 'name': 'ROI Timeframe',
                 'description': 'Return on investment timeline',
                 'levels': [
@@ -296,7 +379,7 @@ SUSTAINABILITY_SCENARIOS = {
     'social': {
         'description': 'Social impact and stakeholder benefits assessment',
         'criteria': {
-            'employee_impact': {
+            'SOC_01': {
                 'name': 'Employee Impact',
                 'description': 'Effects on workforce and employment',
                 'levels': [
@@ -308,7 +391,7 @@ SUSTAINABILITY_SCENARIOS = {
                     "Strong creation of qualified jobs (over 10% increase)"
                 ]
             },
-            'workplace_safety': {
+            'SOC_02': {
                 'name': 'Workplace Safety',
                 'description': 'Impact on worker safety and risk reduction',
                 'levels': [
@@ -320,7 +403,7 @@ SUSTAINABILITY_SCENARIOS = {
                     "Near elimination of risks (>75% reduction)"
                 ]
             },
-            'regional_benefits': {
+            'SOC_03': {
                 'name': 'Regional Benefits',
                 'description': 'Local economic and social benefits',
                 'levels': [
@@ -336,6 +419,7 @@ SUSTAINABILITY_SCENARIOS = {
     }
 }
 
+SUSTAINABILITY_SCENARIOS = DEFAULT_SUSTAINABILITY_SCENARIOS.copy()
 
 class DomainSelectionHelper:
     """Helper class for managing domain selection and configuration"""
@@ -364,7 +448,43 @@ class DomainSelectionHelper:
         }
     
     @staticmethod
-    def create_assessment_from_data(domain: str, data: Dict[str, Any]) -> Any:
+    def generate_criterion_key(domain: Union[str, SustainabilityDomain]) -> str:
+        """Generate a new unique criterion key for the given domain, e.g. "ENV_06"."""
+        domain_str = domain.value if isinstance(domain, SustainabilityDomain) else str(domain)
+        existing_scenarios = SUSTAINABILITY_SCENARIOS
+        prefix_map = {
+            'environmental': 'ENV',
+            'economic': 'ECO',
+            'social': 'SOC'
+        }
+
+        if domain_str not in prefix_map:
+            raise ValueError(f"Unknown domain for key generation: {domain_str}")
+
+        prefix = prefix_map[domain_str]
+
+        existing_keys = []
+        try:
+            existing_keys = list(existing_scenarios[domain_str]['criteria'].keys())
+        except Exception:
+            existing_keys = []
+
+        max_num = 0
+        for k in existing_keys:
+            if k.startswith(prefix + '_'):
+                suffix = k.split('_', 1)[1]
+                try:
+                    num = int(suffix)
+                    if num > max_num:
+                        max_num = num
+                except ValueError:
+                    continue
+
+        next_num = max_num + 1
+        return f"{prefix}_{next_num:02d}"
+
+    @staticmethod
+    def create_assessment_from_data(domain: str, data: Dict[str, Any]) -> DynamicAssessment:
         """Create appropriate assessment object from data"""
         if domain == 'environmental':
             return EnvironmentalAssessment(**data)
@@ -373,4 +493,5 @@ class DomainSelectionHelper:
         elif domain == 'social':
             return SocialAssessment(**data)
         else:
-            raise ValueError(f"Unknown domain: {domain}")
+            # Fallback to generic dynamic assessment
+            return DynamicAssessment(**data)
