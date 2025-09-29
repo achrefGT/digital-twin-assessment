@@ -1,4 +1,3 @@
-// services/scenariosApi.ts
 
 export interface ResilienceScenarios {
   scenarios: Record<string, string[]>

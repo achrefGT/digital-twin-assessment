@@ -13,7 +13,7 @@ class HumanCentricitySettings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env",
         case_sensitive=False,
-        env_prefix="HUMAN_CENTRICITY_"  # Environment variables prefixed with SERVICE_NAME_
+        env_prefix="HUMAN_CENTRICITY_"
     )
     
     # Service identity
@@ -73,9 +73,11 @@ class HumanCentricitySettings(BaseSettings):
     max_help_requests: int = 5          # help requests
     
     # Feature flags
-    enable_detailed_metrics: bool = True
-    enable_performance_monitoring: bool = True
-    enable_request_logging: bool = True
+    enable_dynamic_domains: bool = True
+    enable_custom_scales: bool = True
+    enable_statement_validation: bool = True
+    enable_legacy_compatibility: bool = True
+    enable_real_time_updates: bool = True
         
     @field_validator('cors_origins', mode='before')
     @classmethod

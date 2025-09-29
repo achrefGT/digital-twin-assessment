@@ -4,15 +4,25 @@ from typing import Optional, Dict, Any, List, Set
 from uuid import uuid4
 from enum import Enum
 
-from pydantic import BaseModel, ValidationError, Field
+from pydantic import BaseModel, ValidationError, Field, validator
 
 
 class HumanCentricityDomain(str, Enum):
     CORE_USABILITY = "Core_Usability"
     TRUST_TRANSPARENCY = "Trust_Transparency"
     WORKLOAD_COMFORT = "Workload_Comfort"
+    CYBERSICKNESS = "Cybersickness"
     EMOTIONAL_RESPONSE = "Emotional_Response"
     PERFORMANCE = "Performance"
+
+
+class StatementType(str, Enum):
+    SCALE = "scale"         # ordinal/likert/sam-like
+    NUMERIC = "numeric"     # continuous or slider (e.g. 0-100)
+    PERFORMANCE = "performance"  # objective metrics (time/errors)
+    TEXT = "text"           # free text
+    COMPOSITE = "composite" # contains multiple sub-fields
+    CUSTOM = "custom"       # extension / plugin type
 
 
 class LikertResponse(BaseModel):
@@ -42,6 +52,66 @@ class PerformanceMetrics(BaseModel):
     help_requests: int = Field(..., ge=0, description="Number of help requests")
 
 
+# Statement Management Models (Simplified for fixed domains)
+
+class StatementCreate(BaseModel):
+    domain_key: HumanCentricityDomain = Field(..., description="Domain this statement belongs to")
+    statement_text: str = Field(..., min_length=1, max_length=500, description="Statement text")
+    widget: Optional[str] = Field(None, description="UI widget, e.g. 'likert', 'slider', 'radio', 'text'")
+    widget_config: Optional[Dict[str, Any]] = Field(None, description="Widget config (e.g. {'min':0,'max':100,'step':1})")
+    display_order: Optional[int] = Field(default=0, description="Display order within domain")
+    is_required: Optional[bool] = Field(default=True, description="Whether this statement is required")
+    is_active: Optional[bool] = Field(default=True, description="Whether this statement is currently active")
+    meta_data: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
+
+    @validator('widget', pre=True, always=True)
+    def set_default_widget(cls, v, values):
+        """Set default widget based on domain if not provided."""
+        if v is not None:
+            return v
+            
+        domain = values.get('domain_key')
+        if not domain:
+            return 'likert'
+            
+        # Set default widget based on domain
+        domain_widgets = {
+            HumanCentricityDomain.CORE_USABILITY: 'likert',
+            HumanCentricityDomain.TRUST_TRANSPARENCY: 'likert',
+            HumanCentricityDomain.WORKLOAD_COMFORT: 'slider',
+            HumanCentricityDomain.CYBERSICKNESS: 'likert',
+            HumanCentricityDomain.EMOTIONAL_RESPONSE: 'sam',
+            HumanCentricityDomain.PERFORMANCE: 'numeric'
+        }
+        return domain_widgets.get(domain, 'likert')
+
+
+class StatementUpdate(BaseModel):
+    statement_text: Optional[str] = Field(None, min_length=1, max_length=500)
+    widget: Optional[str] = None
+    widget_config: Optional[Dict[str, Any]] = None
+    display_order: Optional[int] = None
+    is_required: Optional[bool] = None
+    is_active: Optional[bool] = None
+    meta_data: Optional[Dict[str, Any]] = None
+
+
+class StatementResponse(BaseModel):
+    id: str
+    domain_key: HumanCentricityDomain
+    statement_text: str
+    statement_type: StatementType 
+    widget: Optional[str]
+    widget_config: Optional[Dict[str, Any]] = None
+    display_order: Optional[int]
+    is_required: Optional[bool]
+    is_active: Optional[bool]
+    is_default: bool  
+    meta_data: Dict[str, Any]
+    created_at: datetime
+    updated_at: datetime
+
+
 class HumanCentricityInput(BaseModel):
     assessmentId: Optional[str] = Field(None, description="Unique identifier for the assessment")
     userId: Optional[str] = Field(None, description="User identifier")
@@ -58,11 +128,14 @@ class HumanCentricityInput(BaseModel):
     emotional_response: Optional[EmotionalResponse] = Field(None, description="SAM emotional response")
     performance_metrics: Optional[PerformanceMetrics] = Field(None, description="Objective performance metrics")
     
+    # Dynamic responses for custom statements within domains
+    custom_responses: Optional[Dict[str, List[Dict[str, Any]]]] = Field(None, description="Custom statement responses by domain")
+    
     # Legacy field for backward compatibility
     ux_trust_responses: Optional[List[LikertResponse]] = Field(None, description="Legacy combined UX and Trust responses")
     
     submittedAt: Optional[datetime] = Field(None, description="Timestamp when assessment was submitted")
-    metadata: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
+    meta_data: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Additional metadata")
 
 
 class HumanCentricityResult(BaseModel):
@@ -80,398 +153,450 @@ class HumanCentricityStructure(BaseModel):
     scales: Dict[str, Dict[str, Any]]
 
 
-# Enhanced assessment statements configuration with domain separation
-ASSESSMENT_DOMAINS = {
-    'Core_Usability': {
-        'title': 'Core Usability & User Experience',
-        'description': 'Evaluate the fundamental usability and user experience aspects of the system',
+# Domain scale configuration - each domain has ONE fixed scale
+DOMAIN_SCALES = {
+    HumanCentricityDomain.CORE_USABILITY: {
         'type': 'likert',
-        'scale': 'likert_7_point',
-        'statements': [
-            "I found the digital twin intuitive and easy to use.",
-            "The system's functions feel well integrated and coherent.",
-            "I would use this digital twin frequently in my work.",
-            "Learning to operate the system was quick and straightforward.",
-            "I feel confident and in control when using the twin.",
-            "The terminology and workflows match my domain expertise.",
-            "I can easily tailor views, dashboards, and alerts to my needs.",
-            "I feel comfortable with how the system collects, uses, and displays my data."
-        ]
-    },
-    'Trust_Transparency': {
-        'title': 'Trust & Transparency',
-        'description': 'Assess trust levels and system transparency in decision-making',
-        'type': 'likert',
-        'scale': 'likert_7_point',
-        'statements': [
-            "I understand the origins and currency of the data shown.",
-            "The system explains how it generated its insights or recommendations.",
-            "I trust the accuracy and reliability of the digital twin's outputs.",
-            "I feel confident making operational decisions based on the twin's insights."
-        ]
-    },
-    'Workload_Comfort': {
-        'title': 'Workload & Comfort Assessment',
-        'description': 'Evaluate mental workload and physical comfort while using the system',
-        'type': 'combined',
-        'components': {
-            'workload': {
-                'title': 'Mental Demand & Effort',
-                'description': 'Rate each on a 0-100 scale (0 = very low, 100 = very high)',
-                'type': 'slider',
-                'scale': 'workload_slider',
-                'metrics': [
-                    "Mental Demand",
-                    "Effort Required", 
-                    "Frustration Level"
-                ]
-            },
-            'cybersickness': {
-                'title': 'Cybersickness Symptoms',
-                'description': 'Rate each symptom (1 = None, 5 = Severe)',
-                'type': 'cybersickness',
-                'scale': 'cybersickness_severity',
-                'symptoms': [
-                    "Queasiness or nausea",
-                    "Dizziness or off-balance feeling",
-                    "Eye strain or visual discomfort"
-                ]
-            }
+        'min': 1,
+        'max': 7,
+        'labels': {
+            1: 'Strongly Disagree',
+            2: 'Disagree', 
+            3: 'Somewhat Disagree',
+            4: 'Neutral',
+            5: 'Somewhat Agree',
+            6: 'Agree',
+            7: 'Strongly Agree'
         }
     },
-    'Emotional_Response': {
-        'title': 'Emotional Response (SAM)',
-        'description': 'Capture your emotional state while using the system',
+    HumanCentricityDomain.TRUST_TRANSPARENCY: {
+        'type': 'likert',
+        'min': 1,
+        'max': 7,
+        'labels': {
+            1: 'Strongly Disagree',
+            2: 'Disagree', 
+            3: 'Somewhat Disagree',
+            4: 'Neutral',
+            5: 'Somewhat Agree',
+            6: 'Agree',
+            7: 'Strongly Agree'
+        }
+    },
+    HumanCentricityDomain.WORKLOAD_COMFORT: {
+        'type': 'slider',
+        'min': 0,
+        'max': 100,
+        'step': 1,
+        'labels': {
+            0: 'Very Low',
+            25: 'Low',
+            50: 'Moderate', 
+            75: 'High',
+            100: 'Very High'
+        }
+    },
+    HumanCentricityDomain.CYBERSICKNESS: {
+        'type': 'likert',
+        'min': 1,
+        'max': 5,
+        'labels': {
+            1: 'None',
+            2: 'Slight',
+            3: 'Moderate',
+            4: 'Severe',
+            5: 'Very Severe'
+        }
+    },
+    HumanCentricityDomain.EMOTIONAL_RESPONSE: {
         'type': 'sam',
-        'components': {
+        'min': 1,
+        'max': 5,
+        'dimensions': {
             'valence': {
-                'description': 'Valence (1 = Negative, 5 = Positive)',
-                'scale': [1, 2, 3, 4, 5]
+                'labels': {
+                    1: 'Very Unhappy',
+                    2: 'Unhappy',
+                    3: 'Neutral',
+                    4: 'Happy', 
+                    5: 'Very Happy'
+                }
             },
             'arousal': {
-                'description': 'Arousal (1 = Calm, 5 = Excited)', 
-                'scale': [1, 2, 3, 4, 5]
+                'labels': {
+                    1: 'Very Calm',
+                    2: 'Calm',
+                    3: 'Neutral',
+                    4: 'Excited',
+                    5: 'Very Excited'
+                }
             }
         }
     },
-    'Performance': {
+    HumanCentricityDomain.PERFORMANCE: {
+        'type': 'numeric',
+        'metrics': {
+            'time': {'unit': 'minutes', 'min': 0, 'description': 'Task completion time'},
+            'errors': {'unit': 'count', 'min': 0, 'description': 'Number of errors'},
+            'help': {'unit': 'count', 'min': 0, 'description': 'Help requests'}
+        }
+    }
+}
+
+
+# Fixed domain configurations - These cannot be modified, only statements within them
+FIXED_DOMAINS = {
+    HumanCentricityDomain.CORE_USABILITY: {
+        'title': 'Core Usability & User Experience',
+        'description': 'Evaluate the fundamental usability and user experience aspects of the system',
+        'statement_type': StatementType.SCALE,
+        'default_widget': 'likert',
+        'display_order': 1,
+        'is_composite': False,
+        'icon': 'user-check',
+        'color': '#3B82F6'
+    },
+    HumanCentricityDomain.TRUST_TRANSPARENCY: {
+        'title': 'Trust & Transparency',
+        'description': 'Assess trust levels and system transparency in decision-making',
+        'statement_type': StatementType.SCALE,
+        'default_widget': 'likert',
+        'display_order': 2,
+        'is_composite': False,
+        'icon': 'shield-check',
+        'color': '#10B981'
+    },
+    HumanCentricityDomain.WORKLOAD_COMFORT: {
+        'title': 'Workload & Comfort Assessment',
+        'description': 'Evaluate mental workload and physical comfort while using the system',
+        'statement_type': StatementType.COMPOSITE,
+        'default_widget': 'slider',
+        'display_order': 3,
+        'is_composite': True,
+        'icon': 'brain',
+        'color': '#F59E0B'
+    },
+    HumanCentricityDomain.CYBERSICKNESS: {
+        'title': 'Cybersickness / Comfort',
+        'description': 'Evaluate physical discomfort or cybersickness symptoms while using the system',
+        'statement_type': StatementType.SCALE,
+        'default_widget': 'likert',
+        'display_order': 4,
+        'is_composite': False,
+        'icon': 'heart-pulse',
+        'color': '#EF4444'
+    },
+    HumanCentricityDomain.EMOTIONAL_RESPONSE: {
+        'title': 'Emotional Response (SAM)',
+        'description': 'Capture your emotional state while using the system',
+        'statement_type': StatementType.SCALE,
+        'default_widget': 'sam',
+        'display_order': 5,
+        'is_composite': True,
+        'icon': 'smile',
+        'color': '#8B5CF6'
+    },
+    HumanCentricityDomain.PERFORMANCE: {
         'title': 'Objective Performance Metrics',
         'description': 'Record measured performance indicators',
-        'type': 'performance',
-        'scale': 'performance_metrics',
-        'metrics': [
-            "Task Completion Time (minutes)",
-            "Error Rate (errors per task)",
-            "Help Requests (occurrences)"
-        ]
+        'statement_type': StatementType.PERFORMANCE,
+        'default_widget': 'numeric',
+        'display_order': 6,
+        'is_composite': True,
+        'icon': 'bar-chart',
+        'color': '#06B6D4'
     }
 }
 
-# Legacy statements for backward compatibility
-ASSESSMENT_STATEMENTS = {
-    'Section1_Core_Usability_UX': ASSESSMENT_DOMAINS['Core_Usability']['statements'],
-    'Section2_Trust_Transparency': ASSESSMENT_DOMAINS['Trust_Transparency']['statements'],
-    'Section3_Workload_Metrics': {
-        'description': 'Rate each on a 0-100 scale (0 = very low, 100 = very high)',
-        'metrics': ASSESSMENT_DOMAINS['Workload_Comfort']['components']['workload']['metrics']
-    },
-    'Section3_Cybersickness_Symptoms': {
-        'description': 'Rate each symptom (1 = None, 5 = Severe)',
-        'symptoms': ASSESSMENT_DOMAINS['Workload_Comfort']['components']['cybersickness']['symptoms']
-    },
-    'Section4_Emotional_Response_SAM': ASSESSMENT_DOMAINS['Emotional_Response']['components'],
-    'Section5_Objective_Performance': {
-        'description': 'Enter actual measured values',
-        'metrics': ASSESSMENT_DOMAINS['Performance']['metrics']
-    }
-}
-
-# Scale definitions
-ASSESSMENT_SCALES = {
-    'likert_7_point': {
-        'range': [1, 7],
-        'labels': {
-            1: "Strongly Disagree",
-            2: "Disagree",
-            3: "Somewhat Disagree", 
-            4: "Neutral",
-            5: "Somewhat Agree",
-            6: "Agree",
-            7: "Strongly Agree"
+# Default statements for each domain - these will be created as "default" statements
+DEFAULT_STATEMENTS = {
+    HumanCentricityDomain.CORE_USABILITY: [
+        {
+            'text': "I found the digital twin intuitive and easy to use.",
+            'display_order': 1,
+            'is_default': True
         },
-        'description': 'Rate each statement on a 1–7 scale'
-    },
-    'workload_slider': {
-        'range': [0, 100],
-        'description': '0 = very low … 100 = very high'
-    },
-    'cybersickness_severity': {
-        'range': [1, 5],
-        'labels': {
-            1: "None",
-            2: "Slight",
-            3: "Moderate",
-            4: "Severe", 
-            5: "Very Severe"
+        {
+            'text': "The system's functions feel well integrated and coherent.",
+            'display_order': 2,
+            'is_default': True
         },
-        'description': '1 = None … 5 = Severe'
-    },
-    'sam_valence': {
-        'range': [1, 5],
-        'labels': {
-            1: "Very Negative",
-            2: "Negative",
-            3: "Neutral",
-            4: "Positive",
-            5: "Very Positive"
+        {
+            'text': "I would use this digital twin frequently in my work.",
+            'display_order': 3,
+            'is_default': True
         },
-        'description': 'Select your current emotional state'
-    },
-    'sam_arousal': {
-        'range': [1, 5], 
-        'labels': {
-            1: "Very Calm",
-            2: "Calm",
-            3: "Neutral",
-            4: "Excited",
-            5: "Very Excited"
+        {
+            'text': "Learning to operate the system was quick and straightforward.",
+            'display_order': 4,
+            'is_default': True
         },
-        'description': 'Select your current emotional state'
-    },
-    'performance_metrics': {
-        'task_completion_time': {
-            'unit': 'minutes',
-            'min_value': 0.0,
-            'step': 0.1
+        {
+            'text': "I feel confident and in control when using the twin.",
+            'display_order': 5,
+            'is_default': True
         },
-        'error_rate': {
-            'unit': 'errors per task',
-            'min_value': 0,
-            'step': 1
+        {
+            'text': "The terminology and workflows match my domain expertise.",
+            'display_order': 6,
+            'is_default': True
         },
-        'help_requests': {
-            'unit': 'occurrences', 
-            'min_value': 0,
-            'step': 1
+        {
+            'text': "I can easily tailor views, dashboards, and alerts to my needs.",
+            'display_order': 7,
+            'is_default': True
+        },
+        {
+            'text': "I feel comfortable with how the system collects, uses, and displays my data.",
+            'display_order': 8,
+            'is_default': True
         }
-    }
-}
-
-
-# Assessment section structure for easy frontend generation
-ASSESSMENT_STRUCTURE = {
-    'sections': [
+    ],
+    HumanCentricityDomain.TRUST_TRANSPARENCY: [
         {
-            'id': 'section1',
-            'title': 'Core Usability & User Experience',
-            'description': 'Rate each statement on a 1–7 scale (1 = Strongly Disagree, 7 = Strongly Agree)',
-            'type': 'likert',
-            'scale': 'likert_7_point',
-            'statements': ASSESSMENT_STATEMENTS['Section1_Core_Usability_UX']
+            'text': "I understand the origins and currency of the data shown.",
+            'display_order': 1,
+            'is_default': True
         },
         {
-            'id': 'section2', 
-            'title': 'Trust & Transparency',
-            'description': 'Rate each statement on a 1–7 scale (1 = Strongly Disagree, 7 = Strongly Agree)',
-            'type': 'likert',
-            'scale': 'likert_7_point', 
-            'statements': ASSESSMENT_STATEMENTS['Section2_Trust_Transparency']
+            'text': "The system explains how it generated its insights or recommendations.",
+            'display_order': 2,
+            'is_default': True
         },
         {
-            'id': 'section3a',
-            'title': 'Workload & Comfort - Mental Demand & Effort',
-            'description': 'Use sliders to rate each aspect',
-            'type': 'slider',
-            'scale': 'workload_slider',
-            'metrics': ASSESSMENT_STATEMENTS['Section3_Workload_Metrics']['metrics']
+            'text': "I trust the accuracy and reliability of the digital twin's outputs.",
+            'display_order': 3,
+            'is_default': True
         },
         {
-            'id': 'section3b',
-            'title': 'Workload & Comfort - Cybersickness Symptoms', 
-            'description': 'Rate the severity of each symptom',
-            'type': 'cybersickness',
-            'scale': 'cybersickness_severity',
-            'symptoms': ASSESSMENT_STATEMENTS['Section3_Cybersickness_Symptoms']['symptoms']
+            'text': "I feel confident making operational decisions based on the twin's insights.",
+            'display_order': 4,
+            'is_default': True
+        }
+    ],
+    HumanCentricityDomain.WORKLOAD_COMFORT: [
+        {
+            'text': "Mental Demand",
+            'display_order': 1,
+            'is_default': True,
+            'widget': 'slider'
         },
         {
-            'id': 'section4',
-            'title': 'Emotional Response (SAM)',
-            'description': 'Select your current emotional state',
-            'type': 'sam',
-            'components': {
-                'valence': ASSESSMENT_STATEMENTS['Section4_Emotional_Response_SAM']['valence'],
-                'arousal': ASSESSMENT_STATEMENTS['Section4_Emotional_Response_SAM']['arousal']
-            }
+            'text': "Effort Required",
+            'display_order': 2,
+            'is_default': True,
+            'widget': 'slider'
         },
         {
-            'id': 'section5',
-            'title': 'Objective Performance Metrics',
-            'description': 'Enter the measured performance values',
-            'type': 'performance',
-            'scale': 'performance_metrics',
-            'metrics': ASSESSMENT_STATEMENTS['Section5_Objective_Performance']['metrics']
+            'text': "Frustration Level",
+            'display_order': 3,
+            'is_default': True,
+            'widget': 'slider'
+        }
+    ],
+    HumanCentricityDomain.CYBERSICKNESS: [
+        {
+            'text': "Queasiness or nausea",
+            'display_order': 1,
+            'is_default': True
+        },
+        {
+            'text': "Dizziness or off-balance feeling",
+            'display_order': 2,
+            'is_default': True
+        },
+        {
+            'text': "Eye strain or visual discomfort",
+            'display_order': 3,
+            'is_default': True
+        }
+    ],
+    HumanCentricityDomain.EMOTIONAL_RESPONSE: [
+        {
+            'text': "Valence (1 = Negative, 5 = Positive)",
+            'display_order': 1,
+            'is_default': True,
+            'widget': 'sam'
+        },
+        {
+            'text': "Arousal (1 = Calm, 5 = Excited)",
+            'display_order': 2,
+            'is_default': True,
+            'widget': 'sam'
+        }
+    ],
+    HumanCentricityDomain.PERFORMANCE: [
+        {
+            'text': "Task Completion Time (minutes)",
+            'display_order': 1,
+            'is_default': True,
+            'widget': 'numeric',
+            'widget_config': {'min': 0, 'step': 0.1, 'unit': 'minutes'}
+        },
+        {
+            'text': "Error Rate (errors per task)",
+            'display_order': 2,
+            'is_default': True,
+            'widget': 'numeric',
+            'widget_config': {'min': 0, 'step': 1, 'unit': 'errors'}
+        },
+        {
+            'text': "Help Requests (occurrences)",
+            'display_order': 3,
+            'is_default': True,
+            'widget': 'numeric',
+            'widget_config': {'min': 0, 'step': 1, 'unit': 'requests'}
         }
     ]
 }
 
-# Constants for normalizing objective performance
+# Performance constants for scoring
 PERFORMANCE_CONSTANTS = {
-    'MAX_TIME': 30.0,      # minutes (expected maximum)  
-    'MAX_ERRORS': 10,      # errors per task
-    'MAX_HELP': 5          # help requests
+    'MAX_TIME': 30,  # Maximum task time in minutes
+    'MAX_ERRORS': 10,  # Maximum error count
+    'MAX_HELP': 5   # Maximum help requests
 }
 
 
-class DomainSelectionHelper:
-    """Helper class for managing domain selection and configuration"""
+class StatementManager:
+    """Helper class for statement management within fixed domains"""
     
     @staticmethod
-    def get_available_domains() -> List[Dict[str, Any]]:
-        """Get list of available domains with descriptions"""
-        return [
-            {
-                'domain': domain.value,
-                'enum': domain,
-                'title': ASSESSMENT_DOMAINS[domain.value]['title'],
-                'description': ASSESSMENT_DOMAINS[domain.value]['description'],
-                'type': ASSESSMENT_DOMAINS[domain.value]['type'],
-                'component_count': DomainSelectionHelper._get_component_count(domain.value)
-            }
-            for domain in HumanCentricityDomain
-            if domain.value in ASSESSMENT_DOMAINS
-        ]
+    def get_domain_info(domain: HumanCentricityDomain) -> Dict[str, Any]:
+        """Get information about a fixed domain"""
+        return FIXED_DOMAINS.get(domain, {})
     
     @staticmethod
-    def _get_component_count(domain_key: str) -> int:
-        """Get count of components/questions for a domain"""
-        domain_config = ASSESSMENT_DOMAINS[domain_key]
+    def get_domain_scale(domain: HumanCentricityDomain) -> Dict[str, Any]:
+        """Get the fixed scale configuration for a domain"""
+        return DOMAIN_SCALES.get(domain, {})
+    
+    @staticmethod
+    def get_all_domains() -> Dict[HumanCentricityDomain, Dict[str, Any]]:
+        """Get all fixed domains"""
+        return FIXED_DOMAINS
+    
+    @staticmethod
+    def get_default_statements_for_domain(domain: HumanCentricityDomain) -> List[Dict[str, Any]]:
+        """Get default statements for a domain"""
+        return DEFAULT_STATEMENTS.get(domain, [])
+    
+    @staticmethod
+    def validate_statement_for_domain(domain: HumanCentricityDomain, statement_data: Dict[str, Any]) -> Dict[str, Any]:
+        """Validate a statement against domain constraints"""
+        domain_info = FIXED_DOMAINS.get(domain)
+        if not domain_info:
+            return {'valid': False, 'errors': ['Invalid domain']}
         
-        if domain_config['type'] == 'likert':
-            return len(domain_config['statements'])
-        elif domain_config['type'] == 'combined':
-            total = 0
-            for component in domain_config['components'].values():
-                if 'metrics' in component:
-                    total += len(component['metrics'])
-                elif 'symptoms' in component:
-                    total += len(component['symptoms'])
-            return total
-        elif domain_config['type'] == 'sam':
-            return len(domain_config['components'])
-        elif domain_config['type'] == 'performance':
-            return len(domain_config['metrics'])
-        else:
-            return 0
+        validation_result = {'valid': True, 'errors': [], 'warnings': []}
+        
+        # Check widget compatibility
+        widget = statement_data.get('widget')
+        if widget and widget not in StatementManager._get_compatible_widgets(domain):
+            validation_result['warnings'].append(
+                f"Widget '{widget}' may not be optimal for {domain.value} domain"
+            )
+        
+        return validation_result
     
     @staticmethod
-    def get_domain_configuration(selected_domains: Set[HumanCentricityDomain]) -> Dict[str, Any]:
-        """Get configuration for selected domains"""
-        config = {
-            'domains': {},
-            'scales': ASSESSMENT_SCALES,
-            'total_sections': len(selected_domains)
+    def _get_compatible_widgets(domain: HumanCentricityDomain) -> List[str]:
+        """Get compatible widgets for a domain"""
+        widget_compatibility = {
+            HumanCentricityDomain.CORE_USABILITY: ['likert', 'radio', 'text'],
+            HumanCentricityDomain.TRUST_TRANSPARENCY: ['likert', 'radio', 'text'],
+            HumanCentricityDomain.WORKLOAD_COMFORT: ['slider', 'likert', 'numeric'],
+            HumanCentricityDomain.CYBERSICKNESS: ['likert', 'radio'],
+            HumanCentricityDomain.EMOTIONAL_RESPONSE: ['sam', 'likert'],
+            HumanCentricityDomain.PERFORMANCE: ['numeric', 'slider']
         }
-        
-        for domain in selected_domains:
-            if domain.value in ASSESSMENT_DOMAINS:
-                config['domains'][domain.value] = ASSESSMENT_DOMAINS[domain.value]
-        
-        return config
+        return widget_compatibility.get(domain, ['likert'])
     
     @staticmethod
-    def validate_domain_data(selected_domains: Set[HumanCentricityDomain], form_data: Dict[str, Any]) -> List[str]:
+    def get_statement_template(domain: HumanCentricityDomain) -> Dict[str, Any]:
+        """Get a template for creating new statements in a domain"""
+        domain_info = FIXED_DOMAINS.get(domain, {})
+        return {
+            'domain_key': domain,
+            'statement_text': '',
+            'widget': domain_info.get('default_widget', 'likert'),
+            'widget_config': None,
+            'display_order': 0,
+            'is_required': True,
+            'is_active': True,
+            'meta_data': {}
+        }
+
+
+class DomainSelectionHelper:
+    """Helper class for domain selection and validation (simplified for fixed domains)"""
+    
+    @staticmethod
+    def get_required_fields_for_domain(domain: HumanCentricityDomain) -> List[str]:
+        """Get required form fields for a specific domain"""
+        field_mapping = {
+            HumanCentricityDomain.CORE_USABILITY: ['core_usability_responses'],
+            HumanCentricityDomain.TRUST_TRANSPARENCY: ['trust_transparency_responses'],
+            HumanCentricityDomain.WORKLOAD_COMFORT: ['workload_metrics'],
+            HumanCentricityDomain.CYBERSICKNESS: ['cybersickness_responses'],
+            HumanCentricityDomain.EMOTIONAL_RESPONSE: ['emotional_response'],
+            HumanCentricityDomain.PERFORMANCE: ['performance_metrics']
+        }
+        return field_mapping.get(domain, [])
+    
+    @staticmethod
+    def validate_domain_data(selected_domains: Set[HumanCentricityDomain], 
+                           form_data: Dict[str, Any]) -> List[str]:
         """Validate that form data contains required fields for selected domains"""
         missing_fields = []
         
         for domain in selected_domains:
-            if domain == HumanCentricityDomain.CORE_USABILITY:
-                if 'core_usability_responses' not in form_data:
-                    missing_fields.append('core_usability_responses')
-            elif domain == HumanCentricityDomain.TRUST_TRANSPARENCY:
-                if 'trust_transparency_responses' not in form_data:
-                    missing_fields.append('trust_transparency_responses')
-            elif domain == HumanCentricityDomain.WORKLOAD_COMFORT:
-                if 'workload_metrics' not in form_data or 'cybersickness_responses' not in form_data:
-                    missing_fields.extend(['workload_metrics', 'cybersickness_responses'])
-            elif domain == HumanCentricityDomain.EMOTIONAL_RESPONSE:
-                if 'emotional_response' not in form_data:
-                    missing_fields.append('emotional_response')
-            elif domain == HumanCentricityDomain.PERFORMANCE:
-                if 'performance_metrics' not in form_data:
-                    missing_fields.append('performance_metrics')
+            required_fields = DomainSelectionHelper.get_required_fields_for_domain(domain)
+            for field in required_fields:
+                if field not in form_data or form_data[field] is None:
+                    missing_fields.append(f"{domain.value}: {field}")
         
         return missing_fields
+    
+    @staticmethod
+    def get_default_domain_selection() -> Set[HumanCentricityDomain]:
+        """Get default domain selection"""
+        return {
+            HumanCentricityDomain.CORE_USABILITY,
+            HumanCentricityDomain.TRUST_TRANSPARENCY,
+            HumanCentricityDomain.WORKLOAD_COMFORT,
+            HumanCentricityDomain.CYBERSICKNESS,
+            HumanCentricityDomain.EMOTIONAL_RESPONSE,
+            HumanCentricityDomain.PERFORMANCE
+        }
+    
+    @staticmethod
+    def get_minimal_domain_selection() -> Set[HumanCentricityDomain]:
+        """Get minimal domain selection for quick assessments"""
+        return {
+            HumanCentricityDomain.CORE_USABILITY,
+            HumanCentricityDomain.TRUST_TRANSPARENCY
+        }
 
 
-# Enhanced assessment structure for easy frontend generation
-def get_assessment_structure_for_domains(selected_domains: Set[HumanCentricityDomain]) -> Dict[str, Any]:
-    """Generate assessment structure for selected domains"""
-    sections = []
-    
-    for domain in selected_domains:
-        if domain.value in ASSESSMENT_DOMAINS:
-            domain_config = ASSESSMENT_DOMAINS[domain.value]
-            
-            if domain == HumanCentricityDomain.CORE_USABILITY:
-                sections.append({
-                    'id': 'core_usability',
-                    'title': domain_config['title'],
-                    'description': 'Rate each statement on a 1–7 scale (1 = Strongly Disagree, 7 = Strongly Agree)',
-                    'type': 'likert',
-                    'scale': 'likert_7_point',
-                    'statements': domain_config['statements']
-                })
-            
-            elif domain == HumanCentricityDomain.TRUST_TRANSPARENCY:
-                sections.append({
-                    'id': 'trust_transparency',
-                    'title': domain_config['title'],
-                    'description': 'Rate each statement on a 1–7 scale (1 = Strongly Disagree, 7 = Strongly Agree)',
-                    'type': 'likert',
-                    'scale': 'likert_7_point',
-                    'statements': domain_config['statements']
-                })
-            
-            elif domain == HumanCentricityDomain.WORKLOAD_COMFORT:
-                sections.extend([
-                    {
-                        'id': 'workload_metrics',
-                        'title': 'Mental Demand & Effort',
-                        'description': 'Use sliders to rate each aspect',
-                        'type': 'slider',
-                        'scale': 'workload_slider',
-                        'metrics': domain_config['components']['workload']['metrics']
-                    },
-                    {
-                        'id': 'cybersickness',
-                        'title': 'Cybersickness Symptoms',
-                        'description': 'Rate the severity of each symptom',
-                        'type': 'cybersickness',
-                        'scale': 'cybersickness_severity',
-                        'symptoms': domain_config['components']['cybersickness']['symptoms']
-                    }
-                ])
-            
-            elif domain == HumanCentricityDomain.EMOTIONAL_RESPONSE:
-                sections.append({
-                    'id': 'emotional_response',
-                    'title': domain_config['title'],
-                    'description': 'Select your current emotional state',
-                    'type': 'sam',
-                    'components': domain_config['components']
-                })
-            
-            elif domain == HumanCentricityDomain.PERFORMANCE:
-                sections.append({
-                    'id': 'performance_metrics',
-                    'title': domain_config['title'],
-                    'description': 'Enter the measured performance values',
-                    'type': 'performance',
-                    'scale': 'performance_metrics',
-                    'metrics': domain_config['metrics']
-                })
-    
-    return {
-        'sections': sections,
-        'selected_domains': [domain.value for domain in selected_domains]
+# Assessment structure metadata
+ASSESSMENT_STRUCTURE = {
+    'version': '2.2.0',
+    'description': 'Human Centricity Assessment Framework - Fixed Domain Scales',
+    'features': [
+        'fixed_domains',
+        'fixed_domain_scales',
+        'statement_management',
+        'custom_statements',
+        'statement_ordering',
+        'backward_compatibility'
+    ],
+    'scoring_method': 'weighted_domain_average',
+    'validation_rules': {
+        'min_domains': 1,
+        'max_domains': 6,  # Fixed to the 6 predefined domains
+        'min_statements_per_domain': 1,
+        'max_statements_per_domain': 20,
+        'max_total_statements': 100
     }
+}

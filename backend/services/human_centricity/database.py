@@ -1,7 +1,7 @@
 from datetime import datetime
-from typing import Optional, Dict, Any
+from typing import List, Optional, Dict, Any
 import json
-from sqlalchemy import Column, String, Float, DateTime, JSON, Integer, create_engine, text
+from sqlalchemy import Column, String, Float, DateTime, JSON, Integer, Boolean, create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 import logging
@@ -60,6 +60,7 @@ def make_json_serializable(obj):
         logger.warning(f"Could not serialize object of type {type(obj)}: {obj}")
         return None
 
+
 class HumanCentricityAssessment(Base):
     __tablename__ = "human_centricity_assessments"
     
@@ -80,6 +81,25 @@ class HumanCentricityAssessment(Base):
     # Timestamps
     submitted_at = Column(DateTime, nullable=False)
     processed_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+
+class DynamicStatement(Base):
+    """Table for managing custom statements within fixed domains"""
+    __tablename__ = "dynamic_statements"
+    
+    id = Column(String, primary_key=True)
+    domain_key = Column(String, index=True, nullable=False)  # HumanCentricityDomain enum value
+    statement_text = Column(String, nullable=False)
+    widget = Column(String, default="likert")  # UI widget type
+    scale_key = Column(String, default="likert_7_point")  # Scale configuration key
+    widget_config = Column(JSON, default={})  # Widget-specific configuration
+    display_order = Column(Integer, default=0)
+    is_required = Column(Boolean, default=True)
+    is_active = Column(Boolean, default=True)  # Enable/disable without deletion
+    is_default = Column(Boolean, default=False)  # Original default statement
+    meta_data = Column(JSON, default={})
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -186,5 +206,264 @@ class DatabaseManager:
         except Exception as e:
             logger.error(f"Failed to retrieve assessment {assessment_id}: {e}")
             raise DatabaseConnectionException(f"Failed to retrieve assessment: {e}")
+        finally:
+            db.close()
+
+    def get_assessments_by_user(self, user_id: str) -> List[HumanCentricityAssessment]:
+        """Get all assessments for a specific user"""
+        db = self.get_session()
+        try:
+            assessments = db.query(HumanCentricityAssessment).filter(
+                HumanCentricityAssessment.user_id == user_id
+            ).order_by(HumanCentricityAssessment.created_at.desc()).all()
+            
+            logger.info(f"Retrieved {len(assessments)} assessments for user {user_id}")
+            return assessments
+            
+        except Exception as e:
+            logger.error(f"Failed to retrieve assessments for user {user_id}: {e}")
+            raise DatabaseConnectionException(f"Failed to retrieve user assessments: {e}")
+        finally:
+            db.close()
+
+    # Statement Management Methods
+
+    def save_statement(self, statement_data: Dict[str, Any]) -> DynamicStatement:
+        """Save a dynamic statement to database"""
+        db = self.get_session()
+        try:
+            # Generate ID if not provided
+            if 'id' not in statement_data or not statement_data['id']:
+                from uuid import uuid4
+                statement_data['id'] = str(uuid4())
+            
+            db_statement = DynamicStatement(
+                id=statement_data['id'],
+                domain_key=statement_data['domain_key'],
+                statement_text=statement_data['statement_text'],
+                widget=statement_data.get('widget', 'likert'),
+                scale_key=statement_data.get('scale_key', 'likert_7_point'),
+                widget_config=make_json_serializable(statement_data.get('widget_config', {})),
+                display_order=statement_data.get('display_order', 0),
+                is_required=statement_data.get('is_required', True),
+                is_active=statement_data.get('is_active', True),
+                is_default=statement_data.get('is_default', False),
+                meta_data=make_json_serializable(statement_data.get('meta_data', {}))
+            )
+            
+            db.add(db_statement)
+            db.commit()
+            db.refresh(db_statement)
+            logger.info(f"Saved statement {statement_data['id']} to database")
+            return db_statement
+        
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to save statement {statement_data.get('id')}: {e}")
+            raise DatabaseConnectionException(f"Failed to save statement: {e}")
+        finally:
+            db.close()
+
+    def get_statement(self, statement_id: str) -> Optional[DynamicStatement]:
+        """Get statement by ID"""
+        db = self.get_session()
+        try:
+            statement = db.query(DynamicStatement).filter(
+                DynamicStatement.id == statement_id
+            ).first()
+            
+            if statement:
+                logger.info(f"Retrieved statement {statement_id} from database")
+            else:
+                logger.warning(f"Statement {statement_id} not found in database")
+                
+            return statement
+            
+        except Exception as e:
+            logger.error(f"Failed to retrieve statement {statement_id}: {e}")
+            raise DatabaseConnectionException(f"Failed to retrieve statement: {e}")
+        finally:
+            db.close()
+
+    def get_statements_by_domain(self, domain_key: str, active_only: bool = True) -> List[DynamicStatement]:
+        """Get all statements for a specific domain"""
+        db = self.get_session()
+        try:
+            query = db.query(DynamicStatement).filter(
+                DynamicStatement.domain_key == domain_key
+            )
+            
+            if active_only:
+                query = query.filter(DynamicStatement.is_active == True)
+            
+            statements = query.order_by(DynamicStatement.display_order).all()
+            
+            logger.info(f"Retrieved {len(statements)} statements for domain {domain_key}")
+            return statements
+            
+        except Exception as e:
+            logger.error(f"Failed to retrieve statements for domain {domain_key}: {e}")
+            raise DatabaseConnectionException(f"Failed to retrieve domain statements: {e}")
+        finally:
+            db.close()
+
+    def get_all_active_statements(self) -> List[DynamicStatement]:
+        """Get all active statements grouped by domain"""
+        db = self.get_session()
+        try:
+            statements = db.query(DynamicStatement).filter(
+                DynamicStatement.is_active == True
+            ).order_by(DynamicStatement.domain_key, DynamicStatement.display_order).all()
+            
+            logger.info(f"Retrieved {len(statements)} active statements")
+            return statements
+            
+        except Exception as e:
+            logger.error(f"Failed to retrieve active statements: {e}")
+            raise DatabaseConnectionException(f"Failed to retrieve active statements: {e}")
+        finally:
+            db.close()
+
+    def update_statement(self, statement_id: str, update_data: Dict[str, Any]) -> Optional[DynamicStatement]:
+        """Update an existing statement"""
+        db = self.get_session()
+        try:
+            statement = db.query(DynamicStatement).filter(
+                DynamicStatement.id == statement_id
+            ).first()
+            
+            if not statement:
+                logger.warning(f"Statement {statement_id} not found for update")
+                return None
+            
+            # Update fields
+            for field, value in update_data.items():
+                if hasattr(statement, field):
+                    if field in ['widget_config', 'meta_data']:
+                        setattr(statement, field, make_json_serializable(value))
+                    else:
+                        setattr(statement, field, value)
+            
+            statement.updated_at = datetime.utcnow()
+            
+            db.commit()
+            db.refresh(statement)
+            logger.info(f"Updated statement {statement_id}")
+            return statement
+        
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to update statement {statement_id}: {e}")
+            raise DatabaseConnectionException(f"Failed to update statement: {e}")
+        finally:
+            db.close()
+
+    def delete_statement(self, statement_id: str) -> bool:
+        """Delete a statement"""
+        db = self.get_session()
+        try:
+            deleted_count = db.query(DynamicStatement).filter(
+                DynamicStatement.id == statement_id
+            ).delete()
+            
+            db.commit()
+            success = deleted_count > 0
+            
+            if success:
+                logger.info(f"Deleted statement {statement_id}")
+            else:
+                logger.warning(f"Statement {statement_id} not found for deletion")
+            
+            return success
+        
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to delete statement {statement_id}: {e}")
+            raise DatabaseConnectionException(f"Failed to delete statement: {e}")
+        finally:
+            db.close()
+
+    def bulk_create_default_statements(self, statements_data: List[Dict[str, Any]]) -> List[DynamicStatement]:
+        """Bulk create default statements for initialization"""
+        db = self.get_session()
+        try:
+            created_statements = []
+            
+            for stmt_data in statements_data:
+                # Generate ID if not provided
+                if 'id' not in stmt_data or not stmt_data['id']:
+                    from uuid import uuid4
+                    stmt_data['id'] = str(uuid4())
+                
+                db_statement = DynamicStatement(
+                    id=stmt_data['id'],
+                    domain_key=stmt_data['domain_key'],
+                    statement_text=stmt_data['statement_text'],
+                    widget=stmt_data.get('widget', 'likert'),
+                    scale_key=stmt_data.get('scale_key', 'likert_7_point'),
+                    widget_config=make_json_serializable(stmt_data.get('widget_config', {})),
+                    display_order=stmt_data.get('display_order', 0),
+                    is_required=stmt_data.get('is_required', True),
+                    is_active=stmt_data.get('is_active', True),
+                    is_default=stmt_data.get('is_default', True),
+                    meta_data=make_json_serializable(stmt_data.get('meta_data', {}))
+                )
+                
+                db.add(db_statement)
+                created_statements.append(db_statement)
+            
+            db.commit()
+            
+            # Refresh all statements
+            for statement in created_statements:
+                db.refresh(statement)
+            
+            logger.info(f"Bulk created {len(created_statements)} default statements")
+            return created_statements
+        
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to bulk create statements: {e}")
+            raise DatabaseConnectionException(f"Failed to bulk create statements: {e}")
+        finally:
+            db.close()
+
+    def reset_domain_statements(self, domain_key: str) -> bool:
+        """Delete all statements for a domain (used before resetting to defaults)"""
+        db = self.get_session()
+        try:
+            deleted_count = db.query(DynamicStatement).filter(
+                DynamicStatement.domain_key == domain_key
+            ).delete()
+            
+            db.commit()
+            logger.info(f"Deleted {deleted_count} statements for domain {domain_key}")
+            return True
+        
+        except Exception as e:
+            db.rollback()
+            logger.error(f"Failed to reset statements for domain {domain_key}: {e}")
+            raise DatabaseConnectionException(f"Failed to reset domain statements: {e}")
+        finally:
+            db.close()
+
+    def get_statement_count_by_domain(self) -> Dict[str, int]:
+        """Get statement counts grouped by domain"""
+        db = self.get_session()
+        try:
+            from sqlalchemy import func
+            
+            results = db.query(
+                DynamicStatement.domain_key,
+                func.count(DynamicStatement.id).label('count')
+            ).filter(
+                DynamicStatement.is_active == True
+            ).group_by(DynamicStatement.domain_key).all()
+            
+            return {result.domain_key: result.count for result in results}
+        
+        except Exception as e:
+            logger.error(f"Failed to get statement counts by domain: {e}")
+            raise DatabaseConnectionException(f"Failed to get statement counts: {e}")
         finally:
             db.close()

@@ -32,8 +32,8 @@ class SecurityConfig:
 pwd_context = CryptContext(
     schemes=["bcrypt"], 
     deprecated="auto",
-    bcrypt__rounds=12  # Increase rounds for better security
-)
+    bcrypt__rounds=12  
+    )
 
 class SecurityManager:
     """Handles JWT tokens and password operations"""

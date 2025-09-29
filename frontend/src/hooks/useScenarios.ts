@@ -10,7 +10,7 @@ import {
   type ScenarioResponse,
   type ScenarioCreate,
   type ScenarioUpdate 
-} from '@/services/scenariosApi'
+} from '@/services/ResilienceAPI'
 
 const RESILIENCE_DOMAINS = ['Robustness', 'Redundancy', 'Adaptability', 'Rapidity', 'PHM']
 

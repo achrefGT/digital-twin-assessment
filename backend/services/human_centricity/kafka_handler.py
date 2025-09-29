@@ -82,10 +82,8 @@ class HumanCentricityKafkaHandler:
                     print(f"DEBUG: Message value type: {type(message.value)}")
                     await self._process_message(message.value)
             except Exception as e:
-                logger.error(f"Error in consumer loop: {e}")
+                logger.error(f"Error in consumer loop: {e}", exc_info=True)
                 print(f"DEBUG: ❌ Error in consumer loop: {type(e).__name__}: {e}")
-                import traceback
-                traceback.print_exc()
                 if self.running:  # Only retry if we're still supposed to be running
                     print("DEBUG: Waiting 5 seconds before retrying...")
                     await asyncio.sleep(5)  # Wait before retrying
@@ -127,7 +125,7 @@ class HumanCentricityKafkaHandler:
                 print(f"DEBUG: Created form_submission - domain: {form_submission.domain}")
                 print(f"DEBUG: Created form_submission - assessment_id: {form_submission.assessment_id}")
             except Exception as e:
-                logger.error(f"Failed to create FormSubmissionRequest: {e}")
+                logger.error(f"Failed to create FormSubmissionRequest: {e}", exc_info=True)
                 print(f"DEBUG: FormSubmissionRequest creation failed: {e}")
                 print(f"DEBUG: Submission data that failed: {submission_data}")
                 raise
@@ -184,6 +182,7 @@ class HumanCentricityKafkaHandler:
             logger.debug("Preparing to save to database")
             print(f"DEBUG: Saving assessment {human_centricity_input.assessmentId} to database")
             
+            # Convert Pydantic models to dict for database serialization
             assessment_data = {
                 "assessment_id": human_centricity_input.assessmentId,
                 "user_id": human_centricity_input.userId,
@@ -192,19 +191,19 @@ class HumanCentricityKafkaHandler:
                 "domain_scores": result.domainScores,
                 "selected_domains": result.selectedDomains,
                 "detailed_metrics": result.detailedMetrics,
-                "raw_assessments": human_centricity_input,  # Database will handle JSON serialization
-                "metadata": human_centricity_input.metadata,  # Database will handle JSON serialization
+                "raw_assessments": human_centricity_input.dict(),  # Explicitly convert to dict
+                "metadata": human_centricity_input.meta_data if human_centricity_input.meta_data else {},
                 "submitted_at": human_centricity_input.submittedAt
             }
             logger.debug(f"Assessment data prepared: {assessment_data}")
             print(f"DEBUG: Assessment data keys: {list(assessment_data.keys())}")
-            print(f"DEBUG: Database will handle JSON serialization of Pydantic models")
+            print(f"DEBUG: Converted Pydantic models to dict for database")
             
             self.db_manager.save_assessment(assessment_data)
             logger.debug("Successfully saved to database")
             print(f"DEBUG: Successfully saved assessment {assessment_id} to database")
             
-            # Publish success event - SIMPLIFIED to match resilience structure
+            # Publish success event
             logger.debug("Publishing domain scored event")
             print(f"DEBUG: Publishing success event for assessment {assessment_id}")
             await self._publish_domain_scored_event(result)
@@ -228,11 +227,8 @@ class HumanCentricityKafkaHandler:
             await self._publish_error_event(assessment_id, "database_error", str(e))
             
         except Exception as e:
-            logger.error(f"Unexpected error processing human centricity message for assessment {assessment_id}: {e}")
+            logger.error(f"Unexpected error processing human centricity message for assessment {assessment_id}: {e}", exc_info=True)
             print(f"DEBUG: ❌ Unexpected error for {assessment_id}: {type(e).__name__}: {e}")
-            print(f"DEBUG: Error traceback: {e.__class__.__module__}.{e.__class__.__name__}")
-            import traceback
-            traceback.print_exc()
             await self._publish_error_event(assessment_id, "processing_error", str(e))
     
     def _parse_human_centricity_input(self, form_submission) -> HumanCentricityInput:
@@ -306,6 +302,8 @@ class HumanCentricityKafkaHandler:
                     if 'workload_metrics' in form_data:
                         parsed_data['workload_metrics'] = WorkloadMetrics(**form_data['workload_metrics'])
                         print(f"DEBUG: Parsed workload metrics")
+                
+                elif domain == HumanCentricityDomain.CYBERSICKNESS:
                     if 'cybersickness_responses' in form_data:
                         responses_data = form_data['cybersickness_responses']
                         parsed_data['cybersickness_responses'] = [CybersicknessResponse(**r) for r in responses_data]
@@ -321,6 +319,11 @@ class HumanCentricityKafkaHandler:
                         parsed_data['performance_metrics'] = PerformanceMetrics(**form_data['performance_metrics'])
                         print(f"DEBUG: Parsed performance metrics")
             
+            # Handle custom responses if present
+            if 'custom_responses' in form_data:
+                parsed_data['custom_responses'] = form_data['custom_responses']
+                print(f"DEBUG: Added custom responses: {list(form_data['custom_responses'].keys()) if form_data['custom_responses'] else 'None'}")
+            
             human_centricity_input = HumanCentricityInput(**parsed_data)
             
             logger.debug(f"Created HumanCentricityInput: {human_centricity_input}")
@@ -329,12 +332,10 @@ class HumanCentricityKafkaHandler:
             return human_centricity_input
             
         except Exception as e:
-            logger.error(f"Failed to parse human centricity form data: {e}")
+            logger.error(f"Failed to parse human centricity form data: {e}", exc_info=True)
             print(f"DEBUG: ❌ _parse_human_centricity_input failed: {type(e).__name__}: {e}")
             if hasattr(form_submission, '__dict__'):
                 print(f"DEBUG: form_submission details: {form_submission.__dict__}")
-            import traceback
-            traceback.print_exc()
             raise InvalidFormDataException(f"Failed to parse human centricity form data: {e}")
     
     def _detect_legacy_domains(self, form_data: Dict[str, Any]) -> Set[HumanCentricityDomain]:
@@ -348,8 +349,13 @@ class HumanCentricityKafkaHandler:
         if 'trust_transparency_responses' in form_data:
             detected_domains.add(HumanCentricityDomain.TRUST_TRANSPARENCY)
         
-        if 'workload_metrics' in form_data and 'cybersickness_responses' in form_data:
+        # Workload comfort domain (separate from cybersickness)
+        if 'workload_metrics' in form_data:
             detected_domains.add(HumanCentricityDomain.WORKLOAD_COMFORT)
+        
+        # Cybersickness as separate domain
+        if 'cybersickness_responses' in form_data:
+            detected_domains.add(HumanCentricityDomain.CYBERSICKNESS)
         
         if 'emotional_response' in form_data:
             detected_domains.add(HumanCentricityDomain.EMOTIONAL_RESPONSE)
@@ -357,15 +363,21 @@ class HumanCentricityKafkaHandler:
         if 'performance_metrics' in form_data:
             detected_domains.add(HumanCentricityDomain.PERFORMANCE)
         
+        # Handle legacy combined UX/Trust responses
+        if 'ux_trust_responses' in form_data:
+            detected_domains.add(HumanCentricityDomain.CORE_USABILITY)
+            detected_domains.add(HumanCentricityDomain.TRUST_TRANSPARENCY)
+        
+        print(f"DEBUG: Detected {len(detected_domains)} legacy domains")
         return detected_domains
     
     async def _publish_domain_scored_event(self, result: HumanCentricityResult):
-        """Publish simplified domain scored event to match resilience service structure"""
+        """Publish domain scored event"""
         try:
             logger.debug(f"Publishing domain scored event for {result.assessmentId}")
             print(f"DEBUG: _publish_domain_scored_event called - assessment_id: {result.assessmentId}")
             
-            # Create simplified event structure matching resilience service
+            # Create event structure
             event = EventFactory.create_domain_scored_event(
                 assessment_id=result.assessmentId,
                 domain="human_centricity",
@@ -378,18 +390,16 @@ class HumanCentricityKafkaHandler:
                 processing_time_ms=result.processingTimeMs
             )
             
-            logger.debug(f"Created simplified domain scored event: {event}")
-            print(f"DEBUG: Created simplified domain scored event with overall score: {result.overallScore}")
+            logger.debug(f"Created domain scored event: {event}")
+            print(f"DEBUG: Created domain scored event with overall score: {result.overallScore}")
             
             await self.producer.send(settings.human_centricity_scores_topic, event.dict())
-            logger.info(f"Published simplified domain scored event for assessment {result.assessmentId}")
-            print(f"DEBUG: ✅ Successfully published simplified domain scored event to {settings.human_centricity_scores_topic}")
+            logger.info(f"Published domain scored event for assessment {result.assessmentId}")
+            print(f"DEBUG: ✅ Successfully published domain scored event to {settings.human_centricity_scores_topic}")
             
         except Exception as e:
-            logger.error(f"Failed to publish domain scored event: {e}")
+            logger.error(f"Failed to publish domain scored event: {e}", exc_info=True)
             print(f"DEBUG: ❌ Failed to publish domain scored event: {type(e).__name__}: {e}")
-            import traceback
-            traceback.print_exc()
     
     async def _publish_error_event(self, assessment_id: Optional[str], error_type: str, error_message: str):
         """Publish error event"""
@@ -412,7 +422,5 @@ class HumanCentricityKafkaHandler:
             print(f"DEBUG: ✅ Successfully published error event to {settings.error_events_topic}")
             
         except Exception as e:
-            logger.error(f"Failed to publish error event: {e}")
+            logger.error(f"Failed to publish error event: {e}", exc_info=True)
             print(f"DEBUG: ❌ Failed to publish error event: {type(e).__name__}: {e}")
-            import traceback
-            traceback.print_exc()

@@ -208,9 +208,14 @@ async def delete_scenario(scenario_id: str = Path(..., description="Scenario ID"
 
 
 @app.post("/scenarios/reset")
-async def reset_scenarios(domain: Optional[str] = Body(None, description="Domain to reset (optional)")):
+async def reset_scenarios(request_body: Optional[Dict[str, Any]] = Body(None)):
     """Reset scenarios to defaults for a domain or all domains"""
     try:
+        # Extract domain from request body if provided
+        domain = None
+        if request_body and isinstance(request_body, dict):
+            domain = request_body.get("domain")
+        
         success = scenario_manager.reset_to_defaults(domain)
         if not success:
             raise HTTPException(

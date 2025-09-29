@@ -4,8 +4,9 @@
 -- Connect to the api_gateway database
 \c api_gateway_db;
 
--- Enable UUID extension if not already enabled
+-- Enable UUID extension and pgcrypto for proper bcrypt hashing
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS pgcrypto;
 
 -- Create users table
 CREATE TABLE IF NOT EXISTS users (
@@ -87,29 +88,129 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
--- Insert default admin user (password is 'admin123!' hashed with bcrypt)
--- Note: Change this password immediately in production!
-INSERT INTO users (
-    user_id, 
-    email, 
-    username, 
-    hashed_password, 
-    first_name, 
-    last_name, 
-    role, 
-    is_active, 
-    is_verified
-) VALUES (
-    uuid_generate_v4()::text,
-    'admin@digitaltwin.local',
-    'admin',
-    '$2b$12$LQv3c1yqBWVHxkd0LHAkCOYz6TtxMQJqhN8/LewD5Q1YiB7uPIAb6', -- admin123!
-    'System',
-    'Administrator',
-    'admin',
-    TRUE,
-    TRUE
-) ON CONFLICT (email) DO NOTHING;
+-- Create admin user management function (for use by FastAPI)
+CREATE OR REPLACE FUNCTION create_admin_with_hash(
+    p_email VARCHAR(255),
+    p_username VARCHAR(255), 
+    p_password_hash VARCHAR(255),
+    p_first_name VARCHAR(100) DEFAULT 'System',
+    p_last_name VARCHAR(100) DEFAULT 'Administrator'
+)
+RETURNS TABLE(success BOOLEAN, user_id VARCHAR(255), message TEXT)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_user_id VARCHAR(255);
+    v_existing_user_id VARCHAR(255);
+    v_action TEXT;
+BEGIN
+    -- Check if user already exists
+    SELECT users.user_id INTO v_existing_user_id
+    FROM users 
+    WHERE users.email = p_email OR users.username = p_username;
+    
+    IF v_existing_user_id IS NOT NULL THEN
+        -- Update existing user
+        UPDATE users 
+        SET hashed_password = p_password_hash,
+            updated_at = CURRENT_TIMESTAMP,
+            is_active = TRUE,
+            is_verified = TRUE,
+            role = 'admin'
+        WHERE users.user_id = v_existing_user_id;
+        
+        v_user_id := v_existing_user_id;
+        v_action := 'updated';
+    ELSE
+        -- Create new user
+        v_user_id := uuid_generate_v4()::text;
+        
+        INSERT INTO users (
+            user_id, email, username, hashed_password,
+            first_name, last_name, role, is_active, is_verified
+        ) VALUES (
+            v_user_id, p_email, p_username, p_password_hash,
+            p_first_name, p_last_name, 'admin', TRUE, TRUE
+        );
+        
+        v_action := 'created';
+    END IF;
+    
+    RETURN QUERY SELECT 
+        TRUE,
+        v_user_id,
+        format('Admin user %s successfully', v_action);
+        
+EXCEPTION
+    WHEN OTHERS THEN
+        RETURN QUERY SELECT 
+            FALSE,
+            NULL::VARCHAR(255),
+            format('Error: %s', SQLERRM);
+END;
+$$;
+
+-- Create password verification function
+CREATE OR REPLACE FUNCTION verify_user_password(
+    p_identifier VARCHAR(255), -- email or username
+    p_password VARCHAR(255)
+)
+RETURNS TABLE(
+    is_valid BOOLEAN,
+    user_id VARCHAR(255),
+    email VARCHAR(255),
+    username VARCHAR(255),
+    role VARCHAR(50)
+)
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_user RECORD;
+BEGIN
+    -- Find user by email or username
+    SELECT u.user_id, u.email, u.username, u.hashed_password, u.role, u.is_active
+    INTO v_user
+    FROM users u
+    WHERE u.email = p_identifier OR u.username = p_identifier;
+    
+    IF v_user.user_id IS NULL THEN
+        -- User not found
+        RETURN QUERY SELECT FALSE, NULL::VARCHAR, NULL::VARCHAR, NULL::VARCHAR, NULL::VARCHAR;
+        RETURN;
+    END IF;
+    
+    IF NOT v_user.is_active THEN
+        -- User is inactive
+        RETURN QUERY SELECT FALSE, v_user.user_id, v_user.email, v_user.username, v_user.role;
+        RETURN;
+    END IF;
+    
+    -- Verify password using crypt (for passwords hashed with pgcrypto)
+    IF crypt(p_password, v_user.hashed_password) = v_user.hashed_password THEN
+        -- Password is correct
+        RETURN QUERY SELECT TRUE, v_user.user_id, v_user.email, v_user.username, v_user.role;
+    ELSE
+        -- Password is incorrect
+        RETURN QUERY SELECT FALSE, v_user.user_id, v_user.email, v_user.username, v_user.role;
+    END IF;
+END;
+$$;
+
+-- Function to update user's last login timestamp
+CREATE OR REPLACE FUNCTION update_last_login(p_user_id VARCHAR(255))
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    UPDATE users 
+    SET last_login = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE user_id = p_user_id;
+    
+    RETURN FOUND;
+END;
+$$;
+
 
 -- Create a view for user information without sensitive data
 CREATE OR REPLACE VIEW user_profile AS
@@ -136,6 +237,9 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO api_gateway_user;
 -- Grant execute permission on functions
 GRANT EXECUTE ON FUNCTION cleanup_expired_refresh_tokens() TO api_gateway_user;
 GRANT EXECUTE ON FUNCTION update_updated_at_column() TO api_gateway_user;
+GRANT EXECUTE ON FUNCTION create_admin_with_hash(VARCHAR, VARCHAR, VARCHAR, VARCHAR, VARCHAR) TO api_gateway_user;
+GRANT EXECUTE ON FUNCTION verify_user_password(VARCHAR, VARCHAR) TO api_gateway_user;
+GRANT EXECUTE ON FUNCTION update_last_login(VARCHAR) TO api_gateway_user;
 
 -- Add some useful comments
 COMMENT ON TABLE users IS 'User accounts for authentication and authorization';
@@ -145,11 +249,14 @@ COMMENT ON COLUMN users.hashed_password IS 'Bcrypt hashed password';
 COMMENT ON COLUMN users.meta_data IS 'Additional user metadata as JSON';
 COMMENT ON COLUMN refresh_tokens.token_hash IS 'SHA256 hash of the refresh token';
 COMMENT ON FUNCTION cleanup_expired_refresh_tokens() IS 'Removes expired and revoked refresh tokens';
+COMMENT ON FUNCTION create_admin_with_hash IS 'Creates or updates admin user with bcrypt hash from FastAPI';
+COMMENT ON FUNCTION verify_user_password IS 'Verifies user password for authentication';
+COMMENT ON FUNCTION update_last_login IS 'Updates user last login timestamp';
 
 -- Print completion message
 DO $$
 BEGIN
-    RAISE NOTICE 'Authentication tables created successfully in api_gateway_db';
-    RAISE NOTICE 'Default admin user created with email: admin@digitaltwin.local';
-    RAISE NOTICE 'IMPORTANT: Change the default admin password immediately in production!';
+    RAISE NOTICE 'Authentication tables and functions created successfully in api_gateway_db';
+    RAISE NOTICE 'Admin user will be created by FastAPI application on startup';
+    RAISE NOTICE 'Check FastAPI logs for admin credentials after container starts';
 END $$;

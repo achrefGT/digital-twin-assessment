@@ -11,7 +11,7 @@ from fastapi.responses import JSONResponse
 from .config import settings
 from .database import DatabaseManager
 from .kafka_service import KafkaService
-from .routers import assessments, health, websockets
+from .routers import assessments, health, websockets, admin
 from .auth.router import router as auth_router
 from .exceptions import create_http_exception
 from shared.models.exceptions import DigitalTwinAssessmentException
@@ -19,7 +19,15 @@ from .dependencies import get_db_manager, get_kafka_service
 from .websocket_service import connection_manager
 from .weighting_service import WeightingService
 
+import os
+import asyncpg
+from passlib.context import CryptContext
 
+pwd_context = CryptContext(
+    schemes=["bcrypt"], 
+    deprecated="auto",
+    bcrypt__rounds=12  
+    )
 
 # Setup logging
 logging.basicConfig(
@@ -29,9 +37,62 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
+async def ensure_admin_user():
+    """Create admin user if it doesn't exist or update password"""
+    try:
+        # Database connection using your existing database settings
+        conn = await asyncpg.connect(
+            host=os.getenv("DB_HOST", "localhost"),
+            port=int(os.getenv("DATABASE_PORT", 5432)),
+            database=os.getenv("AUTH_DB_NAME", "api_gateway_db"),
+            user=os.getenv("AUTH_DB_USER", "api_gateway_user"),
+            password=os.getenv("DB_PASSWORD")
+        )
+        
+        # Admin configuration from environment
+        admin_email = os.getenv("ADMIN_EMAIL", "admin@digitaltwin.local")
+        admin_username = os.getenv("ADMIN_USERNAME", "admin")
+        admin_password = os.getenv("ADMIN_PASSWORD", "admin123!")
+        
+        # Generate proper bcrypt hash
+        password_hash = pwd_context.hash(admin_password)
+        
+        # Create or update admin user using the function from SQL script
+        result = await conn.fetchrow(
+            "SELECT * FROM create_admin_with_hash($1, $2, $3, $4, $5)",
+            admin_email, admin_username, password_hash, "System", "Administrator"
+        )
+        
+        if result and result['success']:
+            logger.info(f"🔐 Admin user: {result['message']}")
+            logger.info(f"   Login: {admin_username} / {admin_password}")
+            
+            # Verify the password works
+            user_check = await conn.fetchrow(
+                "SELECT hashed_password FROM users WHERE username = $1 AND role = 'admin'",
+                admin_username
+            )
+            
+            if user_check and pwd_context.verify(admin_password, user_check['hashed_password']):
+                logger.info("✅ Admin login verification: SUCCESS")
+            else:
+                logger.warning("⚠️  Admin login verification: FAILED")
+                
+        else:
+            logger.error(f"❌ Failed to create admin: {result['message'] if result else 'Unknown error'}")
+        
+        await conn.close()
+        
+    except Exception as e:
+        logger.error(f"❌ Admin user setup error: {e}")
+        # If the function doesn't exist yet (edge case), create it
+        if "function create_admin_with_hash does not exist" in str(e).lower():
+            logger.warning("Admin function not found, this might be a timing issue with database initialization")
+
+# Your lifespan function remains the same
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager with WebSocket support"""
+    """Application lifespan manager with WebSocket support and admin user creation"""
     # Startup
     logger.info("Starting API Gateway with real-time capabilities...")
     
@@ -43,6 +104,13 @@ async def lifespan(app: FastAPI):
         # Create database tables
         db_manager.create_tables()
         logger.info("Database tables initialized")
+
+        # Small delay to ensure database initialization is complete
+        await asyncio.sleep(1)
+
+        # Create admin user
+        logger.info("Setting up admin user...")
+        await ensure_admin_user()
 
         # Initialize weighting service
         weighting_service = WeightingService()
@@ -59,7 +127,7 @@ async def lifespan(app: FastAPI):
         # Initialize WebSocket connection manager
         app.state.connection_manager = connection_manager
         
-        logger.info("API Gateway started successfully with real-time features")
+        logger.info("API Gateway started successfully with real-time features and admin user")
         
         # Store task for cleanup
         app.state.consumer_task = consumer_task
@@ -71,7 +139,7 @@ async def lifespan(app: FastAPI):
         raise
     
     finally:
-        # Shutdown
+        # Shutdown (your existing shutdown code remains the same)
         logger.info("Shutting down API Gateway...")
         try:
             # Cancel consumer task with timeout
@@ -93,6 +161,7 @@ async def lifespan(app: FastAPI):
             logger.info("API Gateway shutdown complete")
         except Exception as e:
             logger.error(f"Error during shutdown: {e}")
+            
 
 async def close_websocket_connections(connection_manager):
     """Gracefully close all WebSocket connections"""
@@ -206,6 +275,7 @@ app.include_router(assessments.router)
 app.include_router(health.router)
 app.include_router(websockets.router, prefix="/api")
 app.include_router(auth_router)
+app.include_router(admin.router)
 
 @app.get("/")
 async def root():

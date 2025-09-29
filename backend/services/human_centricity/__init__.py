@@ -14,7 +14,6 @@ from .models import (
     WorkloadMetrics,
     EmotionalResponse,
     PerformanceMetrics,
-    ASSESSMENT_STATEMENTS
 )
 
 from .score import calculate_human_centricity_score_with_domains as calculate_human_centricity_score
@@ -30,7 +29,6 @@ __all__ = [
     "WorkloadMetrics",
     "EmotionalResponse",
     "PerformanceMetrics",
-    "ASSESSMENT_STATEMENTS",
     "calculate_human_centricity_score",
     "settings"
 ]

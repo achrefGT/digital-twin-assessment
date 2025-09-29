@@ -6,6 +6,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/auth/AuthProvider";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { ProtectedAdminRoute } from '@/components/admin/ProtectedAdminRoute';
 import Home from "./pages/Home";
 import Assessment from "./pages/Assessment";
 import AssessmentsListPage from "./pages/AssessmentsListPage";
@@ -14,6 +15,13 @@ import Login from "./pages/Login";
 import Profile from "./pages/Profile";
 import NotFound from "./pages/NotFound";
 import { createQueryClient } from "@/services/assessmentApi";
+
+// Admin imports
+import AdminDashboardPage from '@/pages/admin/index';
+import SustainabilityPage from '@/pages/admin/sustainability';
+import ResiliencePage from '@/pages/admin/resilience';
+import HumanCentricityPage from '@/pages/admin/human-centricity';
+import SystemPage from '@/pages/admin/system';
 
 // Create the query client instance with enhanced configuration for assessments
 const queryClient = createQueryClient();
@@ -157,18 +165,18 @@ const App = () => {
                   } 
                 />
                 
-                {/* Admin Only Routes */}
-                <Route 
-                  path="/admin/*" 
-                  element={
-                    <ProtectedRoute requiredRole="admin">
-                      <div className="p-8 text-center">
-                        <h1 className="text-2xl font-bold">Admin Panel</h1>
-                        <p className="text-gray-600 mt-2">Admin functionality coming soon...</p>
-                      </div>
-                    </ProtectedRoute>
-                  } 
-                />
+                {/* Admin routes */}
+                <Route path="/admin/*" element={
+                  <ProtectedAdminRoute>
+                    <Routes>
+                      <Route index element={<AdminDashboardPage />} />
+                      <Route path="sustainability" element={<SustainabilityPage />} />
+                      <Route path="resilience" element={<ResiliencePage />} />
+                      <Route path="human-centricity" element={<HumanCentricityPage />} />
+                      <Route path="system" element={<SystemPage />} />
+                    </Routes>
+                  </ProtectedAdminRoute>
+                } />
                 
                 {/* Assessor Only Routes */}
                 <Route 

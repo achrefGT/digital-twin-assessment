@@ -1,6 +1,6 @@
 import os
 from typing import List, Union
-from pydantic import field_validator
+from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 from shared.kafka_utils import KafkaConfig
@@ -80,10 +80,14 @@ class Settings(BaseSettings):
     service_name: str = "api-gateway"
 
     # Auth settings
-    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY", "your-secret-key-change-in-production")
+    jwt_secret_key: str = os.getenv("JWT_SECRET_KEY")
     jwt_algorithm: str = os.getenv("JWT_ALGORITHM", "HS256")
     access_token_expire_minutes: int = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
     refresh_token_expire_days: int = int(os.getenv("REFRESH_TOKEN_EXPIRE_DAYS", "7"))
+    
+    # Admin proxy settings
+    admin_proxy_timeout: float = Field(default=30.0, env="ADMIN_PROXY_TIMEOUT")
+    admin_proxy_retries: int = Field(default=3, env="ADMIN_PROXY_RETRIES")
         
         
     @field_validator('cors_origins', mode='before')

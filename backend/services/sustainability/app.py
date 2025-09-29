@@ -234,9 +234,14 @@ async def delete_criterion(criterion_id: str = Path(..., description="Criterion 
 
 
 @app.post("/criteria/reset")
-async def reset_criteria(domain: Optional[str] = Body(None, description="Domain to reset (optional)")):
+async def reset_criteria(request_body: Optional[Dict[str, Any]] = Body(None)):
     """Reset criteria to defaults for a domain or all domains"""
     try:
+        # Extract domain from request body if provided
+        domain = None
+        if request_body and isinstance(request_body, dict):
+            domain = request_body.get("domain")
+        
         success = criterion_manager.reset_to_defaults(domain)
         if not success:
             raise HTTPException(

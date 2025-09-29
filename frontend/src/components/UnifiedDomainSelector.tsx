@@ -8,12 +8,13 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { PaginatedForm } from "./PaginatedForm"
 import { useScenarios } from "@/hooks/useScenarios"
 import { useSustainability } from "@/hooks/useSustainability"
+import { useHumanCentricity } from "@/hooks/useHumanCentricity"
 
 // Step getter function map
 const stepGetters = {
   sustainability: () => import("./forms/SustainabilityFormSteps").then(m => m.getSustainabilitySteps()),
   // Remove the static resilience import - we'll handle this dynamically
-  human_centricity: () => import("./forms/HumanCentricityFormSteps").then(m => m.getHumanCentricitySteps()),
+  human_centricity: () => import("./forms/DynamicHumanCentricityFormSteps").then(m => m.getHumanCentricitySteps()),
 } as const
 
 // Assessment type configuration
@@ -69,9 +70,10 @@ export default function UnifiedDomainSelector({
   const [selectedDomains, setSelectedDomains] = React.useState<Set<string>>(new Set())
   const [started, setStarted] = React.useState(false)
   
-  // ALWAYS call both hooks to maintain hook order - this is crucial for Rules of Hooks
+  // ALWAYS call all hooks to maintain hook order - this is crucial for Rules of Hooks
   const resilienceHook = useScenarios()
   const sustainabilityHook = useSustainability()
+  const humanCentricityHook = useHumanCentricity()
   
   const config = assessmentConfig[assessmentType]
 
@@ -128,6 +130,29 @@ export default function UnifiedDomainSelector({
             throw new Error('No sustainability steps available')
           }
           
+        } else if (assessmentType === 'human_centricity') {
+          // Handle human centricity assessment with dynamic structure
+          if (!humanCentricityHook.isReady) {
+            // Wait for structure to load
+            if (humanCentricityHook.error) {
+              throw new Error(`Failed to load human centricity structure: ${humanCentricityHook.error.message}`)
+            }
+            return // Still loading structure
+          }
+          
+          // Import human centricity steps and get dynamic steps
+          const humanCentricityModule = await import("./forms/DynamicHumanCentricityFormSteps")
+          
+          // Use dynamic steps if available
+          if (humanCentricityModule.getDynamicHumanCentricitySteps && humanCentricityHook.availableDomains?.length > 0) {
+            steps = humanCentricityModule.getDynamicHumanCentricitySteps(humanCentricityHook.availableDomains)
+          } else if (humanCentricityModule.getHumanCentricitySteps) {
+            // Fallback to static steps
+            steps = humanCentricityModule.getHumanCentricitySteps()
+          } else {
+            throw new Error('No human centricity steps available')
+          }
+          
         } else {
           // Handle other assessment types normally
           const stepGetter = stepGetters[assessmentType as keyof typeof stepGetters]
@@ -159,7 +184,10 @@ export default function UnifiedDomainSelector({
     resilienceHook.availableDomains?.length,
     sustainabilityHook.isReady,
     sustainabilityHook.error?.message,
-    sustainabilityHook.availableDomains?.length
+    sustainabilityHook.availableDomains?.length,
+    humanCentricityHook.isReady,
+    humanCentricityHook.error?.message,
+    humanCentricityHook.availableDomains?.length
   ])
 
   // Build the steps array for PaginatedForm - MOVED BEFORE EARLY RETURNS
@@ -172,10 +200,14 @@ export default function UnifiedDomainSelector({
         component: React.createElement(step.component as any, {
           // Pass scenarios data to components that need it
           ...(assessmentType === 'resilience' && { scenariosData: resilienceHook.scenarios }),
-          ...(assessmentType === 'sustainability' && { scenariosData: sustainabilityHook.scenarios })
+          ...(assessmentType === 'sustainability' && { scenariosData: sustainabilityHook.scenarios }),
+          ...(assessmentType === 'human_centricity' && { 
+            structureData: humanCentricityHook.structure, 
+            scalesData: humanCentricityHook.scales 
+          })
         })
       }))
-  }, [allSteps, selectedDomains, assessmentType, resilienceHook.scenarios, sustainabilityHook.scenarios])
+  }, [allSteps, selectedDomains, assessmentType, resilienceHook.scenarios, sustainabilityHook.scenarios, humanCentricityHook.structure, humanCentricityHook.scales])
 
   const domainTitles = allSteps.map(s => s.title)
 
@@ -210,7 +242,8 @@ export default function UnifiedDomainSelector({
   // Determine loading state based on assessment type
   const isLoadingAny = loading || 
     (assessmentType === 'resilience' && resilienceHook.isLoading) ||
-    (assessmentType === 'sustainability' && sustainabilityHook.isLoading)
+    (assessmentType === 'sustainability' && sustainabilityHook.isLoading) ||
+    (assessmentType === 'human_centricity' && humanCentricityHook.isLoading)
   
   if (isLoadingAny) {
     return (
@@ -236,7 +269,7 @@ export default function UnifiedDomainSelector({
           </CardHeader>
           <CardContent className="space-y-6">
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-              {[1,2,3,4,5].map(i => (
+              {[1,2,3,4,5,6].map(i => (
                 <Skeleton key={i} className="h-16 rounded-xl" />
               ))}
             </div>
@@ -252,7 +285,8 @@ export default function UnifiedDomainSelector({
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
             <span className="text-sm text-gray-600">
               {assessmentType === 'resilience' ? 'Loading resilience scenarios...' : 
-               assessmentType === 'sustainability' ? 'Loading sustainability scenarios...' : 
+               assessmentType === 'sustainability' ? 'Loading sustainability scenarios...' :
+               assessmentType === 'human_centricity' ? 'Loading human centricity structure...' :
                'Loading domains...'}
             </span>
           </div>
@@ -264,7 +298,8 @@ export default function UnifiedDomainSelector({
   // Determine error state based on assessment type
   const currentError = error || 
     (assessmentType === 'resilience' && resilienceHook.error) ||
-    (assessmentType === 'sustainability' && sustainabilityHook.error)
+    (assessmentType === 'sustainability' && sustainabilityHook.error) ||
+    (assessmentType === 'human_centricity' && humanCentricityHook.error)
 
   // Error state
   if (currentError) {
@@ -326,6 +361,8 @@ export default function UnifiedDomainSelector({
               ? 'No resilience scenarios are currently configured. Please contact your administrator.'
               : assessmentType === 'sustainability'
               ? 'No sustainability scenarios are currently configured. Please contact your administrator.'
+              : assessmentType === 'human_centricity'
+              ? 'No human centricity domains are currently configured. Please contact your administrator.'
               : 'No domains are available for this assessment type.'
             }
           </AlertDescription>
@@ -334,9 +371,10 @@ export default function UnifiedDomainSelector({
     )
   }
 
-  // Get the appropriate scenarios for the info alert
-  const currentScenarios = assessmentType === 'resilience' ? resilienceHook.scenarios : 
-                          assessmentType === 'sustainability' ? sustainabilityHook.scenarios : null
+  // Get the appropriate data for the info alert
+  const currentData = assessmentType === 'resilience' ? resilienceHook.scenarios : 
+                     assessmentType === 'sustainability' ? sustainabilityHook.scenarios :
+                     assessmentType === 'human_centricity' ? humanCentricityHook.structure : null
 
   return (
     <div className="max-w-4xl mx-auto space-y-8">
@@ -352,27 +390,6 @@ export default function UnifiedDomainSelector({
           </p>
         </div>
       </div>
-
-      {/* Assessment-specific info */}
-      {assessmentType === 'resilience' && currentScenarios && (
-        <Alert className="max-w-2xl mx-auto">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Using dynamic scenario configuration with {Object.keys(currentScenarios.scenarios).length} domains 
-            and {Object.values(currentScenarios.scenarios).reduce((sum, arr) => sum + arr.length, 0)} total scenarios.
-          </AlertDescription>
-        </Alert>
-      )}
-
-      {assessmentType === 'sustainability' && currentScenarios && (
-        <Alert className="max-w-2xl mx-auto">
-          <AlertCircle className="h-4 w-4" />
-          <AlertDescription>
-            Using dynamic sustainability configuration with {Object.keys(currentScenarios.scenarios).length} domains 
-            and {Object.values(currentScenarios.scenarios).reduce((sum, domainData) => sum + Object.keys(domainData.criteria).length, 0)} total criteria.
-          </AlertDescription>
-        </Alert>
-      )}
 
       {/* Main Selection Card */}
       <Card className="border-0 shadow-xl bg-gradient-to-br from-white via-gray-50 to-gray-100">
@@ -476,7 +493,10 @@ export default function UnifiedDomainSelector({
         <div className={`text-center p-4 rounded-xl ${config.accentColor} ${config.borderColor} border`}>
           <p className={`text-sm font-medium ${config.textColor}`}>
             Your assessment will include {selectedDomains.size} domain{selectedDomains.size !== 1 ? 's' : ''} with approximately{' '}
-            {selectedDomains.size * 3}-{selectedDomains.size * 5} questions
+            {assessmentType === 'human_centricity' 
+              ? `${selectedDomains.size * 2}-${selectedDomains.size * 8}` 
+              : `${selectedDomains.size * 3}-${selectedDomains.size * 5}`
+            } questions
           </p>
         </div>
       )}
