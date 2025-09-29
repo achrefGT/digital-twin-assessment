@@ -26,6 +26,7 @@ import {
   Eye,
   Check,
   Trash2,
+  Server, // Added for system name icon
 } from 'lucide-react';
 import { useAuth } from '@/auth';
 import {
@@ -421,6 +422,16 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
                         <span>Assessment #{assessment.assessment_id.slice(0,8)}</span>
                         {isSwitching === assessment.assessment_id && <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin ml-2" />}
                       </CardTitle>
+
+                      {/* System Name Display */}
+                      {assessment.system_name && (
+                        <div className="flex items-center gap-2 mb-3">
+                          <Server className="w-4 h-4 text-gray-500" />
+                          <span className="text-sm text-gray-700 font-medium truncate" title={assessment.system_name}>
+                            {assessment.system_name}
+                          </span>
+                        </div>
+                      )}
 
                       <div className="mt-1">
                         <StatusPill status={assessment.status} />

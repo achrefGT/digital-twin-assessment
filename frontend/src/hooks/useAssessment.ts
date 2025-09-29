@@ -262,6 +262,7 @@ const clearAssessmentData = (assessmentId?: string) => {
 
 export const useAssessment = () => {
   const [currentAssessment, setCurrentAssessment] = useState<Assessment | null>(null)
+  const [assessmentSnapshot, setAssessmentSnapshot] = useState<Assessment | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const { token, isAuthenticated, user } = useAuth()
   const queryClient = useQueryClient()
@@ -776,11 +777,85 @@ export const useAssessment = () => {
     }
   }, [currentAssessment, isAuthenticated, token, fetchDomainScores, convertDomainScoresToAssessment, invalidateAssessmentQueries])
 
+  // Create a snapshot before optimistic updates
+  const createSnapshot = useCallback(() => {
+    if (currentAssessment) {
+      setAssessmentSnapshot(JSON.parse(JSON.stringify(currentAssessment)))
+      debugLog('Created assessment snapshot', currentAssessment.assessment_id)
+    }
+  }, [currentAssessment])
+
+  // Rollback to snapshot
+  const rollbackToSnapshot = useCallback(() => {
+    if (assessmentSnapshot) {
+      setCurrentAssessment(assessmentSnapshot)
+      persistAssessmentData(assessmentSnapshot)
+      debugLog('Rolled back to snapshot', assessmentSnapshot.assessment_id)
+      
+      // Clear snapshot after rollback
+      setAssessmentSnapshot(null)
+      return true
+    }
+    debugLog('No snapshot available for rollback')
+    return false
+  }, [assessmentSnapshot])
+
+  // Clear snapshot (call after successful update)
+  const clearSnapshot = useCallback(() => {
+    setAssessmentSnapshot(null)
+  }, [])
+
+  // Modified updateProgress with snapshot support
+  const updateProgressWithSnapshot = useCallback((
+    progressData: Partial<AssessmentProgress>,
+    createSnapshotFirst: boolean = false
+  ) => {
+    if (!currentAssessment) {
+      debugLog('Cannot update progress - no current assessment')
+      return
+    }
+    
+    if (createSnapshotFirst) {
+      createSnapshot()
+    }
+    
+    debugLog('Updating progress for:', currentAssessment.assessment_id, progressData)
+    
+    const mergedProgress = {
+      ...currentAssessment.progress,
+      ...progressData,
+      domain_data: {
+        ...(currentAssessment.progress?.domain_data || {}),
+        ...(progressData?.domain_data || {})
+      }
+    }
+    
+    if (mergedProgress.domain_scores) {
+      mergedProgress.summary_statistics = {
+        ...calculateSummaryStatistics(mergedProgress.domain_scores),
+        ...mergedProgress.summary_statistics
+      }
+    }
+    
+    const updatedAssessment = {
+      ...currentAssessment,
+      progress: mergedProgress
+    }
+    
+    setCurrentAssessment(updatedAssessment)
+    persistAssessmentData(updatedAssessment, progressData)
+    invalidateAssessmentQueries()
+  }, [currentAssessment, invalidateAssessmentQueries, createSnapshot])
+
   return {
     currentAssessment,
     isLoading,
     updateAssessment,
     updateProgress,
+    updateProgressWithSnapshot,
+    createSnapshot,
+    rollbackToSnapshot,
+    clearSnapshot,
     createAssessment,
     clearAssessment,
     ensureAssessment,

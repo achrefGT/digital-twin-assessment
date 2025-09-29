@@ -5,8 +5,8 @@ import logging
 
 from .models import (
     StatementCreate, StatementUpdate, StatementResponse,
-    HumanCentricityDomain, FIXED_DOMAINS, DEFAULT_STATEMENTS, 
-    ASSESSMENT_SCALES, ASSESSMENT_STRUCTURE, StatementManager as ModelStatementManager,
+    HumanCentricityDomain, FIXED_DOMAINS, DEFAULT_STATEMENTS,
+    ASSESSMENT_STRUCTURE, StatementManager as ModelStatementManager,
     StatementType
 )
 from .database import DatabaseManager, DynamicStatement
@@ -19,7 +19,6 @@ class StatementManager:
     
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
-        self.scales = ASSESSMENT_SCALES
         self.fixed_domains = FIXED_DOMAINS
         self.default_statements = DEFAULT_STATEMENTS
         self._ensure_dynamic_tables()

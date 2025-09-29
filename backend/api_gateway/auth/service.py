@@ -306,9 +306,7 @@ class AuthService:
         """Get user scopes based on role"""
         base_scopes = ["read:profile", "write:profile"]
         
-        if user.role == UserRole.ADMIN.value:
+        if user.role == UserRole.ADMIN.value or user.role == UserRole.SUPER_ADMIN.value:
             return base_scopes + ["admin:all", "read:users", "write:users"]
-        elif user.role == UserRole.ASSESSOR.value:
-            return base_scopes + ["read:assessments", "write:assessments"]
         else:
             return base_scopes

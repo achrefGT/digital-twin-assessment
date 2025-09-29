@@ -12,7 +12,7 @@ from shared.health import create_health_response
 from shared.models.exceptions import AssessmentNotFoundException
 from .models import (
     HumanCentricityStructure, HumanCentricityDomain, StatementCreate, StatementUpdate, 
-    StatementResponse, ASSESSMENT_SCALES, ASSESSMENT_STRUCTURE, PERFORMANCE_CONSTANTS,
+    StatementResponse, ASSESSMENT_STRUCTURE, PERFORMANCE_CONSTANTS,
     FIXED_DOMAINS, DEFAULT_STATEMENTS
 )
 from .database import DatabaseManager, make_json_serializable
@@ -414,7 +414,6 @@ async def get_legacy_assessment_structure():
         
         return HumanCentricityStructure(
             domains={"legacy_mode": "This endpoint provides backward compatibility"},
-            scales=ASSESSMENT_SCALES
         )
     except Exception as e:
         logger.error(f"Error retrieving legacy assessment structure: {e}")

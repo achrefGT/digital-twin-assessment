@@ -85,7 +85,7 @@ async def get_assessment(
     if current_user:
         if (assessment.user_id and 
             assessment.user_id != current_user.user_id and 
-            current_user.role not in ["admin", "assessor"]):
+            current_user.role not in ["admin", "super_admin"]):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"
@@ -115,7 +115,7 @@ async def submit_form(
     if current_user:
         if (progress.user_id and 
             progress.user_id != current_user.user_id and 
-            current_user.role not in ["admin", "assessor"]):
+            current_user.role not in ["admin", "super_admin"]):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"
@@ -190,10 +190,10 @@ async def get_user_assessments(
 ):
     """Get assessments for a user with optional status filtering"""
     
-    # Authorization check - users can only see their own assessments unless admin/assessor
+    # Authorization check - users can only see their own assessments unless admin/super_admin
     if current_user:
         if (user_id != current_user.user_id and 
-            current_user.role not in ["admin", "assessor"]):
+            current_user.role not in ["admin", "super_admin"]):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"
@@ -244,7 +244,7 @@ async def get_assessment_progress(
     if current_user:
         if (progress.user_id and 
             progress.user_id != current_user.user_id and 
-            current_user.role not in ["admin", "assessor"]):
+            current_user.role not in ["admin", "super_admin"]):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"
@@ -255,7 +255,7 @@ async def get_assessment_progress(
 
 @router.patch("/{assessment_id}/status")
 @handle_exceptions
-@require_roles("admin", "assessor")  # Only admins and assessors can change status
+@require_roles("admin", "super_admin")  # Only admins and super_admin can change status
 async def update_assessment_status(
     assessment_id: str,
     new_status: AssessmentStatus,
@@ -263,7 +263,7 @@ async def update_assessment_status(
     kafka_service: KafkaService = Depends(get_kafka_service),
     current_user: TokenData = Depends(get_current_user_required)
 ):
-    """Update assessment status (admin/assessor endpoint) with event publishing"""
+    """Update assessment status (admin/super_admin endpoint) with event publishing"""
     
     db_assessment = db_manager.get_assessment(assessment_id)
     progress = db_assessment.to_progress_model()
@@ -331,7 +331,7 @@ async def delete_assessment(
     if current_user:
         if (assessment.user_id and 
             assessment.user_id != current_user.user_id and 
-            current_user.role not in ["admin", "assessor"]):
+            current_user.role not in ["admin", "super_admin"]):
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="Access denied"

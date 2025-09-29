@@ -1,7 +1,7 @@
 import React from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { AdminSection } from '@/types/admin';
-import { Sparkles, ArrowLeft, Settings, Activity, Leaf, Shield, Users, Grid3x3 } from 'lucide-react';
+import { Sparkles, ArrowLeft, Settings, Activity, Leaf, Shield, Users, Grid3x3, UserCog, Heart } from 'lucide-react';
 
 interface AdminSidebarProps {
   currentSection?: AdminSection;
@@ -20,6 +20,12 @@ export function AdminSidebar({ currentSection, user }: AdminSidebarProps) {
       icon: <Grid3x3 className="w-5 h-5" />
     },
     {
+      key: 'users' as AdminSection,
+      label: 'User Management',
+      href: '/admin/users',
+      icon: <UserCog className="w-5 h-5" />
+    },
+    {
       key: 'sustainability' as AdminSection,
       label: 'Sustainability',
       href: '/admin/sustainability',
@@ -35,7 +41,7 @@ export function AdminSidebar({ currentSection, user }: AdminSidebarProps) {
       key: 'human-centricity' as AdminSection,
       label: 'Human Centricity',
       href: '/admin/human-centricity',
-      icon: <Users className="w-5 h-5" />
+      icon: <Heart className="w-5 h-5" />
     }
   ];
 

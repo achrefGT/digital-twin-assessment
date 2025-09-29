@@ -3,7 +3,7 @@ from fastapi.responses import JSONResponse
 from typing import Optional, Dict, Any, List
 import httpx
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from ..dependencies import get_current_user_required
 from ..auth.models import TokenData, UserRole
@@ -11,9 +11,11 @@ from ..config import settings
 
 logger = logging.getLogger(__name__)
 
+
 async def require_admin(current_user: TokenData = Depends(get_current_user_required)) -> TokenData:
     """Require admin role"""
-    if current_user.role != UserRole.ADMIN.value:
+    adminRoles = [UserRole.ADMIN.value, UserRole.SUPER_ADMIN.value]
+    if current_user.role not in adminRoles :
         raise HTTPException(
             status_code=403,
             detail="Admin access required"
@@ -444,3 +446,229 @@ async def get_admin_dashboard(current_user: TokenData = Depends(require_admin)):
     except Exception as e:
         logger.error(f"Error generating admin dashboard: {e}")
         raise HTTPException(status_code=500, detail="Failed to generate dashboard")
+    
+# =============================================================================
+# Users Management ENDPOINTS
+# =============================================================================
+
+@router.get("/users")
+async def get_all_users(
+    page: int = Query(1, ge=1),
+    limit: int = Query(20, ge=1, le=100),
+    role: Optional[str] = Query(None),
+    search: Optional[str] = Query(None),
+    current_user: TokenData = Depends(require_admin)
+):
+    """Admin: Get all users with pagination and filtering"""
+    from ..auth.service import AuthService
+    from ..database import DatabaseManager
+    from sqlalchemy import or_, and_
+    from ..auth.models import User
+    
+    db_manager = DatabaseManager()
+    
+    with db_manager.get_session() as session:
+        query = session.query(User)
+        
+        # Apply role filter
+        if role:
+            query = query.filter(User.role == role)
+        
+        # Apply search filter
+        if search:
+            search_term = f"%{search.lower()}%"
+            query = query.filter(or_(
+                User.username.ilike(search_term),
+                User.email.ilike(search_term),
+                User.first_name.ilike(search_term),
+                User.last_name.ilike(search_term)
+            ))
+        
+        # Get total count
+        total = query.count()
+        
+        # Apply pagination
+        offset = (page - 1) * limit
+        users = query.offset(offset).limit(limit).all()
+        
+        # Convert to response format
+        user_data = []
+        for user in users:
+            user_data.append({
+                "user_id": user.user_id,
+                "username": user.username,
+                "email": user.email,
+                "first_name": user.first_name,
+                "last_name": user.last_name,
+                "role": user.role,
+                "is_active": user.is_active,
+                "is_verified": user.is_verified,
+                "created_at": user.created_at.isoformat() if user.created_at else None,
+                "last_login": user.last_login.isoformat() if user.last_login else None
+            })
+        
+        return {
+            "users": user_data,
+            "pagination": {
+                "page": page,
+                "limit": limit,
+                "total": total,
+                "pages": (total + limit - 1) // limit
+            },
+            "filters": {
+                "role": role,
+                "search": search
+            }
+        }
+
+@router.put("/users/{user_id}/role")
+async def update_user_role(
+    user_id: str = Path(...),
+    role_data: Dict[str, str] = Body(...),
+    current_user: TokenData = Depends(require_admin)
+):
+    """Admin: Update user role (promote/demote)"""
+    from ..auth.service import AuthService
+    from ..database import DatabaseManager
+    from ..auth.models import User, UserRole
+    
+    # Validate role
+    new_role = role_data.get("role")
+    if new_role not in [role.value for role in UserRole]:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Invalid role. Must be one of: {[role.value for role in UserRole]}"
+        )
+    
+    # Prevent self-demotion from admin
+    if current_user.user_id == user_id and new_role != UserRole.ADMIN.value:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot remove your own admin privileges"
+        )
+    
+    db_manager = DatabaseManager()
+    
+    with db_manager.get_session() as session:
+        user = session.query(User).filter(User.user_id == user_id).first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        old_role = user.role
+        user.role = new_role
+        user.updated_at = datetime.utcnow()
+        
+        session.commit()
+        
+        logger.info(f"Admin {current_user.username} changed user {user.username} role from {old_role} to {new_role}")
+        
+        return {
+            "message": f"User role updated from {old_role} to {new_role}",
+            "user": {
+                "user_id": user.user_id,
+                "username": user.username,
+                "email": user.email,
+                "role": user.role,
+                "updated_at": user.updated_at.isoformat()
+            }
+        }
+
+@router.put("/users/{user_id}/status")
+async def update_user_status(
+    user_id: str = Path(...),
+    status_data: Dict[str, bool] = Body(...),
+    current_user: TokenData = Depends(require_admin)
+):
+    """Admin: Update user active status (enable/disable)"""
+    from ..auth.service import AuthService
+    from ..database import DatabaseManager
+    from ..auth.models import User
+    
+    is_active = status_data.get("is_active")
+    if is_active is None:
+        raise HTTPException(status_code=400, detail="is_active field is required")
+    
+    # Prevent self-deactivation
+    if current_user.user_id == user_id and not is_active:
+        raise HTTPException(
+            status_code=400,
+            detail="You cannot deactivate your own account"
+        )
+    
+    db_manager = DatabaseManager()
+    
+    with db_manager.get_session() as session:
+        user = session.query(User).filter(User.user_id == user_id).first()
+        
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+        
+        old_status = user.is_active
+        user.is_active = is_active
+        user.updated_at = datetime.utcnow()
+        
+        session.commit()
+        
+        # If deactivating, revoke all refresh tokens
+        if not is_active:
+            auth_service = AuthService(db_manager)
+            revoked_count = auth_service.revoke_all_user_tokens(user_id)
+            logger.info(f"Revoked {revoked_count} tokens for deactivated user {user.username}")
+        
+        status_text = "activated" if is_active else "deactivated"
+        logger.info(f"Admin {current_user.username} {status_text} user {user.username}")
+        
+        return {
+            "message": f"User {status_text} successfully",
+            "user": {
+                "user_id": user.user_id,
+                "username": user.username,
+                "email": user.email,
+                "is_active": user.is_active,
+                "updated_at": user.updated_at.isoformat()
+            }
+        }
+
+@router.get("/users/stats")
+async def get_user_statistics(current_user: TokenData = Depends(require_admin)):
+    """Admin: Get user statistics"""
+    from ..auth.models import User, UserRole
+    from ..database import DatabaseManager
+    from sqlalchemy import func
+    
+    db_manager = DatabaseManager()
+    
+    with db_manager.get_session() as session:
+        # Total users
+        total_users = session.query(User).count()
+        
+        # Active users
+        active_users = session.query(User).filter(User.is_active == True).count()
+        
+        # Users by role
+        role_counts = session.query(User.role, func.count(User.id)).group_by(User.role).all()
+        roles_breakdown = {role: count for role, count in role_counts}
+        
+        # Recently registered (last 30 days)
+        thirty_days_ago = datetime.utcnow() - timedelta(days=30)
+        recent_users = session.query(User).filter(
+            User.created_at >= thirty_days_ago
+        ).count()
+        
+        # Recently active (last 7 days)
+        seven_days_ago = datetime.utcnow() - timedelta(days=7)
+        recently_active = session.query(User).filter(
+            User.last_login >= seven_days_ago
+        ).count()
+        
+        return {
+            "total_users": total_users,
+            "active_users": active_users,
+            "inactive_users": total_users - active_users,
+            "roles": roles_breakdown,
+            "recent_registrations": recent_users,
+            "recently_active": recently_active,
+            "generated_at": datetime.utcnow().isoformat(),
+            "generated_by": current_user.username
+        }

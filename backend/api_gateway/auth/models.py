@@ -10,9 +10,9 @@ from uuid import uuid4
 from ..models import Base
 
 class UserRole(str, Enum):
+    SUPER_ADMIN = "super_admin"
     ADMIN = "admin"
     USER = "user"
-    ASSESSOR = "assessor"
 
 class User(Base):
     """Database model for users"""

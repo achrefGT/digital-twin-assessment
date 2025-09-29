@@ -21,7 +21,7 @@ import AdminDashboardPage from '@/pages/admin/index';
 import SustainabilityPage from '@/pages/admin/sustainability';
 import ResiliencePage from '@/pages/admin/resilience';
 import HumanCentricityPage from '@/pages/admin/human-centricity';
-import SystemPage from '@/pages/admin/system';
+import UserManagementPage from '@/pages/admin/users';
 
 // Create the query client instance with enhanced configuration for assessments
 const queryClient = createQueryClient();
@@ -173,23 +173,11 @@ const App = () => {
                       <Route path="sustainability" element={<SustainabilityPage />} />
                       <Route path="resilience" element={<ResiliencePage />} />
                       <Route path="human-centricity" element={<HumanCentricityPage />} />
-                      <Route path="system" element={<SystemPage />} />
+                      <Route path="users" element={<UserManagementPage />} />
                     </Routes>
                   </ProtectedAdminRoute>
                 } />
                 
-                {/* Assessor Only Routes */}
-                <Route 
-                  path="/assessor/*" 
-                  element={
-                    <ProtectedRoute requiredRole="assessor">
-                      <div className="p-8 text-center">
-                        <h1 className="text-2xl font-bold">Assessor Dashboard</h1>
-                        <p className="text-gray-600 mt-2">Assessor functionality coming soon...</p>
-                      </div>
-                    </ProtectedRoute>
-                  } 
-                />
                 
                 {/* Catch-all route - must be last */}
                 <Route path="*" element={<NotFound />} />

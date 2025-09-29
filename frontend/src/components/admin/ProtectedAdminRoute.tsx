@@ -6,6 +6,8 @@ interface ProtectedAdminRouteProps {
   children: React.ReactNode;
 }
 
+const isAdminish = (role: string | undefined) => ['admin', 'super_admin'].includes(role ?? '');
+
 export function ProtectedAdminRoute({ children }: ProtectedAdminRouteProps) {
   const { user, isAuthenticated, isLoading } = useAuth();
 
@@ -27,7 +29,7 @@ export function ProtectedAdminRoute({ children }: ProtectedAdminRouteProps) {
   }
 
   // Show access denied if not admin
-  if (user?.role !== 'admin') {
+  if (!isAdminish(user.role)) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-gray-50">
         <div className="max-w-md w-full bg-white rounded-lg shadow-lg p-8 text-center">

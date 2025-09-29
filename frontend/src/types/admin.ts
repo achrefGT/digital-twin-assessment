@@ -133,8 +133,8 @@ export interface StatementResponse extends BaseEntity {
 }
 
 // Navigation types
-export type AdminSection = 'dashboard' | 'sustainability' | 'resilience' | 'human-centricity' | 'system';
-
+ export type AdminSection = 'dashboard' | 'users' | 'sustainability' | 'resilience' | 'human-centricity';
+ 
 // Error types
 export interface AdminError {
   code: 'UNAUTHORIZED' | 'FORBIDDEN' | 'VALIDATION_ERROR' | 'SERVICE_ERROR';

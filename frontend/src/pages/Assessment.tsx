@@ -204,18 +204,33 @@ const Assessment = () => {
             <div className="w-16 h-16 bg-gradient-to-br from-yellow-500 to-orange-600 rounded-2xl mx-auto mb-6 flex items-center justify-center">
               <FileText className="w-8 h-8 text-white" />
             </div>
+
             <h2 className="text-2xl font-bold text-gray-900 mb-4">No Assessment Found</h2>
             <p className="text-gray-600 mb-6">
-              You need to create an assessment before completing domain-specific forms.
+              You need to create an assessment or select one before completing domain-specific forms.
             </p>
-            <Button 
-              onClick={() => navigate('/assessment')}
-              className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white"
-            >
-              Create Assessment
-            </Button>
+
+            {/* Button group */}
+            <div className="flex items-center justify-center gap-3">
+              <Button
+                onClick={() => navigate('/assessment')}
+                className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white"
+                aria-label="Create Assessment"
+              >
+                Create Assessment
+              </Button>
+
+              <Button
+                onClick={() => navigate('/assessments')}
+                className="border border-blue-200 bg-white hover:bg-blue-50 text-blue-600 font-medium"
+                aria-label="View Assessments"
+              >
+                View Assessments
+              </Button>
+            </div>
           </CardContent>
         </Card>
+
       </div>
     )
   }

@@ -116,7 +116,7 @@ BEGIN
             updated_at = CURRENT_TIMESTAMP,
             is_active = TRUE,
             is_verified = TRUE,
-            role = 'admin'
+            role = 'super_admin'
         WHERE users.user_id = v_existing_user_id;
         
         v_user_id := v_existing_user_id;
@@ -130,7 +130,7 @@ BEGIN
             first_name, last_name, role, is_active, is_verified
         ) VALUES (
             v_user_id, p_email, p_username, p_password_hash,
-            p_first_name, p_last_name, 'admin', TRUE, TRUE
+            p_first_name, p_last_name, 'super_admin', TRUE, TRUE
         );
         
         v_action := 'created';

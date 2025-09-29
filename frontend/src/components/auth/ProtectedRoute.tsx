@@ -6,7 +6,7 @@ import { Shield, Loader2 } from 'lucide-react';
 
 interface ProtectedRouteProps {
   children: ReactNode;
-  requiredRole?: 'admin' | 'user' | 'assessor';
+  requiredRole?: 'admin' | 'user' | 'super_admin';
   fallbackPath?: string;
 }
 

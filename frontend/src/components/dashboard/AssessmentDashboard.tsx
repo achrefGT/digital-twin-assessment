@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { useWebSocket, WebSocketMessage } from '@/hooks/useWebSocket'
 import { useAssessment } from '@/hooks/useAssessment'
 import { useAuth } from '@/auth'
+import { useToast } from '@/hooks/use-toast'
 import { assessmentKeys } from '@/services/assessmentApi'
 
 import { RadarScoreChart } from './RadarScoreChart'
@@ -21,7 +22,10 @@ import {
   TrendingUp,
   Shield,
   Brain,
-  Sparkles
+  Sparkles,
+  AlertTriangle,
+  CheckCircle2,
+  Clock
 } from 'lucide-react'
 
 interface AssessmentData {
@@ -68,6 +72,12 @@ interface AssessmentDashboardProps {
   assessmentId: string
 }
 
+interface PendingUpdate {
+  messageKey: string
+  timestamp: Date
+  domain: string
+}
+
 // Updated module structure with icons
 const MODULES = {
   human_centricity: {
@@ -98,20 +108,27 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
 }) => {
   const { connectionStatus, messages, subscribeToEvents } = useWebSocket(assessmentId)
   const { 
-    updateProgress, // Only used for WebSocket updates
-    currentAssessment // Used to check if this is the active assessment
+    updateProgressWithSnapshot,
+    rollbackToSnapshot,
+    clearSnapshot,
+    currentAssessment
   } = useAssessment()
   const { token, isAuthenticated } = useAuth()
+  const { toast } = useToast()
   
   const [selectedModule, setSelectedModule] = useState<string | null>(null)
   const [localAssessmentData, setLocalAssessmentData] = useState<AssessmentData | null>(null)
+  const [pendingUpdates, setPendingUpdates] = useState<Map<string, PendingUpdate>>(new Map())
+  const [processingDomains, setProcessingDomains] = useState<Set<string>>(new Set())
   const lastMessageRef = useRef<string>('')
+  const errorTimeoutRefs = useRef<Map<string, NodeJS.Timeout>>(new Map())
 
   // Fetch domain scores for the specific assessment ID
   const { 
     data: domainScoresData, 
     isLoading,
-    error 
+    error,
+    refetch
   } = useQuery({
     queryKey: assessmentKeys.domainScores(assessmentId),
     queryFn: async (): Promise<DomainScoresResponse> => {
@@ -198,7 +215,15 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
     }
   }, [connectionStatus.isConnected, subscribeToEvents, assessmentId, isActiveAssessment])
 
-  // Process WebSocket messages - only for active assessment
+  // Cleanup function for error timeouts
+  useEffect(() => {
+    return () => {
+      errorTimeoutRefs.current.forEach(timeout => clearTimeout(timeout))
+      errorTimeoutRefs.current.clear()
+    }
+  }, [])
+
+  // Process WebSocket messages with error handling and rollback
   useEffect(() => {
     if (!isActiveAssessment) return
 
@@ -212,16 +237,91 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
 
     console.log('Processing WebSocket message:', latestMessage.type, 'for domain:', latestMessage.domain)
 
+    // Handle error events with rollback
+    if (latestMessage.type === 'error') {
+      console.error('Received error event:', latestMessage.error_message)
+      
+      const domain = latestMessage.domain || latestMessage.error_details?.domain
+      
+      if (domain) {
+        // Clear any pending timeout for this domain
+        const timeout = errorTimeoutRefs.current.get(domain)
+        if (timeout) {
+          clearTimeout(timeout)
+          errorTimeoutRefs.current.delete(domain)
+        }
+        
+        // Check if this error is related to a pending update
+        if (pendingUpdates.has(domain)) {
+          console.log(`Rolling back failed update for domain: ${domain}`)
+          
+          // Rollback the optimistic update
+          const rolledBack = rollbackToSnapshot()
+          
+          if (rolledBack) {
+            toast({
+              title: "Processing Error",
+              description: `Failed to process ${domain.replace('_', ' ')}: ${latestMessage.error_message}. Changes have been rolled back.`,
+              variant: "destructive",
+            })
+            
+            // Refetch to get the correct state from backend
+            setTimeout(() => refetch(), 500)
+          }
+          
+          // Remove from pending updates
+          setPendingUpdates(prev => {
+            const newMap = new Map(prev)
+            newMap.delete(domain)
+            return newMap
+          })
+        } else {
+          // General error not related to a specific update
+          toast({
+            title: "Assessment Error",
+            description: latestMessage.error_message || "An error occurred during assessment processing",
+            variant: "destructive",
+          })
+        }
+        
+        // Remove from processing domains
+        setProcessingDomains(prev => {
+          const newSet = new Set(prev)
+          newSet.delete(domain)
+          return newSet
+        })
+      } else {
+        // Error without domain context
+        toast({
+          title: "System Error",
+          description: latestMessage.error_message || "An unexpected error occurred",
+          variant: "destructive",
+        })
+      }
+      
+      return
+    }
+
     if (latestMessage.type === 'score_update') {
-      // Build progress update from WebSocket message
       const progressUpdate: any = {}
       
       if (latestMessage.domain) {
-        // Update completed domains
+        // Mark this domain as processing
+        setProcessingDomains(prev => new Set(prev).add(latestMessage.domain!))
+        
+        // Mark this domain update as pending
+        setPendingUpdates(prev => new Map(prev).set(
+          latestMessage.domain!,
+          {
+            messageKey,
+            timestamp: new Date(),
+            domain: latestMessage.domain!
+          }
+        ))
+        
         const currentCompleted = assessmentData.completed_domains || []
         progressUpdate.completed_domains = [...new Set([...currentCompleted, latestMessage.domain])]
         
-        // Update domain data
         progressUpdate.domain_data = {
           ...assessmentData.domain_data,
           [latestMessage.domain]: {
@@ -232,7 +332,6 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
           }
         }
         
-        // Update domain scores
         if (latestMessage.score_value !== undefined) {
           progressUpdate.domain_scores = {
             ...assessmentData.domain_scores,
@@ -260,10 +359,10 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
         progressUpdate.status = latestMessage.status
       }
 
-      // Update the global assessment state (only for active assessment)
-      updateProgress(progressUpdate)
+      // Optimistic update WITH snapshot
+      updateProgressWithSnapshot(progressUpdate, true)
       
-      // Also update local state for immediate UI refresh
+      // Update local state for immediate UI refresh
       setLocalAssessmentData(prev => prev ? {
         ...prev,
         ...progressUpdate,
@@ -273,8 +372,55 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
         }
       } : null)
       
+      // Set timeout to clear pending status and snapshot if no error received
+      if (latestMessage.domain) {
+        const domain = latestMessage.domain
+        
+        // Clear any existing timeout for this domain
+        const existingTimeout = errorTimeoutRefs.current.get(domain)
+        if (existingTimeout) {
+          clearTimeout(existingTimeout)
+        }
+        
+        // Set new timeout
+        const timeout = setTimeout(() => {
+          console.log(`No error received for ${domain}, clearing snapshot and pending status`)
+          
+          setPendingUpdates(prev => {
+            const newMap = new Map(prev)
+            newMap.delete(domain)
+            return newMap
+          })
+          
+          setProcessingDomains(prev => {
+            const newSet = new Set(prev)
+            newSet.delete(domain)
+            return newSet
+          })
+          
+          clearSnapshot()
+          errorTimeoutRefs.current.delete(domain)
+          
+          // Show success toast
+          toast({
+            title: "Domain Processed",
+            description: `${domain.replace('_', ' ')} has been successfully evaluated`,
+          })
+        }, 2000) // Wait 2 seconds for potential error
+        
+        errorTimeoutRefs.current.set(domain, timeout)
+      }
+      
     } else if (latestMessage.type === 'assessment_completed') {
-      // Handle assessment completion
+      console.log('Assessment completed event received')
+      
+      // Clear all pending updates and timeouts on completion
+      errorTimeoutRefs.current.forEach(timeout => clearTimeout(timeout))
+      errorTimeoutRefs.current.clear()
+      setPendingUpdates(new Map())
+      setProcessingDomains(new Set())
+      clearSnapshot()
+      
       const allDomainsWithScores = latestMessage.domain_scores ? 
         Object.keys(latestMessage.domain_scores) : []
       
@@ -312,16 +458,36 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
         completion_percentage: 100
       }
 
-      // Update global state
-      updateProgress(completionUpdate)
+      // Update global state (no snapshot needed for completion)
+      updateProgressWithSnapshot(completionUpdate, false)
       
       // Update local state
       setLocalAssessmentData(prev => prev ? {
         ...prev,
         ...completionUpdate
       } : null)
+      
+      // Show completion toast
+      toast({
+        title: "Assessment Complete",
+        description: `All domains have been evaluated. Overall score: ${latestMessage.overall_score?.toFixed(1) || 'N/A'}`,
+      })
+      
+      // Refetch to ensure we have the latest data
+      setTimeout(() => refetch(), 1000)
     }
-  }, [messages, assessmentId, assessmentData, updateProgress, isActiveAssessment])
+  }, [
+    messages, 
+    assessmentId, 
+    assessmentData, 
+    updateProgressWithSnapshot, 
+    rollbackToSnapshot, 
+    clearSnapshot, 
+    isActiveAssessment, 
+    toast, 
+    pendingUpdates,
+    refetch
+  ])
 
   // Show loading state
   if (isLoading) {
@@ -347,7 +513,8 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
             <AlertCircle className="w-8 h-8 text-white" />
           </div>
           <h3 className="text-xl font-semibold text-gray-900 mb-2">Failed to Load Assessment</h3>
-          <p className="text-gray-600">Could not load data for assessment {assessmentId.slice(0, 8)}</p>
+          <p className="text-gray-600 mb-4">Could not load data for assessment {assessmentId.slice(0, 8)}</p>
+          <Button onClick={() => refetch()}>Retry</Button>
         </div>
       </div>
     )
@@ -380,6 +547,11 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
     return scores.reduce((sum, score) => sum + score, 0) / scores.length
   }
 
+  const isModuleProcessing = (moduleKey: string) => {
+    const module = MODULES[moduleKey as keyof typeof MODULES]
+    return module.domains.some(domain => processingDomains.has(domain))
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-background to-muted/20">
       <div className="container mx-auto px-6 py-8 space-y-8">
@@ -393,6 +565,30 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
                 <span className="font-medium">
                   Viewing historical assessment
                 </span>
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Connection status indicator */}
+        {isActiveAssessment && (
+          <Card className="border-0 shadow-sm">
+            <CardContent className="p-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div className={`w-2 h-2 rounded-full ${
+                    connectionStatus.isConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
+                  }`} />
+                  <span className="text-sm text-muted-foreground">
+                    {connectionStatus.isConnected ? 'Live updates active' : 'Disconnected'}
+                  </span>
+                </div>
+                {pendingUpdates.size > 0 && (
+                  <Badge variant="secondary" className="gap-1">
+                    <Clock className="w-3 h-3" />
+                    {pendingUpdates.size} pending
+                  </Badge>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -428,6 +624,7 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
                 const status = getModuleStatus(moduleKey)
                 const score = getModuleScore(moduleKey)
                 const IconComponent = module.icon
+                const isProcessing = isModuleProcessing(moduleKey)
                 
                 return (
                   <div 
@@ -440,7 +637,7 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
                         : module.color === 'purple'
                         ? 'hover:border-purple-400'
                         : 'hover:border-green-400'
-                    }`}
+                    } ${isProcessing ? 'ring-2 ring-blue-400 ring-opacity-50' : ''}`}
                   >
                     {/* Animated gradient overlay */}
                     <div className={`absolute inset-0 opacity-0 group-hover:opacity-10 transition-opacity duration-300 ${
@@ -457,13 +654,24 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
                             module.color === 'blue' ? 'text-blue-600' :
                             module.color === 'purple' ? 'text-purple-600' :
                             'text-green-600'
-                          }`}>
+                          } ${isProcessing ? 'animate-pulse' : ''}`}>
                             <IconComponent className="w-7 h-7" />
                           </div>
                           <div>
-                            <h3 className="text-lg font-semibold text-foreground">
-                              {module.name}
-                            </h3>
+                            <div className="flex items-center gap-2">
+                              <h3 className="text-lg font-semibold text-foreground">
+                                {module.name}
+                              </h3>
+                              {isProcessing && (
+                                <Badge variant="secondary" className="gap-1 text-xs">
+                                  <Clock className="w-3 h-3 animate-spin" />
+                                  Processing
+                                </Badge>
+                              )}
+                              {status.completed === status.total && !isProcessing && (
+                                <CheckCircle2 className="w-4 h-4 text-green-600" />
+                              )}
+                            </div>
                             <p className="text-sm text-muted-foreground mt-1">
                               {module.description}
                             </p>

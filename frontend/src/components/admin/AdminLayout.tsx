@@ -10,6 +10,8 @@ interface AdminLayoutProps {
   currentSection?: AdminSection;
 }
 
+const isAdminish = (role: string | undefined) => ['admin', 'super_admin'].includes(role ?? '');
+
 export function AdminLayout({ children, currentSection }: AdminLayoutProps) {
   const { user, isLoading } = useAuth();
 
@@ -29,7 +31,7 @@ export function AdminLayout({ children, currentSection }: AdminLayoutProps) {
   }
 
   // Redirect if not admin
-  if (!user || user.role !== 'admin') {
+  if (!user || !isAdminish(user.role)) {
     return <Navigate to="/auth/login" replace />;
   }
 

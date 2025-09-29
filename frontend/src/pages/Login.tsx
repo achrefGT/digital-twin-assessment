@@ -8,8 +8,6 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { 
-  Eye, 
-  EyeOff, 
   User, 
   Lock, 
   LogIn, 
@@ -249,7 +247,6 @@ const Login: React.FC = () => {
                           className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                           disabled={isSubmitting}
                         >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                       </div>
                     </div>
@@ -366,7 +363,6 @@ const Login: React.FC = () => {
                           className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                           disabled={isSubmitting}
                         >
-                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                       </div>
                       <p className="text-xs text-gray-500">
@@ -414,14 +410,7 @@ const Login: React.FC = () => {
 
               <div className="mt-6 text-center">
                 <p className="text-sm text-gray-500">
-                  By continuing, you agree to our{' '}
-                  <Link to="/terms" className="text-blue-600 hover:text-blue-500 font-medium">
-                    Terms of Service
-                  </Link>{' '}
-                  and{' '}
-                  <Link to="/privacy" className="text-blue-600 hover:text-blue-500 font-medium">
-                    Privacy Policy
-                  </Link>
+                  By continuing, you agree to our Terms of Service and Privacy Policy
                 </p>
               </div>
             </CardContent>

@@ -13,6 +13,9 @@ export interface WebSocketMessage {
   status?: string
   domain_scores?: Record<string, number>
   final_weights_used?: Record<string, number>
+  error_type?: string
+  error_message?: string
+  error_details?: Record<string, any>
   error?: string
   user_id?: string
   queued_at?: string // For queued messages
