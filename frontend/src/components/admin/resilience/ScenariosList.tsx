@@ -254,16 +254,14 @@ export function ScenariosList({ scenarios, loading, error, onEdit, onDelete, del
               Edit
             </button>
 
-            {!scenario.is_default && (
-              <button
-                onClick={(e) => handleDeleteClick(scenario, e)}
-                disabled={isDeleting}
-                className="flex items-center gap-2 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
-              >
-                {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                {isDeleting ? 'Deleting...' : 'Delete'}
-              </button>
-            )}
+            <button
+              onClick={(e) => handleDeleteClick(scenario, e)}
+              disabled={isDeleting}
+              className="flex items-center gap-2 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+              {isDeleting ? 'Deleting...' : 'Delete'}
+            </button>
           </div>
         </div>
       </div>

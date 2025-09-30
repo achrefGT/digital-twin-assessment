@@ -12,7 +12,7 @@ export function useAdminApi() {
   // Track ongoing deletions to prevent duplicates
   const deletingIdsRef = useRef<Set<string>>(new Set());
 
-  const isAdmin = user?.role === 'admin';
+  const isAdmin = ['admin', 'super_admin'].includes(user?.role || '');
   const enabled = !!token && isAdmin;
 
   // Error handler for mutations

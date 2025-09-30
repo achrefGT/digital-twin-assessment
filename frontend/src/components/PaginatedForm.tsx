@@ -134,11 +134,7 @@ export const PaginatedForm = ({ steps, onComplete, assessmentInfo }: PaginatedFo
 
       {/* Current Step Content */}
       <Card>
-        <CardHeader>
-          <CardTitle>{steps[currentStep].title}</CardTitle>
-          <CardDescription>{steps[currentStep].description}</CardDescription>
-        </CardHeader>
-        <CardContent>
+        <CardContent className="mt-5">
           {React.cloneElement(steps[currentStep].component as React.ReactElement, {
             onSubmit: handleStepComplete,
             initialData: {

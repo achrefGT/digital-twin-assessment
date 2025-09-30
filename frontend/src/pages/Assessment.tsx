@@ -116,16 +116,6 @@ const Assessment = () => {
           <div className="relative container mx-auto px-6 py-16">
             {!assessment ? (
               <div className="max-w-2xl mx-auto">
-                <div className="text-center mb-8">
-                  <div className="inline-flex items-center gap-2 bg-blue-100 text-blue-700 px-4 py-2 rounded-full text-sm font-medium mb-6">
-                    <div className="w-2 h-2 bg-blue-500 rounded-full animate-pulse" />
-                    Assessment Setup
-                  </div>
-                  <h1 className="text-4xl font-bold text-gray-900 mb-4">Create New Assessment</h1>
-                  <p className="text-lg text-gray-600 leading-relaxed">
-                    Initialize your digital twin assessment with basic system information
-                  </p>
-                </div>
                 <CreateAssessment 
                   onAssessmentCreated={(newAssessment) => {
                     setAssessment(newAssessment)
