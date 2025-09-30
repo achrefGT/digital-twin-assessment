@@ -104,7 +104,7 @@ class KafkaService:
         
         # Initialize weighting service with configurable alpha
         alpha = getattr(settings, 'weighting_alpha', 0.8)
-        self.weighting_service = WeightingService(alpha=alpha)
+        self.weighting_service = WeightingService(alpha=alpha, use_sfs_hesitation=True, pi_constant=0.1)
         
         # Weight update management - REMOVED cached assessments
         self.weight_update_interval = getattr(settings, 'weight_update_interval_hours', 24)

@@ -71,8 +71,14 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, className
       await register(registrationData);
       onSuccess?.();
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Registration failed');
-    } finally {
+    const errorMessage = err instanceof Error 
+      ? err.message 
+      : typeof err === 'string' 
+        ? err 
+        : 'Registration failed';
+    setError(errorMessage);
+    console.error('Registration error:', err); 
+  } finally {
       setIsLoading(false);
     }
   };

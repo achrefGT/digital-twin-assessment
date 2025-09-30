@@ -18,28 +18,7 @@ interface SustainabilityPanelProps {
         domain_count?: number
         dimension_weights?: Record<string, number>
         detailed_metrics?: {
-          environmental?: {
-            digital_twin_realism?: {
-              level?: string
-              description?: string
-            }
-            flow_tracking?: {
-              level?: string
-              description?: string
-            }
-            energy_visibility?: {
-              level?: string
-              description?: string
-            }
-            environmental_scope?: {
-              level?: string
-              description?: string
-            }
-            simulation_prediction?: {
-              level?: string
-              description?: string
-            }
-          }
+          environmental?: Record<string, any>
           social?: Record<string, any>
           economic?: Record<string, any>
         }
@@ -96,7 +75,7 @@ export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }
     return 'bg-red-500'
   }
 
-  // Extract key insights from sustainability metrics
+  // Extract key insights from sustainability metrics - now using ENV_* keys
   const getKeyInsights = () => {
     const insights = []
     
@@ -109,30 +88,37 @@ export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }
       })
     }
 
-    // Environmental metrics if available
+    // Environmental metrics if available - look for ENV_* keys
     if (sustainability_metrics?.detailed_metrics?.environmental) {
       const envMetrics = sustainability_metrics.detailed_metrics.environmental
       
-      // Digital twin realism level
-      if (envMetrics.digital_twin_realism?.description) {
-        insights.push({
-          label: 'DT Realism',
-          value: envMetrics.digital_twin_realism.description,
-          type: 'level'
-        })
-      }
-
-      // Energy visibility level
-      if (envMetrics.energy_visibility?.description) {
-        insights.push({
-          label: 'Energy Tracking',
-          value: envMetrics.energy_visibility.description,
-          type: 'level'
-        })
+      // Find the first valid ENV_* criterion with description
+      const envCriteria = Object.entries(envMetrics).filter(([key]) => key.startsWith('ENV_'))
+      
+      if (envCriteria.length > 0) {
+        // Get the first criterion (typically ENV_01 - Digital Twin Realism)
+        const [firstKey, firstValue] = envCriteria[0]
+        if (firstValue?.description && firstValue.description !== 'None') {
+          insights.push({
+            label: 'DT Realism',
+            value: firstValue.description,
+            type: 'level'
+          })
+        }
+        
+        // Get energy tracking info (typically ENV_03)
+        const energyKey = envCriteria.find(([key]) => key === 'ENV_03')
+        if (energyKey && energyKey[1]?.description && energyKey[1].description !== 'None') {
+          insights.push({
+            label: 'Energy Tracking',
+            value: energyKey[1].description,
+            type: 'level'
+          })
+        }
       }
     }
 
-    return insights.slice(0, 2) // Only show top 2 insights to fit the existing layout
+    return insights.slice(0, 2) // Only show top 2 insights
   }
 
   const keyInsights = getKeyInsights()
@@ -189,35 +175,6 @@ export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }
                 </div>
               )
             })}
-          </div>
-        )}
-
-        {/* Environmental Metrics Detail - Only if environmental data exists */}
-        {sustainability_metrics?.detailed_metrics?.environmental && (
-          <div className="pt-4 border-t border-slate-100">
-            <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
-              Environmental Metrics
-            </div>
-            <div className="space-y-2">
-              {Object.entries(sustainability_metrics.detailed_metrics.environmental).map(([metricKey, metric]) => {
-                if (!metric || typeof metric !== 'object' || !metric.description) return null
-                
-                const formatLabel = (key: string) => {
-                  return key.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())
-                }
-
-                return (
-                  <div key={metricKey} className="flex items-center justify-between py-2 px-3 bg-slate-50 rounded-lg">
-                    <span className="text-xs font-medium text-slate-600">
-                      {formatLabel(metricKey)}
-                    </span>
-                    <Badge variant="outline" className="text-xs">
-                      {metric.description}
-                    </Badge>
-                  </div>
-                )
-              })}
-            </div>
           </div>
         )}
 

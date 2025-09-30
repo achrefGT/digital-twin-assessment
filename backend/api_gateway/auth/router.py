@@ -32,7 +32,6 @@ def get_request_info(request: Request) -> Dict[str, Any]:
     }
 
 @router.post("/register", response_model=UserResponse)
-@handle_exceptions
 async def register(
     user_data: UserCreate,
     auth_service: AuthService = Depends(get_auth_service)
@@ -48,7 +47,6 @@ async def register(
         )
 
 @router.post("/login", response_model=Token)
-@handle_exceptions
 async def login(
     user_credentials: UserLogin,
     request: Request,
@@ -73,7 +71,6 @@ async def login(
     return Token(**tokens)
 
 @router.post("/refresh", response_model=Token)
-@handle_exceptions
 async def refresh_token(
     token_request: RefreshTokenRequest,
     auth_service: AuthService = Depends(get_auth_service)
@@ -90,7 +87,6 @@ async def refresh_token(
         )
 
 @router.post("/logout")
-@handle_exceptions
 async def logout(
     token_request: RefreshTokenRequest,
     auth_service: AuthService = Depends(get_auth_service)
@@ -100,7 +96,6 @@ async def logout(
     return {"message": "Successfully logged out" if success else "Token not found"}
 
 @router.get("/me", response_model=UserResponse)
-@handle_exceptions
 async def get_current_user_info(
     current_user: TokenData = Depends(get_current_user_required),
     auth_service: AuthService = Depends(get_auth_service)
@@ -116,7 +111,6 @@ async def get_current_user_info(
     return UserResponse.from_orm(user)
 
 @router.put("/profile", response_model=UserResponse)
-@handle_exceptions
 async def update_profile(
     request: Request,
     current_user: TokenData = Depends(get_current_user_required),

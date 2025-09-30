@@ -8,17 +8,20 @@ from datetime import datetime
 logger = logging.getLogger(__name__)
 
 class WeightingService:
-    def __init__(self, alpha: float = 0.8):
+    def __init__(self, alpha: float = 0.8, use_sfs_hesitation: bool = True, pi_constant: float = 0.1):
         """
-        Initialize WeightingService with compromise weighting.
+        Initialize WeightingService with compromise weighting and SFS hesitation.
         
         Parameters:
         -----------
-        alpha : float, default=0.5
+        alpha : float, default=0.8
             Compromise parameter (0-1):
             - 0 = pure objective weights (entropy-based)
             - 1 = pure subjective weights (hardcoded)
-            - 0.5 = equal balance between objective and subjective
+        use_sfs_hesitation : bool, default=True
+            Whether to incorporate SFS hesitation (π) in score calculation
+        pi_constant : float, default=0.1
+            Spherical fuzzy hesitation constant
         """
         # Define subjective weights (hardcoded/expert knowledge)
         self.subjective_weights = {
@@ -29,12 +32,83 @@ class WeightingService:
         
         # Current weights (starts as subjective, may be updated with compromise)
         self.weights = self.subjective_weights.copy()
-        self.weights_type = "subjective"  # Track weight type: subjective, objective, or compromise
-        self.alpha = max(0.0, min(1.0, alpha))  # Ensure alpha is between 0 and 1
+        self.weights_type = "subjective"
+        self.alpha = max(0.0, min(1.0, alpha))
         self.last_objective_calculation = None
-        self.min_assessments_for_objective = 10  # Minimum assessments needed for objective weighting
-        self.objective_weights = None  # Store calculated objective weights
+        self.min_assessments_for_objective = 10
+        self.objective_weights = None
         
+        # SFS hesitation parameters
+        self.use_sfs_hesitation = use_sfs_hesitation
+        self.pi_constant = pi_constant
+        
+    def _apply_sfs_transform(self, normalized_score: float) -> Dict[str, float]:
+        """
+        Apply spherical fuzzy transform to a normalized score (0-1).
+        
+        Parameters:
+        -----------
+        normalized_score : float
+            Normalized score between 0 and 1
+            
+        Returns:
+        --------
+        Dict with 'mu', 'nu', 'pi' components
+        """
+        pi = self.pi_constant
+        x = max(0.0, min(1.0, normalized_score))
+        
+        # Apply spherical fuzzy transformation
+        mu = (1 - pi) * x
+        nu = (1 - pi) * (1 - x)
+        
+        # Enforce spherical constraint: mu² + nu² + π² ≤ 1
+        total = mu + nu + pi
+        if total > 0:
+            mu = mu / total
+            nu = nu / total
+            pi = pi / total
+        
+        return {'mu': mu, 'nu': nu, 'pi': pi}
+    
+    def _sfs_distance_to_ideal(self, mu: float, nu: float, pi: float) -> float:
+        """
+        Calculate score using distance-to-ideal defuzzification method.
+        Ideal point: (1, 0, 0) - perfect membership, no non-membership, no hesitation
+        
+        Formula: S = 1 - (d / sqrt(3))
+        where d = sqrt((1-μ)² + ν² + π²)
+        
+        This gives a score in [0, 1] where:
+        - 1.0 = ideal (μ=1, ν=0, π=0)
+        - 0.0 = worst case (μ=0, ν=1, π=0) or maximum distance
+        
+        Parameters:
+        -----------
+        mu : float
+            Membership degree
+        nu : float
+            Non-membership degree
+        pi : float
+            Hesitation degree
+            
+        Returns:
+        --------
+        float : Score in [0, 1]
+        """
+        # Calculate Euclidean distance to ideal point (1, 0, 0)
+        distance = np.sqrt((1.0 - mu)**2 + nu**2 + pi**2)
+        
+        # Normalize by maximum possible distance (sqrt(3) when at point (0,1,0) or similar)
+        # The maximum distance in spherical fuzzy space is sqrt(2) to sqrt(3)
+        # We use sqrt(3) for full normalization to [0,1]
+        max_distance = np.sqrt(3.0)
+        
+        # Convert distance to score: closer to ideal = higher score
+        score = 1.0 - (distance / max_distance)
+        
+        return max(0.0, min(1.0, score))
+    
     def entropy_method(self, X: Union[np.ndarray, pd.DataFrame], 
                       normalized: bool = False) -> Tuple[np.ndarray, dict]:
         """
@@ -82,14 +156,13 @@ class WeightingService:
             X_norm = np.zeros_like(X)
             for j in range(n):
                 col_sum = np.sum(X[:, j])
-                if col_sum > 1e-10:  # Avoid division by very small numbers
+                if col_sum > 1e-10:
                     X_norm[:, j] = X[:, j] / col_sum
                 else:
                     warnings.warn(f"Column {j} has near-zero sum, using equal distribution")
                     X_norm[:, j] = 1.0 / m
         else:
             X_norm = X.copy()
-            # Validate normalized input
             for j in range(n):
                 col_sum = np.sum(X_norm[:, j])
                 if not np.isclose(col_sum, 1.0, atol=1e-6):
@@ -116,7 +189,7 @@ class WeightingService:
         for j in range(n):
             entropy_sum = 0
             for i in range(m):
-                if p_matrix[i, j] > 1e-10:  # Avoid log(0)
+                if p_matrix[i, j] > 1e-10:
                     entropy_sum += p_matrix[i, j] * np.log(p_matrix[i, j])
             entropy[j] = -k * entropy_sum
         
@@ -171,7 +244,6 @@ class WeightingService:
         
         try:
             # Prepare data matrix for entropy method
-            # Rows = assessments, Columns = domains (resilience, sustainability, human_centricity)
             domains = ["resilience", "sustainability", "human_centricity"]
             
             # Filter assessments that have all domain scores
@@ -201,7 +273,6 @@ class WeightingService:
             self.objective_weights = objective_weights_dict.copy()
             
             # Calculate compromise weights
-            # W_compromise = α * W_subjective + (1 - α) * W_objective
             compromise_weights = {}
             for domain in domains:
                 subjective_weight = self.subjective_weights[domain]
@@ -210,7 +281,7 @@ class WeightingService:
                                    (1 - self.alpha) * objective_weight)
                 compromise_weights[domain] = compromise_weight
             
-            # Normalize to ensure sum = 1.0 (handle floating point precision issues)
+            # Normalize to ensure sum = 1.0
             total_weight = sum(compromise_weights.values())
             if total_weight > 0:
                 compromise_weights = {
@@ -237,24 +308,66 @@ class WeightingService:
             return self.subjective_weights.copy()
     
     def calculate_overall_score(self, domain_scores: Dict[str, float]) -> Optional[float]:
-        """Calculate weighted overall score from domain scores"""
+        """
+        Calculate weighted overall score from domain scores with optional SFS hesitation.
+        Returns score in range [0, 100].
+        
+        Parameters:
+        -----------
+        domain_scores : Dict[str, float]
+            Dictionary of domain scores (0-100 scale)
+            
+        Returns:
+        --------
+        Optional[float]
+            Overall score (0-100) or None if insufficient data
+        """
         if not domain_scores:
             return None
         
+        # Aggregate weighted scores
         total_weighted_score = 0.0
         total_weight = 0.0
         
+        # First pass: calculate basic weighted average (normalized to 0-1)
         for domain, score in domain_scores.items():
             if score is not None and domain in self.weights:
                 weight = self.weights[domain]
-                total_weighted_score += score * weight
+                # Normalize score to [0, 1] for SFS processing
+                normalized_score = score / 100.0
+                total_weighted_score += normalized_score * weight
                 total_weight += weight
         
-        # Only return score if we have enough domains (at least 50% of total weight)
-        if total_weight >= 0.5:
-            return total_weighted_score / total_weight
+        # Only proceed if we have enough domains (at least 50% of total weight)
+        if total_weight < 0.5:
+            return None
         
-        return None
+        # Calculate normalized weighted average
+        normalized_avg = total_weighted_score / total_weight
+        
+        # Apply SFS hesitation if enabled
+        if self.use_sfs_hesitation:
+            # Transform to SFS triplet
+            sfs_triplet = self._apply_sfs_transform(normalized_avg)
+            
+            # Apply distance-to-ideal defuzzification
+            final_score_normalized = self._sfs_distance_to_ideal(
+                sfs_triplet['mu'], 
+                sfs_triplet['nu'], 
+                sfs_triplet['pi']
+            )
+            
+            logger.debug(f"SFS Transform: normalized={normalized_avg:.4f} -> "
+                        f"(μ={sfs_triplet['mu']:.4f}, ν={sfs_triplet['nu']:.4f}, π={sfs_triplet['pi']:.4f}) -> "
+                        f"score={final_score_normalized:.4f}")
+        else:
+            # Without SFS, use simple weighted average
+            final_score_normalized = normalized_avg
+        
+        # Convert back to 0-100 scale
+        final_score = final_score_normalized * 100.0
+        
+        return final_score
     
     def is_assessment_complete(self, domain_scores: Dict[str, float]) -> bool:
         """Check if all required domains have scores"""
@@ -319,8 +432,30 @@ class WeightingService:
         logger.info(f"Updated alpha parameter to {alpha}")
         return True
     
+    def set_pi_constant(self, pi_constant: float) -> bool:
+        """
+        Update the SFS hesitation constant.
+        
+        Parameters:
+        -----------
+        pi_constant : float
+            New π constant value (0-1)
+            
+        Returns:
+        --------
+        bool
+            True if π was successfully updated
+        """
+        if not (0.0 <= pi_constant <= 1.0):
+            logger.error(f"Invalid π constant: {pi_constant}. Must be between 0 and 1.")
+            return False
+        
+        self.pi_constant = pi_constant
+        logger.info(f"Updated π constant to {pi_constant}")
+        return True
+    
     def get_weights_info(self) -> Dict[str, any]:
-        """Get detailed information about current weights"""
+        """Get detailed information about current weights and SFS parameters"""
         return {
             "current_weights": self.weights.copy(),
             "weights_type": self.weights_type,
@@ -328,7 +463,10 @@ class WeightingService:
             "subjective_weights": self.subjective_weights.copy(),
             "objective_weights": self.objective_weights.copy() if self.objective_weights else None,
             "last_objective_calculation": self.last_objective_calculation.isoformat() if self.last_objective_calculation else None,
-            "min_assessments_for_objective": self.min_assessments_for_objective
+            "min_assessments_for_objective": self.min_assessments_for_objective,
+            "sfs_enabled": self.use_sfs_hesitation,
+            "pi_constant": self.pi_constant,
+            "defuzzification_method": "distance_to_ideal"
         }
     
     def manual_update_weights(self, new_weights: Dict[str, float]) -> bool:
