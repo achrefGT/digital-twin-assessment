@@ -71,6 +71,7 @@ services:
       context: .
       dockerfile: frontend/Dockerfile
     container_name: frontend
+    image: "${DOCKERHUB_PREFIX:-achrefgataa}/digital-twin-frontend:${IMAGE_TAG:-latest}"
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
     environment:
@@ -102,6 +103,7 @@ services:
       context: .
       dockerfile: backend/api_gateway/Dockerfile
     container_name: api-gateway
+    image: "${DOCKERHUB_PREFIX:-achrefgataa}/digital-twin-api-gateway:${IMAGE_TAG:-latest}"
     ports:
       - "${API_PORT:-8000}:8000"
     env_file:
@@ -134,6 +136,7 @@ services:
       context: .
       dockerfile: backend/services/resilience/Dockerfile
     container_name: resilience-service
+    image: "${DOCKERHUB_PREFIX:-achrefgataa}/digital-twin-resilience:${IMAGE_TAG:-latest}"
     ports:
       - "${RESILIENCE_SERVICE_PORT:-8001}:8001"
     env_file:
@@ -168,6 +171,7 @@ services:
       context: .
       dockerfile: backend/services/sustainability/Dockerfile
     container_name: sustainability-service
+    image: "${DOCKERHUB_PREFIX:-achrefgataa}/digital-twin-sustainability:${IMAGE_TAG:-latest}"
     ports:
       - "${SUSTAINABILITY_SERVICE_PORT:-8006}:8006"
     env_file:
@@ -200,6 +204,7 @@ services:
       context: .
       dockerfile: backend/services/human_centricity/Dockerfile
     container_name: human-centricity-service
+    image: "${DOCKERHUB_PREFIX:-achrefgataa}/digital-twin-human-centricity:${IMAGE_TAG:-latest}"
     ports:
       - "${HUMAN_CENTRICITY_SERVICE_PORT:-8002}:8002"
     env_file:

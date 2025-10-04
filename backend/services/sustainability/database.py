@@ -114,6 +114,10 @@ class DatabaseManager:
             # Initialize default criteria if they don't exist
             self._initialize_default_criteria()
             
+            # CRITICAL: Refresh criteria cache from database after initialization
+            # This ensures SUSTAINABILITY_SCENARIOS is up-to-date with database state
+            self._refresh_criteria_cache()
+            
         except Exception as e:
             logger.error(f"Failed to create tables: {e}")
             raise DatabaseConnectionException(f"Failed to create tables: {e}")
@@ -372,7 +376,7 @@ class DatabaseManager:
             SUSTAINABILITY_SCENARIOS.clear()
             SUSTAINABILITY_SCENARIOS.update(new_scenarios)
             
-            logger.info("Criteria cache refreshed successfully")
+            logger.info(f"Criteria cache refreshed successfully - {len(criteria)} criteria loaded")
             
         except Exception as e:
             logger.error(f"Failed to refresh criteria cache: {e}")

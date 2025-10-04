@@ -3,6 +3,9 @@ import { AdminAPI, adminKeys, AdminApiError } from '../services/adminApi';
 import { useAuth } from '@/auth/useAuth';
 import { useToast } from '@/hooks/use-toast';
 import { useCallback, useRef } from 'react';
+import { sustainabilityKeys } from '@/services/sustainabilityApi';
+import { scenarioKeys } from '@/services/ResilienceAPI';
+import { humanCentricityKeys } from '@/services/humanCentricityApi';
 
 export function useAdminApi() {
   const { token, user } = useAuth();
@@ -129,6 +132,7 @@ export function useAdminApi() {
     mutationFn: (data: any) => AdminAPI.createSustainabilityCriterion(data, token!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.sustainabilityCriteria() });
+      queryClient.invalidateQueries({ queryKey: sustainabilityKeys.all });
       handleMutationSuccess('Sustainability criterion created successfully');
     },
     onError: (error) => {
@@ -141,6 +145,7 @@ export function useAdminApi() {
       AdminAPI.updateSustainabilityCriterion(id, data, token!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.sustainabilityCriteria() });
+      queryClient.invalidateQueries({ queryKey: sustainabilityKeys.all });
       handleMutationSuccess('Sustainability criterion updated successfully');
     },
     onError: (error) => {
@@ -148,34 +153,29 @@ export function useAdminApi() {
     },
   });
 
-  // Fixed deletion mutation with duplicate prevention
   const deleteSustainabilityCriterion = useMutation({
     mutationFn: async (id: string) => {
-      // Check if already deleting this ID
       if (deletingIdsRef.current.has(id)) {
         throw new Error('Deletion already in progress for this criterion');
       }
       
-      // Mark as deleting
       deletingIdsRef.current.add(id);
       
       try {
         const result = await AdminAPI.deleteSustainabilityCriterion(id, token!);
         return result;
       } finally {
-        // Always remove from deleting set, even if the request fails
         deletingIdsRef.current.delete(id);
       }
     },
     onSuccess: (_, id) => {
       queryClient.invalidateQueries({ queryKey: adminKeys.sustainabilityCriteria() });
+      queryClient.invalidateQueries({ queryKey: sustainabilityKeys.all });
       handleMutationSuccess('Sustainability criterion deleted successfully');
     },
     onError: (error, id) => {
-      // Make sure to clean up the deleting state on error
       deletingIdsRef.current.delete(id);
       
-      // Don't show error if it's just a duplicate request
       if (error instanceof Error && error.message.includes('already in progress')) {
         return;
       }
@@ -188,6 +188,7 @@ export function useAdminApi() {
     mutationFn: (domain?: string) => AdminAPI.resetSustainabilityCriteria(domain || null, token!),
     onSuccess: (_, domain) => {
       queryClient.invalidateQueries({ queryKey: adminKeys.sustainabilityCriteria() });
+      queryClient.invalidateQueries({ queryKey: sustainabilityKeys.all });
       const message = `Sustainability criteria reset successfully${domain ? ` for ${domain}` : ''}`;
       handleMutationSuccess(message);
     },
@@ -201,6 +202,7 @@ export function useAdminApi() {
     mutationFn: (data: any) => AdminAPI.createResilienceScenario(data, token!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.resilienceScenarios() });
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.all });
       handleMutationSuccess('Resilience scenario created successfully');
     },
     onError: (error) => {
@@ -213,6 +215,7 @@ export function useAdminApi() {
       AdminAPI.updateResilienceScenario(id, data, token!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.resilienceScenarios() });
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.all });
       handleMutationSuccess('Resilience scenario updated successfully');
     },
     onError: (error) => {
@@ -222,31 +225,27 @@ export function useAdminApi() {
 
   const deleteResilienceScenario = useMutation({
     mutationFn: async (id: string) => {
-      // Check if already deleting this ID
       if (deletingIdsRef.current.has(id)) {
         throw new Error('Deletion already in progress for this scenario');
       }
       
-      // Mark as deleting
       deletingIdsRef.current.add(id);
       
       try {
         const result = await AdminAPI.deleteResilienceScenario(id, token!);
         return result;
       } finally {
-        // Always remove from deleting set, even if the request fails
         deletingIdsRef.current.delete(id);
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.resilienceScenarios() });
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.all });
       handleMutationSuccess('Resilience scenario deleted successfully');
     },
     onError: (error, id) => {
-      // Make sure to clean up the deleting state on error
       deletingIdsRef.current.delete(id);
       
-      // Don't show error if it's just a duplicate request
       if (error instanceof Error && error.message.includes('already in progress')) {
         return;
       }
@@ -259,6 +258,7 @@ export function useAdminApi() {
     mutationFn: (domain?: string) => AdminAPI.resetResilienceScenarios(domain || null, token!),
     onSuccess: (_, domain) => {
       queryClient.invalidateQueries({ queryKey: adminKeys.resilienceScenarios() });
+      queryClient.invalidateQueries({ queryKey: scenarioKeys.all });
       const message = `Resilience scenarios reset successfully${domain ? ` for ${domain}` : ''}`;
       handleMutationSuccess(message);
     },
@@ -272,6 +272,7 @@ export function useAdminApi() {
     mutationFn: (data: any) => AdminAPI.createHumanCentricityStatement(data, token!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.humanCentricity() });
+      queryClient.invalidateQueries({ queryKey: humanCentricityKeys.all });
       handleMutationSuccess('Human centricity statement created successfully');
     },
     onError: (error) => {
@@ -284,6 +285,7 @@ export function useAdminApi() {
       AdminAPI.updateHumanCentricityStatement(id, data, token!),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.humanCentricity() });
+      queryClient.invalidateQueries({ queryKey: humanCentricityKeys.all });
       handleMutationSuccess('Human centricity statement updated successfully');
     },
     onError: (error) => {
@@ -293,31 +295,27 @@ export function useAdminApi() {
 
   const deleteHumanCentricityStatement = useMutation({
     mutationFn: async (id: string) => {
-      // Check if already deleting this ID
       if (deletingIdsRef.current.has(id)) {
         throw new Error('Deletion already in progress for this statement');
       }
       
-      // Mark as deleting
       deletingIdsRef.current.add(id);
       
       try {
         const result = await AdminAPI.deleteHumanCentricityStatement(id, token!);
         return result;
       } finally {
-        // Always remove from deleting set, even if the request fails
         deletingIdsRef.current.delete(id);
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: adminKeys.humanCentricity() });
+      queryClient.invalidateQueries({ queryKey: humanCentricityKeys.all });
       handleMutationSuccess('Human centricity statement deleted successfully');
     },
     onError: (error, id) => {
-      // Make sure to clean up the deleting state on error
       deletingIdsRef.current.delete(id);
       
-      // Don't show error if it's just a duplicate request
       if (error instanceof Error && error.message.includes('already in progress')) {
         return;
       }
@@ -330,6 +328,7 @@ export function useAdminApi() {
     mutationFn: (domain: string) => AdminAPI.resetHumanCentricityDomain(domain, token!),
     onSuccess: (_, domain) => {
       queryClient.invalidateQueries({ queryKey: adminKeys.humanCentricity() });
+      queryClient.invalidateQueries({ queryKey: humanCentricityKeys.all });
       handleMutationSuccess(`Human centricity domain ${domain} reset successfully`);
     },
     onError: (error) => {

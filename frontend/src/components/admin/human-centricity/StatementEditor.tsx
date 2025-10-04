@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAdminApi } from '@/hooks/useAdminApi';
-import { StatementResponse, HumanCentricityDomain, StatementCreate, StatementUpdate } from '@/types/admin';
+import { StatementResponse, HumanCentricityDomain, StatementCreate, StatementUpdate, PerformanceWidgetConfig } from '@/types/admin';
 import { 
   X, 
   Save, 
@@ -14,13 +14,19 @@ import {
   Brain,
   Shield,
   Eye,
-  Calendar
+  Calendar,
+  Settings
 } from 'lucide-react';
 
 interface StatementEditorProps {
   statement?: StatementResponse | null;
   onClose: () => void;
 }
+
+// Type guard for PerformanceWidgetConfig
+const isPerformanceConfig = (config: any): config is PerformanceWidgetConfig => {
+  return config && ('min' in config || 'max' in config || 'normalization' in config);
+};
 
 export function StatementEditor({ statement, onClose }: StatementEditorProps) {
   const { mutations } = useAdminApi();
@@ -55,6 +61,23 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
       newErrors.statement_text = 'Statement text must be at least 5 characters';
     } else if (formData.statement_text.trim().length > 500) {
       newErrors.statement_text = 'Statement text must be less than 500 characters';
+    }
+
+    // Validate Performance domain widget config
+    if (formData.domain_key === 'Performance' && formData.widget_config) {
+      const config = formData.widget_config;
+      
+      if (isPerformanceConfig(config)) {
+        if (config.min === undefined || config.max === undefined) {
+          newErrors.widget_config = 'Performance metrics require min and max values';
+        } else if (config.min >= config.max) {
+          newErrors.widget_config = 'Min value must be less than max value';
+        }
+        
+        if (!config.normalization || !['direct', 'inverse'].includes(config.normalization)) {
+          newErrors.widget_config = 'Performance metrics require normalization type (direct or inverse)';
+        }
+      }
     }
 
     setErrors(newErrors);
@@ -145,6 +168,7 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
   ];
 
   const selectedDomain = domains.find(d => d.value === formData.domain_key);
+  const isPerformanceDomain = formData.domain_key === 'Performance';
 
   // Get domain scale info
   const getDomainScaleInfo = (domain: HumanCentricityDomain) => {
@@ -157,6 +181,17 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
       'Performance': 'Numeric metrics (time, errors, help requests)'
     };
     return scaleMap[domain];
+  };
+
+  // Handle widget config changes for Performance domain
+  const handleWidgetConfigChange = (field: string, value: any) => {
+    setFormData(prev => ({
+      ...prev,
+      widget_config: {
+        ...prev.widget_config,
+        [field]: value
+      }
+    }));
   };
 
   return (
@@ -217,7 +252,11 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
                     name="domain_key"
                     value={domain.value}
                     checked={formData.domain_key === domain.value}
-                    onChange={(e) => setFormData(prev => ({ ...prev, domain_key: e.target.value as HumanCentricityDomain }))}
+                    onChange={(e) => setFormData(prev => ({ 
+                      ...prev, 
+                      domain_key: e.target.value as HumanCentricityDomain,
+                      widget_config: e.target.value === 'Performance' ? { min: 0, max: 100, normalization: 'inverse' } : {}
+                    }))}
                     className="sr-only"
                   />
                   <div className="flex items-start gap-3">
@@ -285,6 +324,85 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
             </div>
           </div>
 
+          {/* Performance Domain Widget Configuration */}
+          {isPerformanceDomain && (
+            <div className="bg-indigo-50 rounded-lg p-4 border border-indigo-200">
+              <div className="flex items-start gap-3 mb-4">
+                <Settings className="w-5 h-5 text-indigo-600 mt-0.5" />
+                <div className="flex-1">
+                  <h4 className="text-sm font-medium text-indigo-900 mb-1">Performance Metric Configuration</h4>
+                  <p className="text-sm text-indigo-700">Configure the measurement range and scoring behavior for this performance metric.</p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Minimum Value *
+                  </label>
+                  <input
+                    type="number"
+                    value={isPerformanceConfig(formData.widget_config) ? formData.widget_config.min : 0}
+                    onChange={(e) => handleWidgetConfigChange('min', parseFloat(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="0"
+                    step="any"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Maximum Value *
+                  </label>
+                  <input
+                    type="number"
+                    value={isPerformanceConfig(formData.widget_config) ? formData.widget_config.max : 100}
+                    onChange={(e) => handleWidgetConfigChange('max', parseFloat(e.target.value))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                    placeholder="100"
+                    step="any"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Normalization *
+                  </label>
+                  <select
+                    value={isPerformanceConfig(formData.widget_config) ? formData.widget_config.normalization : 'inverse'}
+                    onChange={(e) => handleWidgetConfigChange('normalization', e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
+                  >
+                    <option value="inverse">Inverse (lower is better)</option>
+                    <option value="direct">Direct (higher is better)</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="mt-3 space-y-2">
+                <div className="flex items-start gap-2">
+                  <Info className="w-4 h-4 text-indigo-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-indigo-700">
+                    <span className="font-medium">Inverse normalization:</span> Used for metrics where lower values are better (e.g., task time, error count). Score = 100 × (max - value) / (max - min)
+                  </p>
+                </div>
+                <div className="flex items-start gap-2">
+                  <Info className="w-4 h-4 text-indigo-600 mt-0.5 flex-shrink-0" />
+                  <p className="text-xs text-indigo-700">
+                    <span className="font-medium">Direct normalization:</span> Used for metrics where higher values are better (e.g., accuracy, completion rate). Score = 100 × (value - min) / (max - min)
+                  </p>
+                </div>
+              </div>
+
+              {errors.widget_config && (
+                <div className="mt-3 flex items-center gap-2 text-red-600">
+                  <AlertCircle className="w-4 h-4" />
+                  <span className="text-sm">{errors.widget_config}</span>
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Preview */}
           <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
             <h4 className="text-sm font-medium text-blue-900 mb-3 flex items-center gap-2">
@@ -305,6 +423,16 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
                 <span>•</span>
                 <span>Scale: {formData.domain_key ? getDomainScaleInfo(formData.domain_key) : 'Select domain'}</span>
               </div>
+              {isPerformanceDomain && formData.widget_config && isPerformanceConfig(formData.widget_config) && (
+                <div className="mt-3 pt-3 border-t border-gray-200">
+                  <p className="text-xs text-gray-600 mb-1">Performance Configuration:</p>
+                  <div className="flex gap-4 text-xs text-gray-700">
+                    <span>Range: {formData.widget_config.min} - {formData.widget_config.max}</span>
+                    <span>•</span>
+                    <span>Type: {formData.widget_config.normalization === 'inverse' ? 'Lower is Better' : 'Higher is Better'}</span>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
 

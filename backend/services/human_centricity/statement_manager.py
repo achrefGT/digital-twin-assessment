@@ -7,7 +7,7 @@ from .models import (
     StatementCreate, StatementUpdate, StatementResponse,
     HumanCentricityDomain, FIXED_DOMAINS, DEFAULT_STATEMENTS,
     ASSESSMENT_STRUCTURE, StatementManager as ModelStatementManager,
-    StatementType
+    StatementType, SCALES
 )
 from .database import DatabaseManager, DynamicStatement
 
@@ -21,6 +21,7 @@ class StatementManager:
         self.db_manager = db_manager
         self.fixed_domains = FIXED_DOMAINS
         self.default_statements = DEFAULT_STATEMENTS
+        self.scales = SCALES
         self._ensure_dynamic_tables()
         self._initialize_default_statements()
     
@@ -75,7 +76,7 @@ class StatementManager:
     # Domain Information Methods (Read-only for fixed domains)
     
     def get_all_domains(self) -> Dict[HumanCentricityDomain, Dict[str, Any]]:
-        """Get all fixed domains with their configuration and statement counts"""
+        """Get all fixed domains with their configuration and statement counts from database"""
         result = {}
         statement_counts = self.db_manager.get_statement_count_by_domain()
         
@@ -87,12 +88,13 @@ class StatementManager:
         return result
     
     def get_domain_info(self, domain: HumanCentricityDomain) -> Optional[Dict[str, Any]]:
-        """Get information about a specific fixed domain"""
+        """Get information about a specific fixed domain with fresh statement count from database"""
         domain_config = self.fixed_domains.get(domain)
         if not domain_config:
             return None
         
-        statement_count = len(self.db_manager.get_statements_by_domain(domain.value))
+        # Get fresh statement count from database
+        statement_count = len(self.db_manager.get_statements_by_domain(domain.value, active_only=True))
         domain_info = domain_config.copy()
         domain_info['statement_count'] = statement_count
         
@@ -105,12 +107,12 @@ class StatementManager:
     # Statement Management Methods
     
     def get_all_statements(self) -> List[StatementResponse]:
-        """Get all active statements"""
+        """Get all active statements - always from database"""
         db_statements = self.db_manager.get_all_active_statements()
         return [self._db_statement_to_response(stmt) for stmt in db_statements]
     
     def get_statements_by_domain(self, domain: HumanCentricityDomain) -> List[StatementResponse]:
-        """Get statements for specific domain"""
+        """Get statements for specific domain - always from database"""
         db_statements = self.db_manager.get_statements_by_domain(domain.value, active_only=True)
         return [self._db_statement_to_response(stmt) for stmt in db_statements]
     
@@ -304,7 +306,7 @@ class StatementManager:
     # Assessment Structure Methods
     
     def get_assessment_structure(self) -> Dict[str, Any]:
-        """Get complete assessment structure including domains, statements, and scales"""
+        """Get complete assessment structure including domains, statements, and scales - built fresh from database"""
         structure = {
             'domains': {},
             'statements': {},
@@ -312,10 +314,10 @@ class StatementManager:
             'metadata': ASSESSMENT_STRUCTURE
         }
         
-        # Get domains with statements
+        # Get domains with statements directly from database (not from cache)
         for domain in self.fixed_domains.keys():
-            domain_info = self.get_domain_info(domain)
-            domain_statements = self.get_statements_by_domain(domain)
+            domain_info = self.get_domain_info(domain)  # Already gets fresh count from DB
+            domain_statements = self.get_statements_by_domain(domain)  # Already queries DB
             
             structure['domains'][domain.value] = {
                 'config': domain_info,
@@ -338,7 +340,7 @@ class StatementManager:
             'stats': {}
         }
         
-        # Get current statistics
+        # Get current statistics from database
         all_statements = self.get_all_statements()
         statement_counts = self.db_manager.get_statement_count_by_domain()
         

@@ -7,117 +7,6 @@ from enum import Enum
 from pydantic import BaseModel, ValidationError, Field, root_validator, validator
 
 
-# Environmental Assessment Levels
-class DigitalTwinRealismLevel(str, Enum):
-    STATIC_PLAN = "static_plan"  # Plan statique, aucun lien avec la réalité
-    SIMPLE_3D = "simple_3d"  # Formes 3D simples
-    BASIC_MOVEMENTS = "basic_movements"  # Modèle avec mouvements basiques
-    REPRESENTATIVE_SIMULATION = "representative_simulation"  # Simulation représentative
-    HIGH_FIDELITY = "high_fidelity"  # Modèle haute fidélité
-    REAL_TIME_CONNECTION = "real_time_connection"  # Connexion temps réel
-
-
-class FlowTrackingLevel(str, Enum):
-    NOTHING_TRACKED = "nothing_tracked"  # Rien n'est suivi
-    SINGLE_FLOW = "single_flow"  # Un seul flux mesuré
-    MULTIPLE_FLOWS = "multiple_flows"  # Plusieurs flux mesurés séparément
-    GLOBAL_BALANCE = "global_balance"  # Bilans globaux des principaux flux
-    DETAILED_TRACEABILITY = "detailed_traceability"  # Traçabilité détaillée poste par poste
-    COMPLETE_SUPPLY_CHAIN = "complete_supply_chain"  # Suivi complet incluant la chaîne d'approvisionnement
-
-
-class EnergyVisibilityLevel(str, Enum):
-    NO_DATA = "no_data"  # Aucune donnée
-    ANNUAL_BILLS = "annual_bills"  # Factures annuelles
-    MONTHLY_READINGS = "monthly_readings"  # Relevés mensuels
-    CONTINUOUS_EQUIPMENT = "continuous_equipment"  # Suivi continu des gros équipements
-    REAL_TIME_MAJORITY = "real_time_majority"  # Monitoring temps réel de la majorité des systèmes
-    PRECISE_SUBSYSTEM_COUNTING = "precise_subsystem_counting"  # Comptage précis par sous-systèmes
-
-
-class EnvironmentalScopeLevel(str, Enum):
-    NO_INDICATORS = "no_indicators"  # Aucun indicateur suivi
-    ENERGY_ONLY = "energy_only"  # Énergie uniquement
-    ENERGY_CARBON = "energy_carbon"  # Énergie + émissions de carbone
-    ADD_WATER = "add_water"  # Ajout de l'eau
-    MULTI_INDICATORS = "multi_indicators"  # Multi-indicateurs
-    COMPLETE_LIFECYCLE = "complete_lifecycle"  # Analyse du cycle de vie complet
-
-
-class SimulationPredictionLevel(str, Enum):
-    OBSERVATION_ONLY = "observation_only"  # Observation uniquement
-    SIMPLE_REPORTS = "simple_reports"  # Rapports et alertes simples
-    BASIC_CHANGE_TESTS = "basic_change_tests"  # Tests de changements de base
-    PREDICTIVE_SCENARIOS = "predictive_scenarios"  # Scénarios prédictifs
-    ASSISTED_OPTIMIZATION = "assisted_optimization"  # Optimisation assistée
-    AUTONOMOUS_OPTIMIZATION = "autonomous_optimization"  # Optimisation autonome
-
-
-# Economic Assessment Levels
-class DigitalizationBudgetLevel(str, Enum):
-    NO_BUDGET = "no_budget"  # Pas de budget prévu
-    MINIMAL_BUDGET = "minimal_budget"  # Budget minimal
-    CORRECT_BUDGET = "correct_budget"  # Budget correct
-    LARGE_BUDGET = "large_budget"  # Gros budget
-    VERY_LARGE_BUDGET = "very_large_budget"  # Très gros budget
-    MAXIMUM_BUDGET = "maximum_budget"  # Budget maximum
-
-
-class SavingsLevel(str, Enum):
-    NO_SAVINGS = "no_savings"  # Aucune économie
-    SMALL_SAVINGS = "small_savings"  # Petites économies
-    CORRECT_SAVINGS = "correct_savings"  # Économies correctes
-    GOOD_SAVINGS = "good_savings"  # Bonnes économies
-    VERY_GOOD_SAVINGS = "very_good_savings"  # Très bonnes économies
-    EXCEPTIONAL_SAVINGS = "exceptional_savings"  # Économies exceptionnelles
-
-
-class PerformanceImprovementLevel(str, Enum):
-    NO_IMPROVEMENT = "no_improvement"  # Aucune amélioration
-    SMALL_IMPROVEMENT = "small_improvement"  # Petite amélioration
-    CORRECT_IMPROVEMENT = "correct_improvement"  # Amélioration correcte
-    GOOD_IMPROVEMENT = "good_improvement"  # Bonne amélioration
-    VERY_GOOD_IMPROVEMENT = "very_good_improvement"  # Très bonne amélioration
-    EXCEPTIONAL_IMPROVEMENT = "exceptional_improvement"  # Amélioration exceptionnelle
-
-
-class ROITimeframeLevel(str, Enum):
-    NOT_CALCULATED_OR_OVER_5_YEARS = "not_calculated_over_5y"  # Pas calculé ou plus de 5 ans
-    PROFITABLE_3_TO_5_YEARS = "profitable_3_5y"  # Rentable entre 3 et 5 ans
-    PROFITABLE_2_TO_3_YEARS = "profitable_2_3y"  # Rentable entre 2 et 3 ans
-    PROFITABLE_18_TO_24_MONTHS = "profitable_18_24m"  # Rentable entre 18 et 24 mois
-    PROFITABLE_12_TO_18_MONTHS = "profitable_12_18m"  # Rentable entre 12 et 18 mois
-    PROFITABLE_UNDER_12_MONTHS = "profitable_under_12m"  # Rentable en moins de 12 mois
-
-
-# Social Assessment Levels
-class EmployeeImpactLevel(str, Enum):
-    JOB_SUPPRESSION_OVER_10_PERCENT = "job_suppression_over_10"  # Suppression d'emplois (plus de 10%)
-    SOME_SUPPRESSIONS_5_TO_10_PERCENT = "some_suppressions_5_10"  # Quelques suppressions (5-10%)
-    STABLE_WORKFORCE_SOME_TRAINING = "stable_some_training"  # Effectifs stables, quelques formations
-    SAME_JOBS_ALL_TRAINED = "same_jobs_all_trained"  # Même nombre d'emplois + formation de tous
-    NEW_POSITIONS_5_TO_10_PERCENT = "new_positions_5_10"  # Création de nouveaux postes (5-10%)
-    STRONG_QUALIFIED_JOB_CREATION = "strong_job_creation"  # Forte création d'emplois qualifiés (plus de 10%)
-
-
-class WorkplaceSafetyLevel(str, Enum):
-    NO_CHANGE = "no_change"  # Aucun changement des risques
-    SLIGHT_REDUCTION_UNDER_10 = "slight_reduction_under_10"  # Légère réduction (<10%)
-    MODERATE_REDUCTION_10_TO_25 = "moderate_reduction_10_25"  # Réduction modérée (10-25%)
-    GOOD_IMPROVEMENT_25_TO_50 = "good_improvement_25_50"  # Bonne amélioration (25-50%)
-    STRONG_REDUCTION_50_TO_75 = "strong_reduction_50_75"  # Forte réduction (50-75%)
-    NEAR_ELIMINATION_OVER_75 = "near_elimination_over_75"  # Quasi-élimination (plus de 75%)
-
-
-class RegionalBenefitsLevel(str, Enum):
-    NO_LOCAL_IMPACT = "no_local_impact"  # Aucune retombée locale
-    SOME_LOCAL_PURCHASES = "some_local_purchases"  # Quelques achats locaux supplémentaires
-    PARTNERSHIP_1_2_COMPANIES = "partnership_1_2_companies"  # Partenariat avec 1-2 entreprises locales
-    INSTITUTIONAL_COLLABORATION = "institutional_collaboration"  # Collaboration institutionnelle
-    NOTABLE_LOCAL_CREATION = "notable_local_creation"  # Création locale notable
-    MAJOR_IMPACT = "major_impact"  # Impact majeur
-
-
 # Sustainability Domain Enum
 class SustainabilityDomain(str, Enum):
     ENVIRONMENTAL = "environmental"
@@ -126,49 +15,29 @@ class SustainabilityDomain(str, Enum):
 
 
 class DynamicAssessment(BaseModel):
-    """Generic assessment model that accepts dynamic criterion keys"""
+    """Generic assessment model that accepts any criterion keys with numeric levels"""
     
     class Config:
         extra = "allow"  # Allow additional fields
     
-    def __init__(self, **data):
-        # Convert any enum string values to their proper enum types if needed
-        processed_data = {}
-        for key, value in data.items():
-            processed_data[key] = self._process_criterion_value(key, value)
-        super().__init__(**processed_data)
-    
-    def _process_criterion_value(self, key: str, value: Any) -> Any:
-        """Process criterion values, converting strings to enums if applicable"""
-        return value
-    
     def dict(self, **kwargs) -> Dict[str, Any]:
         """Override dict to ensure proper serialization"""
-        result = super().dict(**kwargs)
-        return result
+        return super().dict(**kwargs)
 
 
-# Assessment Models
 class EnvironmentalAssessment(DynamicAssessment):
-    digital_twin_realism: Optional[DigitalTwinRealismLevel] = None
-    flow_tracking: Optional[Any] = None  
-    energy_visibility: Optional[Any] = None
-    environmental_scope: Optional[Any] = None
-    simulation_prediction: Optional[Any] = None
+    """Environmental assessment - accepts criterion keys with numeric level values (0-5)"""
+    pass
 
 
 class EconomicAssessment(DynamicAssessment):
-    digitalization_budget: Optional[Any] = None
-    savings_realized: Optional[Any] = None
-    performance_improvement: Optional[Any] = None
-    roi_timeframe: Optional[Any] = None
+    """Economic assessment - accepts criterion keys with numeric level values (0-5)"""
+    pass
 
 
 class SocialAssessment(DynamicAssessment):
-    employee_impact: Optional[Any] = None
-    workplace_safety: Optional[Any] = None
-    regional_benefits: Optional[Any] = None
-
+    """Social assessment - accepts criterion keys with numeric level values (0-5)"""
+    pass
 
 # Updated SustainabilityInput to support selective domain assessment
 class SustainabilityInput(BaseModel):

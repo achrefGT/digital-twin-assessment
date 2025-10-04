@@ -2,8 +2,10 @@ import React from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { Button } from '@/components/ui/button'
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer } from 'recharts'
-import { Brain, Shield, Sparkles, Target, TrendingUp, Award, Trophy, Star, CheckCircle, Clock } from 'lucide-react'
+import { Brain, Shield, Sparkles, Target, TrendingUp, Award, Trophy, Star, CheckCircle, Clock, ArrowRight } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 
 interface RadarScoreChartProps {
   domainScores?: Record<string, number>
@@ -66,10 +68,10 @@ const CircularProgress: React.FC<{
       </svg>
       {/* Center content */}
       <div className="absolute inset-0 flex items-center justify-center flex-col">
-        <div className="text-3xl font-bold text-foreground mb-1">
+        <div className="text-4xl font-bold text-foreground mb-1">
           {value !== null && value !== undefined ? value.toFixed(1) : '--'}
         </div>
-        <div className="text-xs text-muted-foreground uppercase tracking-wide">
+        <div className="text-sm text-muted-foreground uppercase tracking-wide">
           Overall Score
         </div>
       </div>
@@ -84,27 +86,30 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
   completionPercentage = 0,
   totalDomains = 3
 }) => {
+  const navigate = useNavigate()
+
   // Transform domain scores into radar chart data
   const radarData = React.useMemo(() => {
     const domains = [
-      { key: 'human_centricity', name: 'Human Centricity', shortName: 'Human Centricity', icon: Brain, color: '#3b82f6' },
-      { key: 'resilience', name: 'Resilience', shortName: 'Resilience', icon: Shield, color: '#8b5cf6' },
-      { key: 'sustainability', name: 'Sustainability', shortName: 'Sustainability', icon: Sparkles, color: '#10b981' }
+      { key: 'human_centricity', name: 'Human Centricity', shortName: 'Human Centricity', icon: Brain, color: '#3b82f6', path: '/assessment/human_centricity' },
+      { key: 'resilience', name: 'Resilience', shortName: 'Resilience', icon: Shield, color: '#8b5cf6', path: '/assessment/resilience' },
+      { key: 'sustainability', name: 'Sustainability', shortName: 'Sustainability', icon: Sparkles, color: '#10b981', path: '/assessment/sustainability' }
     ]
 
     return domains.map(domain => ({
       domain: domain.shortName,
       fullName: domain.name,
-      score: domainScores?.[domain.key] || 0,
+      score: domainScores?.[domain.key] ?? null,  
       fullMark: 100,
       color: domain.color,
       icon: domain.icon,
-      isCompleted: completedDomains.includes(domain.key)
+      isCompleted: completedDomains.includes(domain.key),
+      assessmentPath: domain.path
     }))
   }, [domainScores, completedDomains])
 
-  const getScoreRating = (score?: number) => {
-    if (!score || score === 0) return { text: 'Not Started', color: 'text-slate-500', bgColor: 'bg-slate-100', iconColor: 'text-slate-400', icon: Clock }
+  const getScoreRating = (score?: number | null) => {
+    if (score === null || score === undefined) return { text: 'Not Assessed', color: 'text-slate-500', bgColor: 'bg-slate-100', iconColor: 'text-slate-400', icon: Clock }
     if (score >= 90) return { text: 'Excellent', color: 'text-emerald-600', bgColor: 'bg-emerald-50', iconColor: 'text-emerald-500', icon: Trophy }
     if (score >= 80) return { text: 'Very Good', color: 'text-green-600', bgColor: 'bg-green-50', iconColor: 'text-green-500', icon: Star }
     if (score >= 70) return { text: 'Good', color: 'text-lime-600', bgColor: 'bg-lime-50', iconColor: 'text-lime-500', icon: CheckCircle }
@@ -124,7 +129,7 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
         
         {/* Radar Chart Section */}
         <div className="xl:col-span-2">
-          <Card className="border-0 shadow-lg bg-gradient-to-br from-background via-background to-muted/20">
+          <Card className="border-0 shadow-lg bg-gradient-to-br from-background via-background to-muted/20 h-full flex flex-col">
             <CardHeader className="bg-gradient-to-r from-primary/5 to-transparent border-b border-border/50">
               <CardTitle className="flex items-center gap-3 text-xl">
                 <div className="p-2 bg-primary/10 rounded-lg">
@@ -140,21 +145,12 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
                 </div>
               </CardTitle>
             </CardHeader>
-            <CardContent className="p-8">
-              <div className="h-96">
+            <CardContent className="p-8 flex-1 flex items-center">
+              <div className="h-96 w-full">
                 <ResponsiveContainer width="100%" height="100%">
-                  {/* 
-                    Key changes to make the plotted area larger while keeping wrapper size:
-                      - Reduce chart margins (less whitespace).
-                      - Increase outerRadius so the radar expands to fill more of the container.
-                      - Increase strokeWidth and dot radius to make shapes feel larger.
-                      - Increase label font sizes and tweak label offsets.
-                  */}
                   <RadarChart
                     data={radarData}
-                    // outerRadius in px — increase to let the polygon expand
                     outerRadius={140}
-                    // tighter margins so the drawing area is larger
                     margin={{ top: 8, right: 12, bottom: 8, left: 12 }}
                   >
                     <defs>
@@ -174,11 +170,10 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
                     <PolarAngleAxis
                       dataKey="domain"
                       tick={({ x, y, payload }) => {
-                        // Slightly larger label font + bigger offsets so they don't collide with a bigger polygon
                         const getLabelAdjustment = (label: string) => {
                           switch (label) {
-                            case 'Human Centricity': return -12; // move up more
-                            case 'Sustainability': return 28;    // move down more
+                            case 'Human Centricity': return -12;
+                            case 'Sustainability': return 28;
                             case 'Resilience': return 28;  
                             default: return 0;
                           }
@@ -193,9 +188,9 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
                               <text
                                 key={index}
                                 x={x}
-                                y={adjustedY - 3 + (index * 18)} // increased line-height for larger font
+                                y={adjustedY - 3 + (index * 18)}
                                 textAnchor="middle"
-                                fontSize={16} // bumped font size
+                                fontSize={16}
                                 fill="#475569"
                                 fontWeight={700}
                               >
@@ -224,8 +219,7 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
                       stroke="#3b82f6"
                       fill="url(#radarGradient)"
                       fillOpacity={0.55}
-                      strokeWidth={4} // thicker stroke
-                      // Larger, more prominent dots
+                      strokeWidth={4}
                       dot={{
                         r: 8,
                         stroke: '#ffffff',
@@ -257,10 +251,9 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
                 {/* Circular Progress */}
                 <CircularProgress 
                   value={overallScore} 
-                  size={160} 
-                  strokeWidth={12}
+                  size={220} 
+                  strokeWidth={14}
                 />
-
                 {/* Score Rating */}
                 {overallScore && (
                   <div className="space-y-3">
@@ -336,6 +329,7 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
               const rating = getScoreRating(item.score)
               const IconComponent = item.icon
               const RatingIcon = rating.icon
+              const isNotAssessed = item.score === null || item.score === undefined
               
               return (
                 <div 
@@ -384,14 +378,14 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
                           className="text-3xl font-bold"
                           style={{ color: item.color }}
                         >
-                          {item.score > 0 ? item.score.toFixed(1) : '--'}
+                          {item.score !== null ? item.score.toFixed(1) : '--'}
                         </span>
                         <span className="text-sm text-muted-foreground font-medium">
                           /100
                         </span>
                       </div>
                       
-                      {item.score > 0 && (
+                      {!isNotAssessed && (
                         <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${rating.bgColor}`}>
                           <RatingIcon className={`w-4 h-4 ${rating.iconColor}`} />
                           <span className={`text-xs font-medium ${rating.color}`}>
@@ -401,24 +395,52 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
                       )}
                     </div>
 
-                    {/* Progress Bar */}
-                    <div className="space-y-2">
-                      <Progress 
-                        value={item.score} 
-                        className="h-2"
-                        style={{
-                          background: `${item.color}15`
-                        }}
-                      />
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-muted-foreground">
-                          Performance Level
-                        </span>
-                        <span className="text-xs font-medium text-muted-foreground">
-                          {item.score > 0 ? `${item.score.toFixed(0)}%` : 'Pending'}
-                        </span>
+                    {/* Progress Bar or Start Button */}
+                    {isNotAssessed ? (
+                      <div className="space-y-3 pt-2">
+                        <Button
+  onClick={() => navigate(item.assessmentPath)}
+  className="w-full"
+  variant="outline"
+  style={{
+    borderColor: item.color,
+    color: item.color,
+  }}
+  onMouseEnter={(e) => {
+    e.currentTarget.style.backgroundColor = item.color
+    e.currentTarget.style.color = 'white'
+  }}
+  onMouseLeave={(e) => {
+    e.currentTarget.style.backgroundColor = 'transparent'
+    e.currentTarget.style.color = item.color
+  }}
+>
+  <span>Start Assessment</span>
+  <ArrowRight className="w-4 h-4 ml-2" />
+</Button>
+                        <p className="text-xs text-center text-muted-foreground">
+                          Complete this assessment to see your score
+                        </p>
                       </div>
-                    </div>
+                    ) : (
+                      <div className="space-y-2">
+                        <Progress 
+                          value={item.score ?? 0} 
+                          className="h-2"
+                          style={{
+                            background: `${item.color}15`
+                          }}
+                        />
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-muted-foreground">
+                            Performance Level
+                          </span>
+                          <span className="text-xs font-medium text-muted-foreground">
+                            {item.score !== null ? `${item.score.toFixed(0)}%` : 'Pending'}
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )

@@ -18,57 +18,6 @@ interface StepDefinition {
   component: React.ComponentType<StepProps>
 }
 
-// Helper function to convert criterion key to enum value
-const keyToEnumValue = (key: string, level: number): string => {
-  // This maps criterion keys to their corresponding enum values
-  // You might need to adjust this based on your enum definitions
-  const keyMap: Record<string, string[]> = {
-    'ENV_01': ['static_plan', 'simple_3d', 'basic_movements', 'representative_simulation', 'high_fidelity', 'real_time_connection'],
-    'ENV_02': ['nothing_tracked', 'single_flow', 'multiple_flows', 'global_balance', 'detailed_traceability', 'complete_supply_chain'],
-    'ENV_03': ['no_data', 'annual_bills', 'monthly_readings', 'continuous_equipment', 'real_time_majority', 'precise_subsystem_counting'],
-    'ENV_04': ['no_indicators', 'energy_only', 'energy_carbon', 'add_water', 'multi_indicators', 'complete_lifecycle'],
-    'ENV_05': ['observation_only', 'simple_reports', 'basic_change_tests', 'predictive_scenarios', 'assisted_optimization', 'autonomous_optimization'],
-    'ECO_01': ['no_budget', 'minimal_budget', 'correct_budget', 'large_budget', 'very_large_budget', 'maximum_budget'],
-    'ECO_02': ['no_savings', 'small_savings', 'correct_savings', 'good_savings', 'very_good_savings', 'exceptional_savings'],
-    'ECO_03': ['no_improvement', 'small_improvement', 'correct_improvement', 'good_improvement', 'very_good_improvement', 'exceptional_improvement'],
-    'ECO_04': ['not_calculated_over_5y', 'profitable_3_5y', 'profitable_2_3y', 'profitable_18_24m', 'profitable_12_18m', 'profitable_under_12m'],
-    'SOC_01': ['job_suppression_over_10', 'some_suppressions_5_10', 'stable_some_training', 'same_jobs_all_trained', 'new_positions_5_10', 'strong_job_creation'],
-    'SOC_02': ['no_change', 'slight_reduction_under_10', 'moderate_reduction_10_25', 'good_improvement_25_50', 'strong_reduction_50_75', 'near_elimination_over_75'],
-    'SOC_03': ['no_local_impact', 'some_local_purchases', 'partnership_1_2_companies', 'institutional_collaboration', 'notable_local_creation', 'major_impact']
-  }
-  
-  const enumValues = keyMap[key]
-  if (!enumValues || level < 0 || level >= enumValues.length) {
-    return `level_${level}`
-  }
-  
-  return enumValues[level]
-}
-
-// Helper function to convert enum value back to level index
-const enumValueToLevel = (key: string, enumValue: string): number => {
-  const keyMap: Record<string, string[]> = {
-    'ENV_01': ['static_plan', 'simple_3d', 'basic_movements', 'representative_simulation', 'high_fidelity', 'real_time_connection'],
-    'ENV_02': ['nothing_tracked', 'single_flow', 'multiple_flows', 'global_balance', 'detailed_traceability', 'complete_supply_chain'],
-    'ENV_03': ['no_data', 'annual_bills', 'monthly_readings', 'continuous_equipment', 'real_time_majority', 'precise_subsystem_counting'],
-    'ENV_04': ['no_indicators', 'energy_only', 'energy_carbon', 'add_water', 'multi_indicators', 'complete_lifecycle'],
-    'ENV_05': ['observation_only', 'simple_reports', 'basic_change_tests', 'predictive_scenarios', 'assisted_optimization', 'autonomous_optimization'],
-    'ECO_01': ['no_budget', 'minimal_budget', 'correct_budget', 'large_budget', 'very_large_budget', 'maximum_budget'],
-    'ECO_02': ['no_savings', 'small_savings', 'correct_savings', 'good_savings', 'very_good_savings', 'exceptional_savings'],
-    'ECO_03': ['no_improvement', 'small_improvement', 'correct_improvement', 'good_improvement', 'very_good_improvement', 'exceptional_improvement'],
-    'ECO_04': ['not_calculated_over_5y', 'profitable_3_5y', 'profitable_2_3y', 'profitable_18_24m', 'profitable_12_18m', 'profitable_under_12m'],
-    'SOC_01': ['job_suppression_over_10', 'some_suppressions_5_10', 'stable_some_training', 'same_jobs_all_trained', 'new_positions_5_10', 'strong_job_creation'],
-    'SOC_02': ['no_change', 'slight_reduction_under_10', 'moderate_reduction_10_25', 'good_improvement_25_50', 'strong_reduction_50_75', 'near_elimination_over_75'],
-    'SOC_03': ['no_local_impact', 'some_local_purchases', 'partnership_1_2_companies', 'institutional_collaboration', 'notable_local_creation', 'major_impact']
-  }
-  
-  const enumValues = keyMap[key]
-  if (!enumValues) return -1
-  
-  const index = enumValues.indexOf(enumValue)
-  return index !== -1 ? index : -1
-}
-
 // Generic domain step component that works with dynamic criteria
 const DomainStep: React.FC<StepProps & { domain: string }> = ({ 
   onSubmit, 
@@ -76,13 +25,14 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
   domain 
 }) => {
   const { scenarios, isLoading, error } = useSustainability()
-  const [assessments, setAssessments] = React.useState<Record<string, string>>(() => {
-    // Initialize from initialData if available
-    const initialValues: Record<string, string> = {}
+  
+  // State now stores numeric level indices (0-5) instead of enum strings
+  const [assessments, setAssessments] = React.useState<Record<string, number>>(() => {
+    const initialValues: Record<string, number> = {}
     if (initialData?.assessments?.[domain]) {
       const domainData = initialData.assessments[domain]
       Object.entries(domainData).forEach(([key, value]) => {
-        if (typeof value === 'string') {
+        if (typeof value === 'number') {
           initialValues[key] = value
         }
       })
@@ -90,38 +40,32 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
     return initialValues
   })
 
-  // Get domain data and criteria for this domain
   const domainData = scenarios?.scenarios[domain]
   const domainCriteria = domainData?.criteria || {}
 
   const updateAssessment = (criterionKey: string, levelIndex: number) => {
-    const enumValue = keyToEnumValue(criterionKey, levelIndex)
+    // Simply store the numeric level index
     setAssessments(prev => ({
       ...prev,
-      [criterionKey]: enumValue
+      [criterionKey]: levelIndex
     }))
   }
 
   const isComplete = Object.keys(domainCriteria).length > 0 && 
-    Object.keys(domainCriteria).every(key => assessments[key])
+    Object.keys(domainCriteria).every(key => assessments[key] !== undefined)
 
   const handleSubmit = () => {
-    // Convert back to the expected format
-    const domainAssessment: Record<string, string> = {}
-    Object.entries(assessments).forEach(([key, enumValue]) => {
-      domainAssessment[key] = enumValue
-    })
-
+    // No conversion needed - assessments already contains numeric indices
     const finalData = { 
       assessments: {
         ...initialData?.assessments,
-        [domain]: domainAssessment
+        [domain]: assessments
       }
     }
     onSubmit(finalData)
   }
 
-  // Get domain icon
+  // Domain-specific styling helpers
   const getDomainIcon = (domain: string) => {
     switch (domain) {
       case 'environmental': return <Leaf className="w-5 h-5 text-white" />
@@ -140,7 +84,7 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
     }
   }
 
-  // Show loading state
+  // Loading state
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -165,7 +109,7 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
     )
   }
 
-  // Show error state
+  // Error state
   if (error) {
     return (
       <div className="space-y-6">
@@ -173,7 +117,7 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
             Failed to load criteria for {domain}. Please try refreshing the page.
-            Error: {error.message}
+            {error.message && ` Error: ${error.message}`}
           </AlertDescription>
         </Alert>
         <Button onClick={handleSubmit} variant="eco" className="w-full" disabled>
@@ -183,7 +127,7 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
     )
   }
 
-  // Show no criteria state
+  // No criteria configured
   if (Object.keys(domainCriteria).length === 0) {
     return (
       <div className="space-y-6">
@@ -216,27 +160,39 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
       {/* Criteria List */}
       <div className="space-y-4">
         {Object.entries(domainCriteria).map(([criterionKey, criterion]) => {
-          const currentEnumValue = assessments[criterionKey] || ""
-          const currentLevel = currentEnumValue ? enumValueToLevel(criterionKey, currentEnumValue) : -1
+          const currentLevel = assessments[criterionKey]
+          const levelCount = criterion.levels?.length || 0
           
           return (
-            <div key={criterionKey} className="space-y-3 p-4 border rounded-lg">
-              <Label className="text-sm font-medium">{criterion.name}</Label>
-              {criterion.description && (
-                <p className="text-xs text-gray-500">{criterion.description}</p>
-              )}
+            <div key={criterionKey} className="space-y-3 p-4 border rounded-lg hover:border-gray-300 transition-colors">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <Label className="text-sm font-medium text-gray-900">
+                    {criterion.name}
+                  </Label>
+                  {criterion.description && (
+                    <p className="text-xs text-gray-500 mt-1">{criterion.description}</p>
+                  )}
+                </div>
+                <span className="text-xs text-gray-400 ml-2">
+                  {currentLevel !== undefined ? `${currentLevel + 1}/${levelCount}` : `0/${levelCount}`}
+                </span>
+              </div>
               
               <Select 
-                value={currentLevel >= 0 ? currentLevel.toString() : ""} 
+                value={currentLevel !== undefined ? currentLevel.toString() : ""} 
                 onValueChange={(value) => updateAssessment(criterionKey, parseInt(value))}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select level" />
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select level..." />
                 </SelectTrigger>
                 <SelectContent>
                   {criterion.levels.map((level, index) => (
                     <SelectItem key={index} value={index.toString()}>
-                      {level}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500 font-mono">L{index}</span>
+                        <span>{level}</span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -246,14 +202,24 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
         })}
       </div>
       
-      <Button onClick={handleSubmit} variant="eco" className="w-full" disabled={!isComplete}>
+      {/* Progress indicator */}
+      <div className="text-sm text-gray-500 text-center">
+        {Object.keys(assessments).length} of {Object.keys(domainCriteria).length} criteria completed
+      </div>
+      
+      <Button 
+        onClick={handleSubmit} 
+        variant="eco" 
+        className="w-full" 
+        disabled={!isComplete}
+      >
         {domain === 'social' ? 'Complete Assessment' : 'Next Step'}
       </Button>
     </div>
   )
 }
 
-// Individual domain components that use the generic DomainStep
+// Individual domain components
 const EnvironmentalStep: React.FC<StepProps> = (props) => (
   <DomainStep {...props} domain="environmental" />
 )
@@ -264,13 +230,13 @@ const EconomicStep: React.FC<StepProps> = (props) => (
 
 const SocialStep: React.FC<StepProps> = ({ onSubmit, initialData }) => {
   const { scenarios, isLoading, error } = useSustainability()
-  const [assessments, setAssessments] = React.useState<Record<string, string>>(() => {
-    // Initialize from initialData if available
-    const initialValues: Record<string, string> = {}
+  
+  const [assessments, setAssessments] = React.useState<Record<string, number>>(() => {
+    const initialValues: Record<string, number> = {}
     if (initialData?.assessments?.social) {
       const domainData = initialData.assessments.social
       Object.entries(domainData).forEach(([key, value]) => {
-        if (typeof value === 'string') {
+        if (typeof value === 'number') {
           initialValues[key] = value
         }
       })
@@ -282,28 +248,22 @@ const SocialStep: React.FC<StepProps> = ({ onSubmit, initialData }) => {
   const domainCriteria = domainData?.criteria || {}
 
   const updateAssessment = (criterionKey: string, levelIndex: number) => {
-    const enumValue = keyToEnumValue(criterionKey, levelIndex)
     setAssessments(prev => ({
       ...prev,
-      [criterionKey]: enumValue
+      [criterionKey]: levelIndex
     }))
   }
 
   const isComplete = Object.keys(domainCriteria).length > 0 && 
-    Object.keys(domainCriteria).every(key => assessments[key])
+    Object.keys(domainCriteria).every(key => assessments[key] !== undefined)
 
   const handleSubmit = () => {
-    // Convert back to the expected format and calculate total criteria
-    const domainAssessment: Record<string, string> = {}
-    Object.entries(assessments).forEach(([key, enumValue]) => {
-      domainAssessment[key] = enumValue
-    })
-
     const allAssessments = {
       ...initialData?.assessments,
-      social: domainAssessment
+      social: assessments
     }
     
+    // Calculate metadata
     let totalCriteria = 0
     Object.values(allAssessments).forEach((domain: any) => {
       if (domain && typeof domain === 'object') {
@@ -318,13 +278,13 @@ const SocialStep: React.FC<StepProps> = ({ onSubmit, initialData }) => {
         version: "2.0",
         total_criteria: totalCriteria,
         selected_domain_count: Object.keys(allAssessments).length,
-        criteria_configuration_version: scenarios?.version || "unknown"
+        criteria_configuration_version: "2.0"
       }
     }
     onSubmit(finalData)
   }
 
-  // Handle loading and error states (same as DomainStep)
+  // Loading state
   if (isLoading) {
     return (
       <div className="space-y-6">
@@ -335,7 +295,6 @@ const SocialStep: React.FC<StepProps> = ({ onSubmit, initialData }) => {
             <Skeleton className="h-4 w-64" />
           </div>
         </div>
-        
         <div className="space-y-4">
           {[1, 2, 3].map(i => (
             <div key={i} className="space-y-3 p-4 border rounded-lg">
@@ -349,6 +308,7 @@ const SocialStep: React.FC<StepProps> = ({ onSubmit, initialData }) => {
     )
   }
 
+  // Error state
   if (error) {
     return (
       <div className="space-y-6">
@@ -356,7 +316,7 @@ const SocialStep: React.FC<StepProps> = ({ onSubmit, initialData }) => {
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
             Failed to load criteria for social domain. Please try refreshing the page.
-            Error: {error.message}
+            {error.message && ` Error: ${error.message}`}
           </AlertDescription>
         </Alert>
         <Button onClick={handleSubmit} variant="eco" className="w-full" disabled>
@@ -366,6 +326,7 @@ const SocialStep: React.FC<StepProps> = ({ onSubmit, initialData }) => {
     )
   }
 
+  // No criteria configured
   if (Object.keys(domainCriteria).length === 0) {
     return (
       <div className="space-y-6">
@@ -398,27 +359,39 @@ const SocialStep: React.FC<StepProps> = ({ onSubmit, initialData }) => {
       {/* Criteria List */}
       <div className="space-y-4">
         {Object.entries(domainCriteria).map(([criterionKey, criterion]) => {
-          const currentEnumValue = assessments[criterionKey] || ""
-          const currentLevel = currentEnumValue ? enumValueToLevel(criterionKey, currentEnumValue) : -1
+          const currentLevel = assessments[criterionKey]
+          const levelCount = criterion.levels?.length || 0
           
           return (
-            <div key={criterionKey} className="space-y-3 p-4 border rounded-lg">
-              <Label className="text-sm font-medium">{criterion.name}</Label>
-              {criterion.description && (
-                <p className="text-xs text-gray-500">{criterion.description}</p>
-              )}
+            <div key={criterionKey} className="space-y-3 p-4 border rounded-lg hover:border-gray-300 transition-colors">
+              <div className="flex items-start justify-between">
+                <div className="flex-1">
+                  <Label className="text-sm font-medium text-gray-900">
+                    {criterion.name}
+                  </Label>
+                  {criterion.description && (
+                    <p className="text-xs text-gray-500 mt-1">{criterion.description}</p>
+                  )}
+                </div>
+                <span className="text-xs text-gray-400 ml-2">
+                  {currentLevel !== undefined ? `${currentLevel + 1}/${levelCount}` : `0/${levelCount}`}
+                </span>
+              </div>
               
               <Select 
-                value={currentLevel >= 0 ? currentLevel.toString() : ""} 
+                value={currentLevel !== undefined ? currentLevel.toString() : ""} 
                 onValueChange={(value) => updateAssessment(criterionKey, parseInt(value))}
               >
-                <SelectTrigger>
-                  <SelectValue placeholder="Select level" />
+                <SelectTrigger className="w-full">
+                  <SelectValue placeholder="Select level..." />
                 </SelectTrigger>
                 <SelectContent>
                   {criterion.levels.map((level, index) => (
                     <SelectItem key={index} value={index.toString()}>
-                      {level}
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-gray-500 font-mono">L{index}</span>
+                        <span>{level}</span>
+                      </div>
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -428,7 +401,17 @@ const SocialStep: React.FC<StepProps> = ({ onSubmit, initialData }) => {
         })}
       </div>
       
-      <Button onClick={handleSubmit} variant="eco" className="w-full" disabled={!isComplete}>
+      {/* Progress indicator */}
+      <div className="text-sm text-gray-500 text-center">
+        {Object.keys(assessments).length} of {Object.keys(domainCriteria).length} criteria completed
+      </div>
+      
+      <Button 
+        onClick={handleSubmit} 
+        variant="eco" 
+        className="w-full" 
+        disabled={!isComplete}
+      >
         Complete Assessment
       </Button>
     </div>
@@ -456,16 +439,15 @@ export const getSustainabilitySteps = (): StepDefinition[] => {
   ]
 }
 
-// Dynamic step generation based on available domains (use this for fully dynamic steps)
-export const getDynamicSustainabilitySteps = (availableDomains: Array<{domain: string, description: string}>): StepDefinition[] => {
-  return availableDomains.map((domainInfo, index) => ({
-    title: domainInfo.domain.charAt(0).toUpperCase() + domainInfo.domain.slice(1), // Capitalize first letter
+// Dynamic step generation based on available domains
+export const getDynamicSustainabilitySteps = (
+  availableDomains: Array<{domain: string, description: string}>
+): StepDefinition[] => {
+  return availableDomains.map((domainInfo) => ({
+    title: domainInfo.domain.charAt(0).toUpperCase() + domainInfo.domain.slice(1),
     description: domainInfo.description,
     component: (props: StepProps) => (
-      <DomainStep 
-        {...props} 
-        domain={domainInfo.domain}
-      />
+      <DomainStep {...props} domain={domainInfo.domain} />
     )
   }))
 }

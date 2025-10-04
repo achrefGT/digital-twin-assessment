@@ -17,6 +17,9 @@ import {
   ChevronDown,
   ChevronRight,
   Loader2,
+  TrendingDown,
+  TrendingUp,
+  Settings
 } from 'lucide-react';
 
 interface StatementsListProps {
@@ -128,6 +131,46 @@ const getWidgetConfig = (widget: string) => {
         color: 'text-gray-600'
       };
   }
+};
+
+const PerformanceConfigDisplay = ({ config }: { config: Record<string, any> }) => {
+  const normalizationLabel = config.normalization === 'inverse' ? 'Lower is Better' : 'Higher is Better';
+  const NormIcon = config.normalization === 'inverse' ? TrendingDown : TrendingUp;
+  
+  return (
+    <div className="mt-3 p-3 bg-indigo-50 rounded-lg border border-indigo-200">
+      <div className="flex items-center gap-2 mb-2">
+        <Settings className="w-4 h-4 text-indigo-600" />
+        <p className="text-xs font-medium text-indigo-900">Performance Configuration</p>
+      </div>
+      <div className="grid grid-cols-3 gap-3">
+        <div className="bg-white rounded p-2 border border-indigo-100">
+          <p className="text-xs text-gray-500 mb-1">Range</p>
+          <p className="text-sm font-medium text-gray-900">
+            {config.min ?? 'N/A'} - {config.max ?? 'N/A'}
+          </p>
+        </div>
+        <div className="bg-white rounded p-2 border border-indigo-100">
+          <p className="text-xs text-gray-500 mb-1">Normalization</p>
+          <div className="flex items-center gap-1">
+            <NormIcon className="w-3 h-3 text-indigo-600" />
+            <p className="text-sm font-medium text-gray-900">{normalizationLabel}</p>
+          </div>
+        </div>
+        {config.unit && (
+          <div className="bg-white rounded p-2 border border-indigo-100">
+            <p className="text-xs text-gray-500 mb-1">Unit</p>
+            <p className="text-sm font-medium text-gray-900">{config.unit}</p>
+          </div>
+        )}
+      </div>
+      {config.step && (
+        <div className="mt-2 text-xs text-indigo-700">
+          <span className="font-medium">Step:</span> {config.step}
+        </div>
+      )}
+    </div>
+  );
 };
 
 export function StatementsList({ statements, loading, error, onEdit, onDelete, deletingIds = [] }: StatementsListProps) {
@@ -243,6 +286,7 @@ export function StatementsList({ statements, loading, error, onEdit, onDelete, d
     const domainConfig = getDomainConfig(statement.domain_key);
     const widgetConfig = getWidgetConfig(statement.widget);
     const isDeleting = deletingIds.includes(statement.id);
+    const isPerformance = statement.domain_key === 'Performance';
 
     return (
       <div
@@ -281,6 +325,11 @@ export function StatementsList({ statements, loading, error, onEdit, onDelete, d
               {statement.statement_text}
             </p>
 
+            {/* Performance Domain Configuration Display */}
+            {isPerformance && statement.widget_config && Object.keys(statement.widget_config).length > 0 && (
+              <PerformanceConfigDisplay config={statement.widget_config} />
+            )}
+
             {/* Metadata Grid */}
             <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-3">
               <div className="flex items-center gap-2">
@@ -308,8 +357,8 @@ export function StatementsList({ statements, loading, error, onEdit, onDelete, d
               </div>
             </div>
 
-            {/* Widget Config */}
-            {statement.widget_config && Object.keys(statement.widget_config).length > 0 && (
+            {/* Widget Config - Only show for non-Performance domains or if no special config */}
+            {!isPerformance && statement.widget_config && Object.keys(statement.widget_config).length > 0 && (
               <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
                 <p className="text-xs font-medium text-gray-700 mb-2">Widget Configuration:</p>
                 <pre className="text-xs text-gray-600 bg-white p-2 rounded border border-gray-200 overflow-x-auto">

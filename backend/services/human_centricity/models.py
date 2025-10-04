@@ -58,6 +58,7 @@ class StatementCreate(BaseModel):
     domain_key: HumanCentricityDomain = Field(..., description="Domain this statement belongs to")
     statement_text: str = Field(..., min_length=1, max_length=500, description="Statement text")
     widget: Optional[str] = Field(None, description="UI widget, e.g. 'likert', 'slider', 'radio', 'text'")
+    scale_key: Optional[str] = Field(None, description="Scale configuration key")  
     widget_config: Optional[Dict[str, Any]] = Field(None, description="Widget config (e.g. {'min':0,'max':100,'step':1})")
     display_order: Optional[int] = Field(default=0, description="Display order within domain")
     is_required: Optional[bool] = Field(default=True, description="Whether this statement is required")
@@ -89,6 +90,7 @@ class StatementCreate(BaseModel):
 class StatementUpdate(BaseModel):
     statement_text: Optional[str] = Field(None, min_length=1, max_length=500)
     widget: Optional[str] = None
+    scale_key: Optional[str] = None  
     widget_config: Optional[Dict[str, Any]] = None
     display_order: Optional[int] = None
     is_required: Optional[bool] = None
@@ -101,6 +103,7 @@ class StatementResponse(BaseModel):
     domain_key: HumanCentricityDomain
     statement_text: str
     statement_type: StatementType 
+    scale_key: str
     widget: Optional[str]
     widget_config: Optional[Dict[str, Any]] = None
     display_order: Optional[int]
@@ -152,6 +155,13 @@ class HumanCentricityStructure(BaseModel):
     domains: Dict[str, Dict[str, Any]]
     scales: Dict[str, Dict[str, Any]]
 
+
+# Performance constants for scoring
+PERFORMANCE_CONSTANTS = {
+    'MAX_TIME': 30,  # Maximum task time in minutes
+    'MAX_ERRORS': 10,  # Maximum error count
+    'MAX_HELP': 5   # Maximum help requests
+}
 
 # Domain scale configuration - each domain has ONE fixed scale
 DOMAIN_SCALES = {
@@ -236,9 +246,32 @@ DOMAIN_SCALES = {
     HumanCentricityDomain.PERFORMANCE: {
         'type': 'numeric',
         'metrics': {
-            'time': {'unit': 'minutes', 'min': 0, 'description': 'Task completion time'},
-            'errors': {'unit': 'count', 'min': 0, 'description': 'Number of errors'},
-            'help': {'unit': 'count', 'min': 0, 'description': 'Help requests'}
+            'time': {
+                'unit': 'minutes', 
+                'min': 0, 
+                'max': PERFORMANCE_CONSTANTS['MAX_TIME'], 
+                'normalization': 'inverse',  # Lower is better
+                'description': 'Task completion time'
+            },
+            'errors': {
+                'unit': 'count', 
+                'min': 0, 
+                'max': PERFORMANCE_CONSTANTS['MAX_ERRORS'],  
+                'normalization': 'inverse',  # Lower is better
+                'description': 'Number of errors'
+            },
+            'help': {
+                'unit': 'count', 
+                'min': 0, 
+                'max': PERFORMANCE_CONSTANTS['MAX_HELP'], 
+                'normalization': 'inverse',  # Lower is better
+                'description': 'Help requests'
+            }
+        },
+        'custom_statement_requirements': {
+            'widget_config_required_fields': ['min', 'max', 'normalization'],
+            'supported_normalizations': ['inverse', 'direct'],
+            'description': 'Custom performance metrics must specify min, max, and normalization type'
         }
     }
 }
@@ -314,41 +347,49 @@ DEFAULT_STATEMENTS = {
         {
             'text': "I found the digital twin intuitive and easy to use.",
             'display_order': 1,
+            'scale_key': 'likert_7_point',
             'is_default': True
         },
         {
             'text': "The system's functions feel well integrated and coherent.",
             'display_order': 2,
+            'scale_key': 'likert_7_point',
             'is_default': True
         },
         {
             'text': "I would use this digital twin frequently in my work.",
             'display_order': 3,
+            'scale_key': 'likert_7_point',
             'is_default': True
         },
         {
             'text': "Learning to operate the system was quick and straightforward.",
             'display_order': 4,
+            'scale_key': 'likert_7_point',
             'is_default': True
         },
         {
             'text': "I feel confident and in control when using the twin.",
             'display_order': 5,
+            'scale_key': 'likert_7_point',
             'is_default': True
         },
         {
             'text': "The terminology and workflows match my domain expertise.",
             'display_order': 6,
+            'scale_key': 'likert_7_point',
             'is_default': True
         },
         {
             'text': "I can easily tailor views, dashboards, and alerts to my needs.",
             'display_order': 7,
+            'scale_key': 'likert_7_point',
             'is_default': True
         },
         {
             'text': "I feel comfortable with how the system collects, uses, and displays my data.",
             'display_order': 8,
+            'scale_key': 'likert_7_point',
             'is_default': True
         }
     ],
@@ -356,21 +397,25 @@ DEFAULT_STATEMENTS = {
         {
             'text': "I understand the origins and currency of the data shown.",
             'display_order': 1,
+            'scale_key': 'likert_7_point',
             'is_default': True
         },
         {
             'text': "The system explains how it generated its insights or recommendations.",
             'display_order': 2,
+            'scale_key': 'likert_7_point',
             'is_default': True
         },
         {
             'text': "I trust the accuracy and reliability of the digital twin's outputs.",
             'display_order': 3,
+            'scale_key': 'likert_7_point',
             'is_default': True
         },
         {
             'text': "I feel confident making operational decisions based on the twin's insights.",
             'display_order': 4,
+            'scale_key': 'likert_7_point',
             'is_default': True
         }
     ],
@@ -379,18 +424,21 @@ DEFAULT_STATEMENTS = {
             'text': "Mental Demand",
             'display_order': 1,
             'is_default': True,
+            'scale_key': 'workload_slider',
             'widget': 'slider'
         },
         {
             'text': "Effort Required",
             'display_order': 2,
             'is_default': True,
+            'scale_key': 'workload_slider',
             'widget': 'slider'
         },
         {
             'text': "Frustration Level",
             'display_order': 3,
             'is_default': True,
+            'scale_key': 'workload_slider',
             'widget': 'slider'
         }
     ],
@@ -398,16 +446,19 @@ DEFAULT_STATEMENTS = {
         {
             'text': "Queasiness or nausea",
             'display_order': 1,
+            'scale_key': 'cybersickness_5_point',
             'is_default': True
         },
         {
             'text': "Dizziness or off-balance feeling",
             'display_order': 2,
+            'scale_key': 'cybersickness_5_point',
             'is_default': True
         },
         {
             'text': "Eye strain or visual discomfort",
             'display_order': 3,
+            'scale_key': 'cybersickness_5_point',
             'is_default': True
         }
     ],
@@ -416,12 +467,14 @@ DEFAULT_STATEMENTS = {
             'text': "Valence (1 = Negative, 5 = Positive)",
             'display_order': 1,
             'is_default': True,
+            'scale_key': 'sam_valence',
             'widget': 'sam'
         },
         {
             'text': "Arousal (1 = Calm, 5 = Excited)",
             'display_order': 2,
             'is_default': True,
+            'scale_key': 'sam_arousal',
             'widget': 'sam'
         }
     ],
@@ -431,35 +484,91 @@ DEFAULT_STATEMENTS = {
             'display_order': 1,
             'is_default': True,
             'widget': 'numeric',
-            'widget_config': {'min': 0, 'step': 0.1, 'unit': 'minutes'}
+            'scale_key': 'performance_metrics',
+            'widget_config': {
+                'min': 0, 
+                'max': 30, 
+                'step': 0.1, 
+                'unit': 'minutes',
+                'normalization': 'inverse'  # Lower is better
+            }
         },
         {
             'text': "Error Rate (errors per task)",
             'display_order': 2,
             'is_default': True,
             'widget': 'numeric',
-            'widget_config': {'min': 0, 'step': 1, 'unit': 'errors'}
+            'scale_key': 'performance_metrics',
+            'widget_config': {
+                'min': 0, 
+                'max': 10, 
+                'step': 1, 
+                'unit': 'errors',
+                'normalization': 'inverse'  # Lower is better
+            }
         },
         {
             'text': "Help Requests (occurrences)",
             'display_order': 3,
             'is_default': True,
             'widget': 'numeric',
-            'widget_config': {'min': 0, 'step': 1, 'unit': 'requests'}
+            'scale_key': 'performance_metrics',
+            'widget_config': {
+                'min': 0, 
+                'max': 5, 
+                'step': 1, 
+                'unit': 'requests',
+                'normalization': 'inverse'  # Lower is better
+            }
         }
     ]
 }
 
-# Performance constants for scoring
-PERFORMANCE_CONSTANTS = {
-    'MAX_TIME': 30,  # Maximum task time in minutes
-    'MAX_ERRORS': 10,  # Maximum error count
-    'MAX_HELP': 5   # Maximum help requests
+# Scale definitions by scale_key (for frontend consumption and validation)
+SCALES = {
+    'likert_7_point': DOMAIN_SCALES[HumanCentricityDomain.CORE_USABILITY],
+    'workload_slider': DOMAIN_SCALES[HumanCentricityDomain.WORKLOAD_COMFORT],
+    'cybersickness_5_point': DOMAIN_SCALES[HumanCentricityDomain.CYBERSICKNESS],
+    'sam_valence': {
+        'type': 'sam',
+        'min': 1,
+        'max': 5,
+        'labels': DOMAIN_SCALES[HumanCentricityDomain.EMOTIONAL_RESPONSE]['dimensions']['valence']['labels'],
+        'description': 'Self-Assessment Manikin (SAM) valence scale'
+    },
+    'sam_arousal': {
+        'type': 'sam',
+        'min': 1,
+        'max': 5,
+        'labels': DOMAIN_SCALES[HumanCentricityDomain.EMOTIONAL_RESPONSE]['dimensions']['arousal']['labels'],
+        'description': 'Self-Assessment Manikin (SAM) arousal scale'
+    },
+    'performance_metrics': {
+        'type': 'performance',
+        'min': 0,
+        'max': 999,
+        'description': 'Objective performance measurement metrics'
+    }
 }
 
 
 class StatementManager:
     """Helper class for statement management within fixed domains"""
+
+    scales = SCALES
+
+    @staticmethod
+    def _get_compatible_scales(domain: HumanCentricityDomain) -> List[str]:
+        """Get compatible scales for a domain"""
+        scale_compatibility = {
+            HumanCentricityDomain.CORE_USABILITY: ['likert_7_point'],
+            HumanCentricityDomain.TRUST_TRANSPARENCY: ['likert_7_point'],
+            HumanCentricityDomain.WORKLOAD_COMFORT: ['workload_slider', 'likert_7_point'],
+            HumanCentricityDomain.CYBERSICKNESS: ['cybersickness_5_point', 'likert_7_point'],
+            HumanCentricityDomain.EMOTIONAL_RESPONSE: ['sam_valence', 'sam_arousal', 'likert_7_point'],
+            HumanCentricityDomain.PERFORMANCE: ['performance_metrics']
+        }
+        return scale_compatibility.get(domain, ['likert_7_point'])
     
     @staticmethod
     def get_domain_info(domain: HumanCentricityDomain) -> Dict[str, Any]:
@@ -600,3 +709,4 @@ ASSESSMENT_STRUCTURE = {
         'max_total_statements': 100
     }
 }
+

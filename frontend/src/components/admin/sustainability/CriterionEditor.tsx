@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAdminApi } from '@/hooks/useAdminApi';
 import { CriterionResponse, SustainabilityDomain, CriterionCreate, CriterionUpdate } from '@/types/admin';
-import { X, Save, AlertCircle, Info, Layers, Key, FileText, Shield, Calendar } from 'lucide-react';
+import { X, Save, AlertCircle, Info, Key, FileText, Shield, Calendar } from 'lucide-react';
 
 interface CriterionEditorProps {
   criterion?: CriterionResponse | null;
@@ -34,7 +34,7 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
         custom_levels: criterion.custom_levels || [],
         is_default: criterion.is_default
       });
-      setCustomLevelsInput(criterion.custom_levels?.join(', ') || '');
+      setCustomLevelsInput(criterion.custom_levels?.join('; ') || '');
     }
   }, [criterion]);
 
@@ -58,7 +58,7 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
     }
 
     if (customLevelsInput.trim()) {
-      const levels = customLevelsInput.split(',').map(l => l.trim()).filter(l => l);
+      const levels = customLevelsInput.split(';').map(l => l.trim()).filter(l => l);
       if (levels.length !== formData.level_count) {
         newErrors.custom_levels = `Custom levels must match level count (${formData.level_count})`;
       }
@@ -74,7 +74,7 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
     if (!validate()) return;
 
     const customLevels = customLevelsInput.trim() 
-      ? customLevelsInput.split(',').map(l => l.trim()).filter(l => l)
+      ? customLevelsInput.split(';').map(l => l.trim()).filter(l => l)
       : [];
 
     const submitData = {
@@ -301,7 +301,7 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
                   w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors text-base resize-none
                   ${errors.custom_levels ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'}
                 `}
-                placeholder="Enter level labels separated by commas:&#10;Poor, Fair, Good, Very Good, Excellent&#10;&#10;Or try: Not Sustainable, Partially Sustainable, Moderately Sustainable, Highly Sustainable, Fully Sustainable"
+                placeholder="Enter level labels separated by semicolons:&#10;Poor; Fair; Good; Very Good; Excellent&#10;&#10;Or try: Not Sustainable; Partially Sustainable; Moderately Sustainable; Highly Sustainable; Fully Sustainable"
               />
               
               <div className="mt-3 flex items-center justify-between">
@@ -310,7 +310,7 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
                   {customLevelsInput.trim() && (
                     <>
                       <span className="mx-2">•</span>
-                      <span className="font-medium">Current levels:</span> {customLevelsInput.split(',').map(l => l.trim()).filter(l => l).length}
+                      <span className="font-medium">Current levels:</span> {customLevelsInput.split(';').map(l => l.trim()).filter(l => l).length}
                     </>
                   )}
                 </div>
@@ -341,7 +341,7 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
               <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
                 <h4 className="text-sm font-medium text-blue-900 mb-2">Preview of your custom levels:</h4>
                 <div className="flex flex-wrap gap-2">
-                  {customLevelsInput.split(',').map((level, index) => {
+                  {customLevelsInput.split(';').map((level, index) => {
                     const trimmedLevel = level.trim();
                     if (!trimmedLevel) return null;
                     return (
@@ -362,15 +362,15 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
               <div className="space-y-2 text-sm text-gray-700">
                 <div>
                   <span className="font-medium text-green-700">Environmental:</span> 
-                  <span className="ml-2">Not Sustainable, Low Impact, Moderate Impact, Eco-Friendly, Carbon Neutral</span>
+                  <span className="ml-2">Not Sustainable; Low Impact; Moderate Impact; Eco-Friendly; Carbon Neutral</span>
                 </div>
                 <div>
                   <span className="font-medium text-blue-700">Economic:</span> 
-                  <span className="ml-2">Not Viable, Low ROI, Break-even, Profitable, Highly Profitable</span>
+                  <span className="ml-2">Not Viable; Low ROI; Break-even; Profitable; Highly Profitable</span>
                 </div>
                 <div>
                   <span className="font-medium text-purple-700">Social:</span> 
-                  <span className="ml-2">Harmful, Concerning, Neutral, Beneficial, Transformative</span>
+                  <span className="ml-2">Harmful; Concerning; Neutral; Beneficial; Transformative</span>
                 </div>
               </div>
             </div>

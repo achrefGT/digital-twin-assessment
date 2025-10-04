@@ -72,16 +72,31 @@ class ScenarioManager:
     def get_current_scenarios_config(self) -> Dict[str, Any]:
         """Get current scenarios configuration (compatible with existing code)"""
         try:
-            # This returns the format expected by existing code
+            # Build scenarios directly from database to ensure fresh data
+            scenarios_from_db = self.db_manager.get_all_scenarios()
+            
+            # Group scenarios by domain
+            scenarios_by_domain = {}
+            domain_descriptions = {}
+            
+            for scenario in scenarios_from_db:
+                domain = scenario.domain
+                
+                if domain not in scenarios_by_domain:
+                    scenarios_by_domain[domain] = []
+                    # Get description from defaults or use the one from DB
+                    default_data = DEFAULT_RESILIENCE_SCENARIOS.get(domain, {})
+                    domain_descriptions[domain] = scenario.description or default_data.get('description', '')
+                
+                scenarios_by_domain[domain].append(scenario.scenario_text)
+            
+            # If no scenarios found in database, return empty structure to trigger "no scenarios" message
+            if not scenarios_by_domain:
+                logger.warning("No scenarios found in database")
+            
             return {
-                'scenarios': {
-                    domain: data['scenarios'] 
-                    for domain, data in RESILIENCE_SCENARIOS.items()
-                },
-                'domain_descriptions': {
-                    domain: data.get('description', '') 
-                    for domain, data in RESILIENCE_SCENARIOS.items()
-                }
+                'scenarios': scenarios_by_domain,
+                'domain_descriptions': domain_descriptions
             }
         except Exception as e:
             logger.error(f"Failed to get scenarios configuration: {e}")

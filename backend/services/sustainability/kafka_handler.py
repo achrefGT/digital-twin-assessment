@@ -232,9 +232,7 @@ class SustainabilityKafkaHandler:
         try:
             logger.debug(f"Parsing form submission: {form_submission}")
             print(f"DEBUG: _parse_sustainability_input called with type: {type(form_submission)}")
-            print(f"DEBUG: form_submission.__dict__: {form_submission.__dict__ if hasattr(form_submission, '__dict__') else 'No __dict__'}")
             
-            # form_submission is now guaranteed to be a FormSubmissionRequest object
             form_data = form_submission.form_data
             logger.debug(f"Extracted form_data: {form_data}")
             print(f"DEBUG: form_data type: {type(form_data)}")
@@ -266,15 +264,25 @@ class SustainabilityKafkaHandler:
                     continue
                 
                 try:
+                    # Validate that domain_data has valid criterion keys
+                    if not isinstance(domain_data, dict) or not domain_data:
+                        logger.error(f"Invalid data for domain {domain_name}: {domain_data}")
+                        raise InvalidFormDataException(f"Invalid data structure for {domain_name}")
+                    
+                    # Log the actual criterion keys being received
+                    print(f"DEBUG: Domain {domain_name} has criteria: {list(domain_data.keys())}")
+                    
                     # Create appropriate assessment object for each domain
                     assessment_obj = DomainSelectionHelper.create_assessment_from_data(domain_name, domain_data)
                     parsed_assessments[domain_name] = assessment_obj
                     logger.debug(f"Successfully parsed {domain_name} assessment")
-                    print(f"DEBUG: ✅ Parsed {domain_name} assessment")
+                    print(f"DEBUG: ✅ Parsed {domain_name} assessment with {len(domain_data)} criteria")
                 
                 except Exception as e:
                     logger.error(f"Failed to parse {domain_name} assessment: {e}")
                     print(f"DEBUG: ❌ Failed to parse {domain_name} assessment: {e}")
+                    import traceback
+                    traceback.print_exc()
                     raise InvalidFormDataException(f"Failed to parse {domain_name} assessment data: {e}")
             
             if not parsed_assessments:
@@ -287,8 +295,8 @@ class SustainabilityKafkaHandler:
                 assessmentId=form_submission.assessment_id,
                 userId=form_submission.user_id,
                 systemName=form_submission.system_name,
-                assessments=parsed_assessments,  # Now contains parsed assessment objects
-                submittedAt=datetime.utcnow(),  # Use current time since we're processing now
+                assessments=parsed_assessments,
+                submittedAt=datetime.utcnow(),
                 metadata=form_submission.metadata
             )
             
@@ -299,11 +307,10 @@ class SustainabilityKafkaHandler:
         except Exception as e:
             logger.error(f"Failed to parse sustainability form data: {e}")
             print(f"DEBUG: ❌ _parse_sustainability_input failed: {type(e).__name__}: {e}")
-            if hasattr(form_submission, '__dict__'):
-                print(f"DEBUG: form_submission details: {form_submission.__dict__}")
             import traceback
             traceback.print_exc()
             raise InvalidFormDataException(f"Failed to parse sustainability form data: {e}")
+
     
     async def _publish_domain_scored_event(self, result: SustainabilityResult):
         """Publish domain scored event"""
