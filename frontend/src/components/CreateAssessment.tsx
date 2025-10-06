@@ -10,6 +10,7 @@ import { ArrowRight, FileText } from "lucide-react"
 import { useAuth } from "@/auth"
 import { useQueryClient } from '@tanstack/react-query'
 import { assessmentKeys } from '@/services/assessmentApi'
+import { useLanguage } from "@/contexts/LanguageContext"
 
 interface CreateAssessmentProps {
   onAssessmentCreated: (assessment: any) => void
@@ -21,6 +22,7 @@ export const CreateAssessment = ({ onAssessmentCreated, domain, userId }: Create
   const { register, handleSubmit, formState: { errors } } = useForm()
   const { toast } = useToast()
   const [isCreating, setIsCreating] = useState(false)
+  const { t } = useLanguage()
 
   // Use existing auth system
   const { token, isAuthenticated, user } = useAuth()
@@ -34,7 +36,7 @@ export const CreateAssessment = ({ onAssessmentCreated, domain, userId }: Create
     try {
 
       if (!isAuthenticated || !token) {
-        throw new Error('Please log in to create an assessment')
+        throw new Error(t('createAssessment.loginRequired'))
       }
       
       const payload = {
@@ -58,7 +60,7 @@ export const CreateAssessment = ({ onAssessmentCreated, domain, userId }: Create
       })
 
       if (response.status === 401) {
-        throw new Error('Session expired. Please log in again.')
+        throw new Error(t('createAssessment.sessionExpired'))
       }
 
       if (!response.ok) {
@@ -128,8 +130,8 @@ export const CreateAssessment = ({ onAssessmentCreated, domain, userId }: Create
       onAssessmentCreated(assessment)
       
       toast({
-        title: "Assessment Created Successfully",
-        description: `Assessment "${data.systemName}" has been created and is ready for completion.`,
+        title: t('createAssessment.createdSuccess'),
+        description: `${t('assessment.create')} "${data.systemName}" ${t('createAssessment.createdMessage')}`,
         duration: 5000
       })
       
@@ -137,8 +139,8 @@ export const CreateAssessment = ({ onAssessmentCreated, domain, userId }: Create
       console.error('[CreateAssessment] Error creating assessment:', error)
 
       toast({
-        title: error.message.includes('log in') ? "Authentication Required" : "Assessment Creation Failed",
-        description: error instanceof Error ? error.message : "Failed to create assessment",
+        title: error.message.includes('log in') ? t('createAssessment.authRequired') : t('createAssessment.creationFailed'),
+        description: error instanceof Error ? error.message : t('notification.error.createFailed'),
         variant: "destructive",
         duration: 7000
       })
@@ -159,14 +161,14 @@ export const CreateAssessment = ({ onAssessmentCreated, domain, userId }: Create
             </div>
           </div>
           <CardTitle className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-            Create New Assessment
+            {t('createAssessment.title')}
           </CardTitle>
           <CardDescription className="text-lg text-gray-600 mt-2 max-w-lg mx-auto">
-            Set up your digital twin assessment to begin evaluating sustainability, performance, and resilience metrics
+            {t('createAssessment.subtitle')}
           </CardDescription>
           {domain && (
             <Badge className="bg-gradient-to-r from-eco-green to-eco-green/80 text-white mx-auto mt-4 px-4 py-1 text-sm font-semibold shadow-md">
-              {domain.toUpperCase()} DOMAIN
+              {domain.toUpperCase()} {t('createAssessment.domainBadge')}
             </Badge>
           )}
         </CardHeader>
@@ -176,14 +178,14 @@ export const CreateAssessment = ({ onAssessmentCreated, domain, userId }: Create
             <div className="space-y-6">
               <div>
                 <Label htmlFor="systemName" className="text-sm font-semibold text-gray-700">
-                  Digital Twin System Name *
+                  {t('createAssessment.systemNameLabel')} *
                 </Label>
                 <Input
                   {...register("systemName", { 
-                    required: "System name is required",
-                    minLength: { value: 3, message: "System name must be at least 3 characters" }
+                    required: t('createAssessment.systemNameRequired'),
+                    minLength: { value: 3, message: t('createAssessment.systemNameMinLength') }
                   })}
-                  placeholder="e.g., Manufacturing Digital Twin System"
+                  placeholder={t('createAssessment.systemNamePlaceholder')}
                   className="mt-2 h-12 text-base border-gray-200 focus:border-eco-green focus:ring-eco-green/20"
                 />
                 {errors.systemName && (
@@ -196,22 +198,22 @@ export const CreateAssessment = ({ onAssessmentCreated, domain, userId }: Create
               
               <div>
                 <Label htmlFor="description" className="text-sm font-semibold text-gray-700">
-                  Description (Optional)
+                  {t('createAssessment.descriptionLabel')}
                 </Label>
                 <Input
                   {...register("description")}
-                  placeholder="Brief description of your digital twin system"
+                  placeholder={t('createAssessment.descriptionPlaceholder')}
                   className="mt-2 h-12 text-base border-gray-200 focus:border-eco-green focus:ring-eco-green/20"
                 />
               </div>
               
               <div>
                 <Label htmlFor="organization" className="text-sm font-semibold text-gray-700">
-                  Organization (Optional)
+                  {t('createAssessment.organizationLabel')}
                 </Label>
                 <Input
                   {...register("organization")}
-                  placeholder="Your organization or company name"
+                  placeholder={t('createAssessment.organizationPlaceholder')}
                   className="mt-2 h-12 text-base border-gray-200 focus:border-eco-green focus:ring-eco-green/20"
                 />
               </div>
@@ -219,32 +221,32 @@ export const CreateAssessment = ({ onAssessmentCreated, domain, userId }: Create
 
             <div className="bg-gradient-to-r from-eco-green/5 via-primary/5 to-eco-green/5 p-6 rounded-xl border border-eco-green/10 shadow-sm">
               <h4 className="font-bold mb-4 text-lg text-gray-800 flex items-center gap-2">
-                Assessment Process Overview
+                {t('createAssessment.processOverview')}
               </h4>
               <ul className="text-sm space-y-3 text-gray-700">
                 <li className="flex items-start gap-3">
                   <span className="w-6 h-6 rounded-full bg-eco-green/10 flex items-center justify-center mt-0.5 flex-shrink-0">
                     <span className="w-2 h-2 rounded-full bg-eco-green"></span>
                   </span>
-                  <span>Create your assessment with a unique system identifier</span>
+                  <span>{t('createAssessment.step1')}</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="w-6 h-6 rounded-full bg-eco-green/10 flex items-center justify-center mt-0.5 flex-shrink-0">
                     <span className="w-2 h-2 rounded-full bg-eco-green"></span>
                   </span>
-                  <span>Complete multi-step evaluations across different domains</span>
+                  <span>{t('createAssessment.step2')}</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="w-6 h-6 rounded-full bg-eco-green/10 flex items-center justify-center mt-0.5 flex-shrink-0">
                     <span className="w-2 h-2 rounded-full bg-eco-green"></span>
                   </span>
-                  <span>Monitor real-time progress in the interactive dashboard</span>
+                  <span>{t('createAssessment.step3')}</span>
                 </li>
                 <li className="flex items-start gap-3">
                   <span className="w-6 h-6 rounded-full bg-eco-green/10 flex items-center justify-center mt-0.5 flex-shrink-0">
                     <span className="w-2 h-2 rounded-full bg-eco-green"></span>
                   </span>
-                  <span>View comprehensive results and analytics upon completion</span>
+                  <span>{t('createAssessment.step4')}</span>
                 </li>
               </ul>
             </div>
@@ -259,11 +261,11 @@ export const CreateAssessment = ({ onAssessmentCreated, domain, userId }: Create
               {isCreating ? (
                 <div className="flex items-center gap-3">
                   <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                  Creating Assessment...
+                  {t('createAssessment.creating')}
                 </div>
               ) : (
                 <>
-                  Create Assessment & Continue
+                  {t('createAssessment.createButton')}
                   <ArrowRight className="w-5 h-5 ml-2 group-hover:translate-x-1 transition-transform" />
                 </>
               )}

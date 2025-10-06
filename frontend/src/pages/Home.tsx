@@ -6,46 +6,49 @@ import { Leaf, DollarSign, Globe, Users, Shield, Activity, ArrowRight, CheckCirc
 import { useState, useEffect } from "react"
 import { UserNavigation } from "@/components/UserNavigation"
 import AnimatedBackground from "@/components/AnimatedBackground"
-
-const assessmentDomains = [
-  {
-    id: "sustainability",
-    title: "Sustainability",
-    tagline: "Balancing environmental, economic, and social impact",
-    description: "Evaluate the system's long-term resilience and performance across environmental, economic, and social dimensions.",
-    icon: Sparkles,
-    gradient: "from-green-500 to-emerald-600",
-    bgGradient: "from-green-50 to-emerald-50",
-    borderColor: "border-green-200 hover:border-green-400",
-    features: ["Environmental", "Economic", "Social"]
-  },
-  {
-    id: "human_centricity",
-    title: "Human Centricity",
-    tagline: "User Experience & Trust",
-    description: "Assess user experience quality, trust factors, workload distribution, and human-system interaction performance",
-    icon: Brain,
-    gradient: "from-blue-500 to-cyan-600",
-    bgGradient: "from-blue-50 to-cyan-50",
-    borderColor: "border-blue-200 hover:border-blue-400",
-    features: ["UX/Trust metrics", "Workload analysis", "Performance tracking"]
-  },
-  {
-    id: "resilience",
-    title: "Resilience",
-    tagline: "System Robustness & Risk Management", 
-    description: "Evaluate system adaptability, redundancy mechanisms, and comprehensive risk management capabilities",
-    icon: Shield,
-    gradient: "from-purple-500 to-violet-600",
-    bgGradient: "from-purple-50 to-violet-50",
-    borderColor: "border-purple-200 hover:border-purple-400",
-    features: ["Risk scenarios", "Impact analysis", "Resilience metrics"]
-  }
-]
+import { LanguageSwitcher } from "@/components/ui/language-switcher"
+import { useLanguage } from "@/contexts/LanguageContext"
 
 const Home = () => {
   const [showNavbarButtons, setShowNavbarButtons] = useState(false)
   const navigate = useNavigate()
+  const { t } = useLanguage()
+
+  const assessmentDomains = [
+    {
+      id: "sustainability",
+      title: t('domain.sustainability.title'),
+      tagline: t('domain.sustainability.tagline'),
+      description: t('domain.sustainability.description'),
+      icon: Sparkles,
+      gradient: "from-green-500 to-emerald-600",
+      bgGradient: "from-green-50 to-emerald-50",
+      borderColor: "border-green-200 hover:border-green-400",
+      features: [t('domain.sustainability.environmental'), t('domain.sustainability.economic'), t('domain.sustainability.social')]
+    },
+    {
+      id: "human_centricity",
+      title: t('domain.humanCentricity.title'),
+      tagline: t('domain.humanCentricity.tagline'),
+      description: t('domain.humanCentricity.description'),
+      icon: Brain,
+      gradient: "from-blue-500 to-cyan-600",
+      bgGradient: "from-blue-50 to-cyan-50",
+      borderColor: "border-blue-200 hover:border-blue-400",
+      features: [t('domain.humanCentricity.uxTrust'), t('domain.humanCentricity.workload'), t('domain.humanCentricity.performance')]
+    },
+    {
+      id: "resilience",
+      title: t('domain.resilience.title'),
+      tagline: t('domain.resilience.tagline'), 
+      description: t('domain.resilience.description'),
+      icon: Shield,
+      gradient: "from-purple-500 to-violet-600",
+      bgGradient: "from-purple-50 to-violet-50",
+      borderColor: "border-purple-200 hover:border-purple-400",
+      features: [t('domain.resilience.riskScenarios'), t('domain.resilience.impactAnalysis'), t('domain.resilience.resilienceMetrics')]
+    }
+  ]
 
   useEffect(() => {
     const handleScroll = () => {
@@ -143,7 +146,7 @@ const Home = () => {
             </div>
 
             {/* Navigation Actions */}
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
               <div className="flex items-center gap-3" aria-hidden={!showNavbarButtons}>
                 <Button
                   size="sm"
@@ -161,7 +164,7 @@ const Home = () => {
                   <div className="absolute inset-0 bg-gradient-to-r from-green-400 to-blue-400 opacity-0 group-hover:opacity-100 transition-opacity duration-300" />
                   <div className="relative flex items-center gap-2">
                     <Sparkles className="w-4 h-4 group-hover:rotate-12 transition-transform duration-300" />
-                    <span>Create Assessment</span>
+                    <span>{t('assessments.create')}</span>
                   </div>
                 </Button>
 
@@ -179,11 +182,12 @@ const Home = () => {
                 >
                   <div className="relative flex items-center gap-2">
                     <List className="w-4 h-4 group-hover:scale-110 transition-transform duration-300" />
-                    <span>My Assessments</span>
+                    <span>{t('assessments.title')}</span>
                   </div>
                 </Button>
               </div>
 
+              <LanguageSwitcher />
               <UserNavigation />
             </div>
           </div>
@@ -197,21 +201,15 @@ const Home = () => {
         {/* Content overlay */}
         <div className="relative z-10 container mx-auto px-6 py-20 min-h-screen flex items-center">
           <div className="text-center max-w-4xl mx-auto">
-            <div className="inline-flex items-center gap-2 bg-white/10 backdrop-blur-sm text-white px-4 py-2 rounded-full text-sm font-medium mb-8 border border-white/20">
-              <div className="w-2 h-2 bg-green-400 rounded-full animate-pulse" />
-              Next-Generation Assessment Platform
-            </div>
-            
-            <h1 className="text-6xl font-bold mb-6 text-white leading-tight">
-              Digital Twin
+             <h1 className="text-6xl font-bold mb-6 mt-4 text-white leading-tight">
+              <span className="block">{t('home.assessmentPlatform')}</span>
               <span className="block bg-gradient-to-r from-green-400 via-blue-400 to-purple-400 bg-clip-text text-transparent">
-                Assessment Platform
+                {t('home.title')}
               </span>
             </h1>
             
             <p className="text-xl text-gray-200 mb-12 leading-relaxed max-w-3xl mx-auto">
-              Comprehensive evaluation framework for digital twin systems across sustainability, 
-              human centricity, and resilience dimensions with advanced analytics and insights.
+              {t('home.subtitle')}
             </p>
             
             {/* Hero CTAs with scroll-based visibility and improved animations */}
@@ -228,7 +226,7 @@ const Home = () => {
               >
                 <div className="relative flex items-center justify-center">
                   <Sparkles className="w-5 h-5 mr-2 group-hover:rotate-12 transition-transform duration-300" />
-                  Start Assessment
+                  {t('home.getStarted')}
                   <ArrowRight className="ml-2 h-5 w-5 group-hover:translate-x-1 transition-transform duration-300" />
                 </div>
               </Button>
@@ -241,7 +239,7 @@ const Home = () => {
               >
                 <div className="relative flex items-center justify-center">
                   <List className="w-5 h-5 mr-2 group-hover:scale-110 transition-transform duration-300" />
-                  My Assessments
+                  {t('assessments.title')}
                 </div>
               </Button>
               
@@ -253,9 +251,9 @@ const Home = () => {
       {/* Assessment Domains */}
       <div className="container mx-auto px-6 py-20">
         <div className="text-center mb-16">
-          <h2 className="text-4xl font-bold text-gray-900 mb-4">Assessment Domains</h2>
+          <h2 className="text-4xl font-bold text-gray-900 mb-4">{t('home.assessmentDomains')}</h2>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed">
-            Comprehensive evaluation across three critical dimensions of digital twin systems
+            {t('home.comprehensiveEvaluation')}
           </p>
         </div>
 
@@ -286,9 +284,9 @@ const Home = () => {
                 
                 <CardContent className="pt-0">
                   <div className="space-y-3">
-                    <p className="text-sm font-semibold text-gray-700 mb-3">
-                      {domain.id === 'sustainability' ? 'Assessment Types:' : 'Key Features:'}
-                    </p>
+                  <p className="text-sm font-semibold text-gray-700 mb-3">
+                    {domain.id === 'sustainability' ? t('domain.sustainability.assessmentTypes') : t('domain.humanCentricity.keyFeatures')}
+                  </p>
                     <div className="space-y-2">
                       {domain.features.map((feature, idx) => (
                         <div key={idx} className="flex items-center gap-3">
@@ -301,7 +299,7 @@ const Home = () => {
                   
                   <div className="mt-6 pt-4 border-t border-white/60">
                     <div className="flex items-center text-sm font-semibold text-gray-700 group-hover:text-gray-900 transition-colors">
-                      Explore {domain.title}
+                      {t('domain.explore')} {domain.title}
                       <ArrowRight className="ml-2 h-4 w-4 group-hover:translate-x-1 transition-transform" />
                     </div>
                   </div>
@@ -316,9 +314,9 @@ const Home = () => {
       <div className="bg-gray-50 py-20">
         <div className="container mx-auto px-6">
           <div className="text-center mb-16">
-            <h2 className="text-4xl font-bold text-gray-900 mb-4">Why Choose Our Platform</h2>
+            <h2 className="text-4xl font-bold text-gray-900 mb-4">{t('home.whyChoose')}</h2>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Advanced assessment capabilities designed for comprehensive digital twin evaluation
+              {t('home.advancedAssessment')}
             </p>
           </div>
           
@@ -327,24 +325,24 @@ const Home = () => {
               <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-blue-500 rounded-2xl mx-auto mb-4 flex items-center justify-center">
                 <Globe className="w-8 h-8 text-white" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-3">Comprehensive Analysis</h3>
-              <p className="text-gray-600">Multi-dimensional assessment across sustainability, human factors, and system resilience</p>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">{t('home.comprehensiveAnalysis')}</h3>
+              <p className="text-gray-600">{t('home.comprehensiveAnalysisDesc')}</p>
             </div>
             
             <div className="text-center p-6">
               <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-500 rounded-2xl mx-auto mb-4 flex items-center justify-center">
                 <Activity className="w-8 h-8 text-white" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-3">Real-time Insights</h3>
-              <p className="text-gray-600">Advanced analytics with real-time monitoring and performance tracking capabilities</p>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">{t('home.realTimeInsights')}</h3>
+              <p className="text-gray-600">{t('home.realTimeInsightsDesc')}</p>
             </div>
             
             <div className="text-center p-6">
               <div className="w-16 h-16 bg-gradient-to-br from-purple-500 to-green-500 rounded-2xl mx-auto mb-4 flex items-center justify-center">
                 <Users className="w-8 h-8 text-white" />
               </div>
-              <h3 className="text-xl font-bold text-gray-900 mb-3">User-Centric Design</h3>
-              <p className="text-gray-600">Intuitive interface designed for researchers, engineers, and decision-makers</p>
+              <h3 className="text-xl font-bold text-gray-900 mb-3">{t('home.userCentricDesign')}</h3>
+              <p className="text-gray-600">{t('home.userCentricDesignDesc')}</p>
             </div>
           </div>
         </div>

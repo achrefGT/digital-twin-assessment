@@ -4,6 +4,7 @@ import { Navigate } from 'react-router-dom';
 import { AdminSidebar } from './AdminSidebar';
 import { AdminSection } from '@/types/admin';
 import { Sparkles } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -14,6 +15,7 @@ const isAdminish = (role: string | undefined) => ['admin', 'super_admin'].includ
 
 export function AdminLayout({ children, currentSection }: AdminLayoutProps) {
   const { user, isLoading } = useAuth();
+  const { t } = useLanguage();
 
   // Show loading while checking authentication
   if (isLoading) {
@@ -24,7 +26,7 @@ export function AdminLayout({ children, currentSection }: AdminLayoutProps) {
             <Sparkles className="w-6 h-6 text-white" />
           </div>
           <div className="animate-spin rounded-full h-8 w-8 border-2 border-blue-600 border-t-transparent mx-auto mb-4"></div>
-          <p className="text-gray-600">Loading admin panel...</p>
+          <p className="text-gray-600">{t('admin.loadingPanel')}</p>
         </div>
       </div>
     );

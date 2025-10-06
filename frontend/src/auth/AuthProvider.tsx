@@ -2,6 +2,7 @@ import React, { createContext, useState, useEffect, ReactNode } from 'react';
 import { AuthContextType, User, RegisterData, ProfileUpdateData } from './auth.types';
 import authService from './authService';
 import { useToast } from '@/hooks/use-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
@@ -15,6 +16,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [refreshToken, setRefreshToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const { toast } = useToast();
+  const { t } = useLanguage();
 
   // Initialize auth state on mount
   useEffect(() => {
@@ -27,7 +29,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
 
     const checkTokenExpiry = () => {
       if (authService.isTokenExpired()) {
-        console.warn('🕒 Token expired, logging out automatically');
+        console.warn('🕐 Token expired, logging out automatically');
         logout();
       }
     };
@@ -132,11 +134,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       await fetchUserProfile(tokens.access_token);
       
       toast({
-        title: "Login Successful",
-        description: "Welcome back to the platform!",
+        title: t('notification.auth.loginSuccess'),
+        description: t('notification.auth.loginDesc'),
       });
     } catch (error) {
       console.error('Login failed:', error);
+      toast({
+        title: t('notification.error.title'),
+        description: t('notification.auth.loginFailed'),
+        variant: 'destructive',
+      });
       throw error;
     }
   };
@@ -146,13 +153,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       const newUser = await authService.register(userData);
       
       toast({
-        title: "Registration Successful",
-        description: "Account created successfully! Please log in.",
+        title: t('notification.success.title'),
+        description: t('notification.auth.registerSuccess'),
       });
       
       return newUser;
     } catch (error) {
       console.error('Registration failed:', error);
+      toast({
+        title: t('notification.error.title'),
+        description: t('notification.auth.registerFailed'),
+        variant: 'destructive',
+      });
       throw error;
     }
   };
@@ -177,8 +189,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setRefreshToken(null);
       
       toast({
-        title: "Logged Out",
-        description: "You have been successfully logged out.",
+        title: t('auth.logout'),
+        description: t('notification.auth.logoutSuccess'),
       });
     }
   };
@@ -188,7 +200,21 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       throw new Error('No refresh token available');
     }
     
-    await handleRefreshToken(refreshToken);
+    try {
+      await handleRefreshToken(refreshToken);
+      
+      toast({
+        title: t('notification.info.title'),
+        description: t('notification.auth.tokenRefreshed'),
+      });
+    } catch (error) {
+      toast({
+        title: t('notification.error.title'),
+        description: t('notification.auth.tokenExpired'),
+        variant: 'destructive',
+      });
+      throw error;
+    }
   };
 
   const changePassword = async (currentPassword: string, newPassword: string) => {
@@ -203,11 +229,16 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       });
       
       toast({
-        title: "Password Changed",
-        description: "Your password has been updated successfully.",
+        title: t('notification.success.title'),
+        description: t('notification.auth.passwordChanged'),
       });
     } catch (error) {
       console.error('Password change failed:', error);
+      toast({
+        title: t('notification.error.title'),
+        description: t('notification.auth.passwordChangeFailed'),
+        variant: 'destructive',
+      });
       throw error;
     }
   };
@@ -226,13 +257,18 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setUser(updatedUser);
       
       toast({
-        title: "Profile Updated",
-        description: "Your profile has been updated successfully.",
+        title: t('notification.success.title'),
+        description: t('notification.auth.profileUpdated'),
       });
       
       return updatedUser;
     } catch (error) {
       console.error('Profile update failed:', error);
+      toast({
+        title: t('notification.error.title'),
+        description: t('notification.auth.profileUpdateFailed'),
+        variant: 'destructive',
+      });
       throw error;
     }
   };

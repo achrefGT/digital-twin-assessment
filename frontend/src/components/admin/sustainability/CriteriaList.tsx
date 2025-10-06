@@ -1,5 +1,6 @@
 import React from 'react';
 import { CriterionResponse } from '@/types/admin';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   Edit,
   Trash2,
@@ -25,12 +26,15 @@ interface CriteriaListProps {
 }
 
 // Helper to build a nice title from domain key
-const prettyDomain = (d: string) => {
-  if (!d) return 'Other';
-  return d.charAt(0).toUpperCase() + d.slice(1);
+const prettyDomain = (d: string, t: (key: string) => string) => {
+  if (!d) return t('common.other');
+  const domainKey = `sustainability.${d}` as const;
+  return t(domainKey);
 };
 
 export function CriteriaList({ criteria, loading, error, onEdit, onDelete, deletingIds = [] }: CriteriaListProps) {
+  const { t } = useLanguage();
+
   // Prevent double-click issues
   const handleDeleteClick = (criterion: CriterionResponse, e: React.MouseEvent) => {
     e.preventDefault();
@@ -114,7 +118,7 @@ export function CriteriaList({ criteria, loading, error, onEdit, onDelete, delet
               <AlertCircle className="w-6 h-6 text-red-600" />
             </div>
             <div>
-              <h3 className="font-medium text-red-900 mb-2">Failed to Load Criteria</h3>
+              <h3 className="font-medium text-red-900 mb-2">{t('sustainability.failedLoadCriteria')}</h3>
               <p className="text-red-700 text-sm">{error.message}</p>
             </div>
           </div>
@@ -129,13 +133,13 @@ export function CriteriaList({ criteria, loading, error, onEdit, onDelete, delet
         <div className="w-20 h-20 bg-gray-100 rounded-xl flex items-center justify-center mb-6 mx-auto">
           <Leaf className="w-8 h-8 text-gray-400" />
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-3">No Criteria Found</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-3">{t('sustainability.noCriteriaFound')}</h3>
         <p className="text-gray-600 mb-6 max-w-md mx-auto">
-          Get started by creating your first sustainability criterion. Define assessment parameters for your digital twin evaluations.
+          {t('sustainability.getStartedCriterion')}
         </p>
         <div className="inline-flex items-center gap-2 bg-green-50 text-green-700 px-4 py-2 rounded-lg text-sm font-medium border border-green-200">
           <CheckCircle className="w-4 h-4" />
-          Ready to create criteria
+          {t('sustainability.readyToCreateCriteria')}
         </div>
       </div>
     );
@@ -187,13 +191,13 @@ export function CriteriaList({ criteria, loading, error, onEdit, onDelete, delet
               <div className="flex items-center gap-2">
                 <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium border ${domainConfig.color}`}>
                   {domainConfig.icon}
-                  {criterion.domain}
+                  {t(`sustainability.${criterion.domain}`)}
                 </span>
 
                 {criterion.is_default && (
                   <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium bg-gray-50 text-gray-700 border border-gray-200">
                     <Shield className="w-3 h-3" />
-                    Default
+                    {t('humanCentricity.default')}
                   </span>
                 )}
               </div>
@@ -207,7 +211,7 @@ export function CriteriaList({ criteria, loading, error, onEdit, onDelete, delet
               <div className="flex items-center gap-2">
                 <Key className="w-4 h-4 text-gray-400" />
                 <div>
-                  <p className="text-xs text-gray-500">Key</p>
+                  <p className="text-xs text-gray-500">{t('sustainability.key')}</p>
                   <p className="text-sm font-medium text-gray-700">{criterion.criterion_key}</p>
                 </div>
               </div>
@@ -215,7 +219,7 @@ export function CriteriaList({ criteria, loading, error, onEdit, onDelete, delet
               <div className="flex items-center gap-2">
                 <Layers className="w-4 h-4 text-gray-400" />
                 <div>
-                  <p className="text-xs text-gray-500">Levels</p>
+                  <p className="text-xs text-gray-500">{t('sustainability.levels')}</p>
                   <p className="text-sm font-medium text-gray-700">{criterion.level_count}</p>
                 </div>
               </div>
@@ -223,7 +227,7 @@ export function CriteriaList({ criteria, loading, error, onEdit, onDelete, delet
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-gray-400" />
                 <div>
-                  <p className="text-xs text-gray-500">Created</p>
+                  <p className="text-xs text-gray-500">{t('humanCentricity.created')}</p>
                   <p className="text-sm font-medium text-gray-700">{new Date(criterion.created_at).toLocaleDateString()}</p>
                 </div>
               </div>
@@ -231,7 +235,7 @@ export function CriteriaList({ criteria, loading, error, onEdit, onDelete, delet
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-gray-400" />
                 <div>
-                  <p className="text-xs text-gray-500">Updated</p>
+                  <p className="text-xs text-gray-500">{t('humanCentricity.updated')}</p>
                   <p className="text-sm font-medium text-gray-700">{new Date(criterion.updated_at).toLocaleDateString()}</p>
                 </div>
               </div>
@@ -240,7 +244,7 @@ export function CriteriaList({ criteria, loading, error, onEdit, onDelete, delet
             {/* Custom Levels */}
             {criterion.custom_levels && criterion.custom_levels.length > 0 && (
               <div className="mt-3 p-3 bg-gray-50 rounded-lg border border-gray-200">
-                <p className="text-xs font-medium text-gray-700 mb-2">Custom Levels:</p>
+                <p className="text-xs font-medium text-gray-700 mb-2">{t('sustainability.customLevelLabels')}:</p>
                 <div className="flex flex-wrap gap-1">
                   {criterion.custom_levels.map((level, idx) => (
                     <span key={idx} className="inline-block px-2 py-1 bg-white text-xs text-gray-600 rounded border border-gray-200">
@@ -260,7 +264,7 @@ export function CriteriaList({ criteria, loading, error, onEdit, onDelete, delet
               className="flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Edit className="w-4 h-4" />
-              Edit
+              {t('manager.edit')}
             </button>
 
             <button
@@ -269,7 +273,7 @@ export function CriteriaList({ criteria, loading, error, onEdit, onDelete, delet
               className="flex items-center gap-2 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-              {isDeleting ? 'Deleting...' : 'Delete'}
+              {isDeleting ? t('manager.deleting') : t('manager.delete')}
             </button>
           </div>
         </div>
@@ -287,14 +291,16 @@ export function CriteriaList({ criteria, loading, error, onEdit, onDelete, delet
               <Leaf className="w-4 h-4 text-green-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Sustainability Criteria</h3>
-              <p className="text-sm text-gray-600">{criteria.length} criteria configured</p>
+              <h3 className="text-lg font-semibold text-gray-900">{t('sustainability.criteria')}</h3>
+              <p className="text-sm text-gray-600">
+                {t('sustainability.criteriaConfigured').replace('{count}', criteria.length.toString())}
+              </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-lg border border-gray-200">
             <CheckCircle className="w-4 h-4 text-green-600" />
-            <span className="text-sm font-medium text-gray-700">Active</span>
+            <span className="text-sm font-medium text-gray-700">{t('profile.active')}</span>
           </div>
         </div>
       </div>
@@ -312,11 +318,11 @@ export function CriteriaList({ criteria, loading, error, onEdit, onDelete, delet
                 <div className="flex items-center gap-3">
                   <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-medium border ${cfg.color}`}>
                     {cfg.icon}
-                    <span>{prettyDomain(domainKey)}</span>
+                    <span>{prettyDomain(domainKey, t)}</span>
                     <span className="ml-2 text-xs text-gray-500">{items.length}</span>
                   </div>
 
-                  <p className="text-sm text-gray-500">Grouped view</p>
+                  <p className="text-sm text-gray-500">{t('humanCentricity.groupedView')}</p>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -326,7 +332,7 @@ export function CriteriaList({ criteria, loading, error, onEdit, onDelete, delet
                     aria-expanded={!isCollapsed}
                   >
                     {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    <span className="text-xs">{isCollapsed ? 'Show' : 'Hide'}</span>
+                    <span className="text-xs">{isCollapsed ? t('humanCentricity.show') : t('humanCentricity.hide')}</span>
                   </button>
                 </div>
               </div>
@@ -338,7 +344,9 @@ export function CriteriaList({ criteria, loading, error, onEdit, onDelete, delet
               )}
 
               {isCollapsed && (
-                <div className="px-4 py-3 text-xs text-gray-500">{items.length} criteria hidden</div>
+                <div className="px-4 py-3 text-xs text-gray-500">
+                  {t('humanCentricity.statementsHidden').replace('{count}', items.length.toString())}
+                </div>
               )}
             </div>
           );

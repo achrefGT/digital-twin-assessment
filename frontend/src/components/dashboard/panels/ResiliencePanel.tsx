@@ -2,6 +2,7 @@ import React from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
+import { useLanguage } from '@/contexts/LanguageContext'
 import { Shield, RefreshCw, Zap, Clock, Wrench, AlertTriangle, Sparkles} from 'lucide-react'
 
 interface ResiliencePanelProps {
@@ -25,6 +26,8 @@ interface ResiliencePanelProps {
 }
 
 export const ResiliencePanel: React.FC<ResiliencePanelProps> = ({ data }) => {
+  const { t } = useLanguage()
+
   if (!data?.scores) {
     return (
       <Card className="border-0 shadow-sm">
@@ -38,8 +41,8 @@ export const ResiliencePanel: React.FC<ResiliencePanelProps> = ({ data }) => {
               <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-gradient-to-br from-slate-400 to-purple-500 opacity-20 animate-pulse" />
             </div>
             <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Awaiting sustainability assessment</p>
-              <p className="text-xs text-muted-foreground/70">Resilience</p>
+              <p className="text-sm text-muted-foreground">{t('resilience.awaiting')}</p>
+              <p className="text-xs text-muted-foreground/70">{t('module.resilience')}</p>
             </div>
           </div>
         </CardContent>
@@ -70,10 +73,10 @@ export const ResiliencePanel: React.FC<ResiliencePanelProps> = ({ data }) => {
   }
 
   const getRiskLevel = (risk: number) => {
-    if (risk <= 5) return { label: 'Low', color: 'text-emerald-600', bgColor: 'bg-emerald-50' }
-    if (risk <= 10) return { label: 'Medium', color: 'text-amber-600', bgColor: 'bg-amber-50' }
-    if (risk <= 15) return { label: 'High', color: 'text-orange-600', bgColor: 'bg-orange-50' }
-    return { label: 'Critical', color: 'text-red-600', bgColor: 'bg-red-50' }
+    if (risk <= 5) return { label: t('resilience.low'), color: 'text-emerald-600', bgColor: 'bg-emerald-50' }
+    if (risk <= 10) return { label: t('resilience.medium'), color: 'text-amber-600', bgColor: 'bg-amber-50' }
+    if (risk <= 15) return { label: t('resilience.high'), color: 'text-orange-600', bgColor: 'bg-orange-50' }
+    return { label: t('resilience.critical'), color: 'text-red-600', bgColor: 'bg-red-50' }
   }
 
   // Get key insights - only most important metrics
@@ -83,7 +86,7 @@ export const ResiliencePanel: React.FC<ResiliencePanelProps> = ({ data }) => {
     if (risk_metrics?.overall_mean_risk !== undefined) {
       const riskLevel = getRiskLevel(risk_metrics.overall_mean_risk)
       insights.push({
-        label: 'Risk Level',
+        label: t('resilience.riskLevel'),
         value: riskLevel.label,
         color: riskLevel.color,
         bgColor: riskLevel.bgColor
@@ -92,7 +95,7 @@ export const ResiliencePanel: React.FC<ResiliencePanelProps> = ({ data }) => {
 
     if (risk_metrics?.total_scenarios) {
       insights.push({
-        label: 'Scenarios',
+        label: t('resilience.scenarios'),
         value: risk_metrics.total_scenarios.toString(),
         color: 'text-blue-600',
         bgColor: 'bg-blue-50'
@@ -147,7 +150,7 @@ export const ResiliencePanel: React.FC<ResiliencePanelProps> = ({ data }) => {
             <div className="flex items-center gap-2 mb-4">
               <AlertTriangle className="h-4 w-4 text-slate-500" />
               <div className="text-xs font-medium text-slate-500 uppercase tracking-wide">
-                Risk Assessment
+                {t('resilience.riskAssessment')}
               </div>
             </div>
             
@@ -172,7 +175,7 @@ export const ResiliencePanel: React.FC<ResiliencePanelProps> = ({ data }) => {
                   {risk_metrics.overall_mean_risk.toFixed(1)}
                 </div>
                 <div className="text-xs text-slate-500 mb-2">
-                  Mean Risk Score
+                  {t('resilience.meanRiskScore')}
                 </div>
                 <div className="w-full h-2 bg-slate-200 rounded-full overflow-hidden">
                   <div 

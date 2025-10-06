@@ -59,7 +59,7 @@ const AnimatedBackground = () => {
     }
 
     const createHumanIcons = () => {
-      for (let i = 0; i < 6; i++) { 
+      for (let i = 0; i < 5; i++) { 
         const icon = document.createElement('div')
         icon.className = 'human-icon'
         icon.style.cssText = `
@@ -125,7 +125,7 @@ const AnimatedBackground = () => {
     }
 
     const createMetricBars = () => {
-      for (let i = 0; i < 7; i++) { // Increased from 5 to 7
+      for (let i = 0; i < 7; i++) { 
         const bar = document.createElement('div')
         bar.className = 'metric-bar'
         bar.style.cssText = `

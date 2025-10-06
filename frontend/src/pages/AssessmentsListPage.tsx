@@ -1,16 +1,33 @@
-import React from 'react'
+import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { Button } from '@/components/ui/button'
-import { ArrowLeft, BarChart3 } from 'lucide-react'
+import { ArrowLeft, BarChart3, Plus } from 'lucide-react'
 import { AssessmentsList } from '@/components/dashboard/AssessmentsList'
 import { Assessment } from '@/services/assessmentApi'
+import { useLanguage } from '@/contexts/LanguageContext'
+import { useAssessment } from '@/hooks/useAssessment'
 
 export default function AssessmentsListPage() {
   const navigate = useNavigate()
+  const { t } = useLanguage()
+  const { clearAssessment } = useAssessment()
+  const [isCreating, setIsCreating] = useState(false)
 
   const handleSelectAssessment = (assessment: Assessment) => {
     // Navigate to the specific assessment dashboard
     navigate(`/dashboard/${assessment.assessment_id}`)
+  }
+
+  const handleCreateAssessment = async () => {
+    try {
+      setIsCreating(true)
+      clearAssessment()
+      navigate('/assessment')
+    } catch (error) {
+      console.error('Failed to navigate to create assessment:', error)
+    } finally {
+      setIsCreating(false)
+    }
   }
 
   return (
@@ -32,9 +49,18 @@ export default function AssessmentsListPage() {
                 <div className="w-8 h-8 bg-gradient-to-br from-blue-600 to-purple-600 rounded-lg flex items-center justify-center">
                   <BarChart3 className="w-5 h-5 text-white" />
                 </div>
-                <span className="text-xl font-bold text-gray-900">Assessments List</span>
+                <h1 className="text-xl font-bold text-gray-900">{t('assessments.title')}</h1>
               </div>
             </div>
+            
+            <Button 
+              onClick={handleCreateAssessment} 
+              disabled={isCreating}
+              className="flex items-center gap-2 px-4 py-2 rounded-md shadow-sm bg-gradient-to-r from-blue-600 to-purple-600 text-white hover:shadow-lg transition-shadow"
+            >
+              <Plus className="w-4 h-4" />
+              {isCreating ? t('common.loading') : t('assessments.create')}
+            </Button>
           </div>
         </div>
       </nav>

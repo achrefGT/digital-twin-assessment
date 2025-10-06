@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useAdminApi } from '@/hooks/useAdminApi';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { StatementsList } from './StatementsList';
 import { StatementEditor } from './StatementEditor';
 import { HumanCentricityDomain, StatementResponse } from '@/types/admin';
@@ -13,20 +14,19 @@ import {
   AlertCircle,
   Heart,
   Activity,
-  MessageSquare,
-  Loader2
+  MessageSquare
 } from 'lucide-react';
 
 export function StatementManager() {
   const { mutations, isDeleting } = useAdminApi();
+  const { t } = useLanguage();
   const [selectedDomain, setSelectedDomain] = useState<HumanCentricityDomain | 'all'>('all');
   const [editingStatement, setEditingStatement] = useState<StatementResponse | null>(null);
   const [showEditor, setShowEditor] = useState(false);
 
-  // Get statements data
   const statementsQuery = useAdminApi().humanCentricityStatements(
     selectedDomain === 'all' ? undefined : selectedDomain,
-    false // Always show all statements since we removed the active filter
+    false
   );
 
   const domains: { 
@@ -38,49 +38,49 @@ export function StatementManager() {
   }[] = [
     { 
       value: 'all', 
-      label: 'All Domains',
+      label: t('humanCentricity.allDomains'),
       color: 'text-gray-600',
       bgColor: 'bg-gray-50',
       icon: <BarChart3 className="w-4 h-4" />
     },
     { 
       value: 'Core_Usability', 
-      label: 'Usability',
+      label: t('humanCentricity.usability'),
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
       icon: <Brain className="w-4 h-4" />
     },
     { 
       value: 'Trust_Transparency', 
-      label: 'Trust',
+      label: t('humanCentricity.trust'),
       color: 'text-green-600',
       bgColor: 'bg-green-50',
       icon: <Shield className="w-4 h-4" />
     },
     { 
       value: 'Workload_Comfort', 
-      label: 'Workload',
+      label: t('humanCentricity.workload'),
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
       icon: <Activity className="w-4 h-4" />
     },
     { 
       value: 'Cybersickness', 
-      label: 'Cybersickness',
+      label: t('humanCentricity.cybersickness'),
       color: 'text-red-600',
       bgColor: 'bg-red-50',
       icon: <AlertCircle className="w-4 h-4" />
     },
     { 
       value: 'Emotional_Response', 
-      label: 'Emotional',
+      label: t('humanCentricity.emotional'),
       color: 'text-orange-600',
       bgColor: 'bg-orange-50',
       icon: <Heart className="w-4 h-4" />
     },
     { 
       value: 'Performance', 
-      label: 'Performance',
+      label: t('humanCentricity.performance'),
       color: 'text-indigo-600',
       bgColor: 'bg-indigo-50',
       icon: <MessageSquare className="w-4 h-4" />
@@ -102,7 +102,7 @@ export function StatementManager() {
       return;
     }
 
-    const confirmMessage = `Are you sure you want to delete this statement?\n\n"${statement.statement_text}"\n\nThis action cannot be undone.`;
+    const confirmMessage = t('confirm.delete') + '\n\n"' + statement.statement_text + '"\n\n' + t('notification.warning.cannotUndo');
     
     if (window.confirm(confirmMessage)) {
       mutations.deleteHumanCentricityStatement.mutate(statement.id);
@@ -110,14 +110,13 @@ export function StatementManager() {
   };
 
   const handleReset = async (domain?: HumanCentricityDomain) => {
-    const domainText = domain ? ` for ${domain.replace('_', ' ')}` : '';
-    const confirmMessage = `Are you sure you want to reset all statements${domainText}?\n\nThis will delete all existing statements and restore defaults. This cannot be undone.`;
+    const domainText = domain ? ` ${t('humanCentricity.forDomain').replace('{domain}', domain.replace('_', ' '))}` : '';
+    const confirmMessage = t('confirm.reset') + domainText + '\n\n' + t('notification.warning.cannotUndo');
     
     if (window.confirm(confirmMessage)) {
       if (domain) {
         mutations.resetHumanCentricityDomain.mutate(domain);
       } else {
-        // Reset all domains - you may need to implement this or call reset for each domain
         for (const domainItem of domains.slice(1)) {
           if (domainItem.value !== 'all') {
             mutations.resetHumanCentricityDomain.mutate(domainItem.value as HumanCentricityDomain);
@@ -132,7 +131,6 @@ export function StatementManager() {
     setEditingStatement(null);
   };
 
-  // Filter statements based on selected domain with proper type safety
   const filteredStatements = useMemo(() => {
     if (!statementsQuery.data || !Array.isArray(statementsQuery.data)) {
       return [];
@@ -142,7 +140,6 @@ export function StatementManager() {
     );
   }, [statementsQuery.data, selectedDomain]);
 
-  // Calculate stats for all domains with proper type safety
   const allStatementsQuery = useAdminApi().humanCentricityStatements(undefined, false);
   const allStatements = useMemo(() => {
     if (!allStatementsQuery.data || !Array.isArray(allStatementsQuery.data)) {
@@ -151,7 +148,6 @@ export function StatementManager() {
     return allStatementsQuery.data as StatementResponse[];
   }, [allStatementsQuery.data]);
 
-  // Calculate domain stats
   const domainStats = useMemo(() => {
     return allStatements.reduce((acc: Record<HumanCentricityDomain, number>, statement: StatementResponse) => {
       acc[statement.domain_key] = (acc[statement.domain_key] || 0) + 1;
@@ -159,7 +155,6 @@ export function StatementManager() {
     }, {} as Record<HumanCentricityDomain, number>);
   }, [allStatements]);
 
-  // Get list of currently deleting IDs for UI state
   const deletingIds = useMemo(() => {
     if (!allStatements) return [];
     return allStatements
@@ -175,10 +170,10 @@ export function StatementManager() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Human Centricity Statements
+          {t('humanCentricity.statements')}
         </h1>
         <p className="text-gray-600">
-          Manage user experience assessment statements across core usability, trust, comfort, and performance domains
+          {t('humanCentricity.manageStatements')}
         </p>
       </div>
 
@@ -219,7 +214,7 @@ export function StatementManager() {
               className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-sm"
             >
               <Plus className="w-5 h-5" />
-              <span>Add Statement</span>
+              <span>{t('humanCentricity.addStatement')}</span>
             </button>
             <button
               onClick={() => handleReset(selectedDomain === 'all' ? undefined : selectedDomain)}
@@ -227,7 +222,7 @@ export function StatementManager() {
               className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg font-medium transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-sm"
             >
               <RefreshCw className={`w-5 h-5 ${isResetLoading ? 'animate-spin' : ''}`} />
-              <span>{isResetLoading ? 'Resetting...' : 'Reset to Default'}</span>
+              <span>{isResetLoading ? t('humanCentricity.resetting') : t('humanCentricity.resetToDefault')}</span>
             </button>
           </div>
         </div>
@@ -236,7 +231,7 @@ export function StatementManager() {
         {deletingIds.length > 0 && (
           <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
             <p className="text-sm text-yellow-800">
-              Deleting {deletingIds.length} statement{deletingIds.length > 1 ? 's' : ''}...
+              {t('humanCentricity.deletingStatements').replace('{count}', deletingIds.length.toString())}
             </p>
           </div>
         )}
@@ -244,7 +239,7 @@ export function StatementManager() {
         {isResetLoading && (
           <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
             <p className="text-sm text-orange-800">
-              Resetting statements{selectedDomain !== 'all' ? ` for ${selectedDomain.replace('_', ' ')}` : ''}...
+              {t('humanCentricity.resettingStatements')}{selectedDomain !== 'all' ? t('humanCentricity.forDomain').replace('{domain}', selectedDomain.replace('_', ' ')) : ''}...
             </p>
           </div>
         )}
@@ -256,14 +251,14 @@ export function StatementManager() {
           <div className="flex items-center gap-2 mb-2">
             <Users className="w-5 h-5 text-blue-600" />
             <h3 className="font-medium text-gray-900">
-              {selectedDomain === 'all' ? 'Total Statements' : `${selectedDomain.replace('_', ' ')} Statements`}
+              {selectedDomain === 'all' ? t('humanCentricity.totalStatements') : t('humanCentricity.domainStatements').replace('{domain}', selectedDomain.replace('_', ' '))}
             </h3>
           </div>
           <div className="text-2xl font-bold text-gray-900">
             {filteredStatements.length}
           </div>
           <div className="text-sm text-gray-600">
-            All statements
+            {t('humanCentricity.allStatements')}
           </div>
         </div>
         
@@ -286,7 +281,7 @@ export function StatementManager() {
                 </h3>
               </div>
               <div className={`text-2xl font-bold ${domain.color}`}>{count}</div>
-              <div className={`text-sm ${domain.color} opacity-75`}>statements defined</div>
+              <div className={`text-sm ${domain.color} opacity-75`}>{t('humanCentricity.statementsDefined')}</div>
             </div>
           );
         })}
@@ -313,7 +308,7 @@ export function StatementManager() {
                 </h3>
               </div>
               <div className={`text-2xl font-bold ${domain.color}`}>{count}</div>
-              <div className={`text-sm ${domain.color} opacity-75`}>statements defined</div>
+              <div className={`text-sm ${domain.color} opacity-75`}>{t('humanCentricity.statementsDefined')}</div>
             </div>
           );
         })}

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAdminApi } from '@/hooks/useAdminApi';
 import { ScenarioResponse, ResilienceDomain, ScenarioCreate, ScenarioUpdate } from '@/types/admin';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { X, Save, AlertCircle, Info, Shield, Calendar, FileText, Clock } from 'lucide-react';
 
 interface ScenarioEditorProps {
@@ -9,6 +10,7 @@ interface ScenarioEditorProps {
 }
 
 export function ScenarioEditor({ scenario, onClose }: ScenarioEditorProps) {
+  const { t } = useLanguage();
   const { mutations } = useAdminApi();
   const isEdit = !!scenario;
   
@@ -36,15 +38,15 @@ export function ScenarioEditor({ scenario, onClose }: ScenarioEditorProps) {
     const newErrors: Record<string, string> = {};
 
     if (!formData.scenario_text.trim()) {
-      newErrors.scenario_text = 'Scenario text is required';
+      newErrors.scenario_text = t('manager.statementTextRequired');
     } else if (formData.scenario_text.trim().length < 10) {
-      newErrors.scenario_text = 'Scenario text must be at least 10 characters';
+      newErrors.scenario_text = t('manager.statementMinLength').replace('{min}', '10');
     } else if (formData.scenario_text.trim().length > 1000) {
-      newErrors.scenario_text = 'Scenario text must be less than 1000 characters';
+      newErrors.scenario_text = t('manager.statementMaxLength').replace('{max}', '1000');
     }
 
     if (formData.description && formData.description.trim().length > 500) {
-      newErrors.description = 'Description must be less than 500 characters';
+      newErrors.description = t('manager.descriptionMaxLength').replace('{max}', '500');
     }
 
     setErrors(newErrors);
@@ -90,32 +92,32 @@ export function ScenarioEditor({ scenario, onClose }: ScenarioEditorProps) {
   }[] = [
     { 
       value: 'Robustness', 
-      label: 'Robustness', 
-      description: 'System ability to maintain function under stress and failure conditions',
+      label: t('resilience.robustness'), 
+      description: t('resilience.systemAbility'),
       color: 'border-blue-200 bg-blue-50'
     },
     { 
       value: 'Redundancy', 
-      label: 'Redundancy', 
-      description: 'Backup systems and alternative pathways for critical functions',
+      label: t('resilience.redundancy'), 
+      description: t('resilience.backupSystems'),
       color: 'border-green-200 bg-green-50'
     },
     { 
       value: 'Adaptability', 
-      label: 'Adaptability', 
-      description: 'System flexibility to adjust and evolve with changing conditions',
+      label: t('resilience.adaptability'), 
+      description: t('resilience.systemFlexibility'),
       color: 'border-purple-200 bg-purple-50'
     },
     { 
       value: 'Rapidity', 
-      label: 'Rapidity', 
-      description: 'Speed of response and recovery from disruptions',
+      label: t('resilience.rapidity'), 
+      description: t('resilience.speedResponse'),
       color: 'border-orange-200 bg-orange-50'
     },
     { 
       value: 'PHM', 
-      label: 'PHM (Prognostics & Health Management)', 
-      description: 'Predictive maintenance and health monitoring capabilities',
+      label: t('resilience.phmFull'), 
+      description: t('resilience.predictiveMaintenance'),
       color: 'border-indigo-200 bg-indigo-50'
     }
   ];
@@ -132,10 +134,10 @@ export function ScenarioEditor({ scenario, onClose }: ScenarioEditorProps) {
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">
-                  {isEdit ? 'Edit Scenario' : 'Create New Scenario'}
+                  {isEdit ? t('resilience.editScenario') : t('resilience.createNewScenario')}
                 </h2>
                 <p className="text-sm text-gray-600">
-                  {isEdit ? 'Modify the resilience scenario details' : 'Define a new resilience assessment scenario'}
+                  {isEdit ? t('resilience.modifyScenario') : t('resilience.defineScenario')}
                 </p>
               </div>
             </div>
@@ -153,7 +155,7 @@ export function ScenarioEditor({ scenario, onClose }: ScenarioEditorProps) {
           {/* Domain Selection */}
           <div className="space-y-4">
             <label className="text-lg font-semibold text-gray-900">
-              Resilience Domain *
+              {t('resilience.resilienceDomain')} *
             </label>
             
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -188,7 +190,7 @@ export function ScenarioEditor({ scenario, onClose }: ScenarioEditorProps) {
           {/* Scenario Text */}
           <div>
             <label className="block text-sm font-medium text-gray-900 mb-2">
-              Scenario Description *
+              {t('resilience.scenarioDescription')} *
             </label>
             <textarea
               value={formData.scenario_text}
@@ -198,7 +200,7 @@ export function ScenarioEditor({ scenario, onClose }: ScenarioEditorProps) {
                 w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors resize-none
                 ${errors.scenario_text ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'}
               `}
-              placeholder={`Describe a ${formData.domain.toLowerCase()} scenario that assessors will evaluate...`}
+              placeholder={t('resilience.describeScenario').replace('{domain}', formData.domain.toLowerCase())}
             />
             {errors.scenario_text && (
               <div className="flex items-center gap-2 mt-1 text-red-600">
@@ -208,7 +210,7 @@ export function ScenarioEditor({ scenario, onClose }: ScenarioEditorProps) {
             )}
             <div className="flex justify-between items-center mt-1">
               <p className="text-sm text-gray-600">
-                This scenario will be presented to assessors for evaluation
+                {t('resilience.scenarioPresented')}
               </p>
               <span className={`text-xs ${formData.scenario_text.length > 900 ? 'text-red-500' : 'text-gray-500'}`}>
                 {formData.scenario_text.length}/1000
@@ -219,7 +221,7 @@ export function ScenarioEditor({ scenario, onClose }: ScenarioEditorProps) {
           {/* Additional Description */}
           <div>
             <label className="block text-sm font-medium text-gray-900 mb-2">
-              Additional Context <span className="text-gray-500 font-normal">(Optional)</span>
+              {t('resilience.additionalContext')} <span className="text-gray-500 font-normal">({t('form.optional')})</span>
             </label>
             <textarea
               value={formData.description}
@@ -229,7 +231,7 @@ export function ScenarioEditor({ scenario, onClose }: ScenarioEditorProps) {
                 w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors resize-none
                 ${errors.description ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'}
               `}
-              placeholder="Additional context or instructions for this scenario..."
+              placeholder={t('resilience.additionalInstructions')}
             />
             {errors.description && (
               <div className="flex items-center gap-2 mt-1 text-red-600">
@@ -239,7 +241,7 @@ export function ScenarioEditor({ scenario, onClose }: ScenarioEditorProps) {
             )}
             <div className="flex justify-between items-center mt-1">
               <p className="text-sm text-gray-600">
-                Additional context for assessors (optional)
+                {t('resilience.additionalForAssessors')}
               </p>
               <span className={`text-xs ${(formData.description || '').length > 450 ? 'text-red-500' : 'text-gray-500'}`}>
                 {(formData.description || '').length}/500
@@ -258,8 +260,8 @@ export function ScenarioEditor({ scenario, onClose }: ScenarioEditorProps) {
                   className="w-4 h-4 text-amber-600 border-amber-300 rounded focus:ring-amber-500"
                 />
                 <div>
-                  <span className="font-medium text-gray-900">Mark as default scenario</span>
-                  <p className="text-sm text-gray-600">Default scenarios cannot be deleted and serve as system baselines</p>
+                  <span className="font-medium text-gray-900">{t('resilience.markDefault')}</span>
+                  <p className="text-sm text-gray-600">{t('resilience.defaultScenarios')}</p>
                 </div>
               </label>
             </div>
@@ -270,7 +272,7 @@ export function ScenarioEditor({ scenario, onClose }: ScenarioEditorProps) {
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
               <div className="flex items-center gap-2 mb-3">
                 <Info className="w-5 h-5 text-gray-600" />
-                <h4 className="font-medium text-gray-900">Scenario Information</h4>
+                <h4 className="font-medium text-gray-900">{t('sustainability.criterionInformation')}</h4>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div className="flex items-center gap-2">
@@ -280,27 +282,27 @@ export function ScenarioEditor({ scenario, onClose }: ScenarioEditorProps) {
                 </div>
                 <div className="flex items-center gap-2">
                   <FileText className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">Domain:</span>
+                  <span className="text-gray-600">{t('humanCentricity.assessmentDomain')}:</span>
                   <span className="font-medium text-gray-900">{scenario.domain}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Shield className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">Default:</span>
-                  <span className="font-medium text-gray-900">{scenario.is_default ? 'Yes' : 'No'}</span>
+                  <span className="text-gray-600">{t('humanCentricity.default')}:</span>
+                  <span className="font-medium text-gray-900">{scenario.is_default ? t('common.yes') : t('common.no')}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Clock className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">Length:</span>
-                  <span className="font-medium text-gray-900">{scenario.scenario_text.length} chars</span>
+                  <span className="text-gray-600">{t('humanCentricity.length')}:</span>
+                  <span className="font-medium text-gray-900">{scenario.scenario_text.length} {t('humanCentricity.chars')}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">Created:</span>
+                  <span className="text-gray-600">{t('humanCentricity.created')}:</span>
                   <span className="font-medium text-gray-900">{new Date(scenario.created_at).toLocaleDateString()}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">Updated:</span>
+                  <span className="text-gray-600">{t('humanCentricity.updated')}:</span>
                   <span className="font-medium text-gray-900">{new Date(scenario.updated_at).toLocaleDateString()}</span>
                 </div>
               </div>
@@ -316,7 +318,7 @@ export function ScenarioEditor({ scenario, onClose }: ScenarioEditorProps) {
               onClick={onClose}
               className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
             >
-              Cancel
+              {t('manager.cancel')}
             </button>
             <button
               onClick={handleSubmit}
@@ -325,12 +327,13 @@ export function ScenarioEditor({ scenario, onClose }: ScenarioEditorProps) {
             >
               <Save className="w-4 h-4" />
               {(mutations.createResilienceScenario.isPending || mutations.updateResilienceScenario.isPending)
-                ? 'Saving...' 
-                : (isEdit ? 'Update Scenario' : 'Create Scenario')
+                ? t('manager.saving') 
+                : (isEdit ? t('resilience.updateScenario') : t('resilience.createScenario'))
               }
             </button>
           </div>
         </div>
       </div>
-    </div>);
+    </div>
+  );
 }

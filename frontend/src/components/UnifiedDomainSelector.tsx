@@ -9,6 +9,7 @@ import { PaginatedForm } from "./PaginatedForm"
 import { useScenarios } from "@/hooks/useScenarios"
 import { useSustainability } from "@/hooks/useSustainability"
 import { useHumanCentricity } from "@/hooks/useHumanCentricity"
+import { useLanguage } from "@/contexts/LanguageContext"
 
 // Step getter function map
 const stepGetters = {
@@ -21,7 +22,9 @@ const stepGetters = {
 const assessmentConfig = {
   sustainability: {
     title: "Sustainability Assessment",
+    titleKey: "domain.sustainability.title",
     description: "Choose which sustainability domains you want to include in this assessment.",
+    descriptionKey: "assessment.selectDomainDesc",
     primaryColor: "bg-emerald-500",
     primaryColorHover: "bg-emerald-600",
     accentColor: "bg-emerald-50",
@@ -31,7 +34,9 @@ const assessmentConfig = {
   },
   resilience: {
     title: "Resilience Assessment", 
+    titleKey: "domain.resilience.title",
     description: "Choose which resilience domains you want to include in this assessment.",
+    descriptionKey: "assessment.selectDomainDesc",
     primaryColor: "bg-blue-500",
     primaryColorHover: "bg-blue-600", 
     accentColor: "bg-blue-50",
@@ -41,7 +46,9 @@ const assessmentConfig = {
   },
   human_centricity: {
     title: "Human Centricity Assessment",
+    titleKey: "domain.humanCentricity.title",
     description: "Choose which human centricity domains you want to include in this assessment.", 
+    descriptionKey: "assessment.selectDomainDesc",
     primaryColor: "bg-violet-500",
     primaryColorHover: "bg-violet-600",
     accentColor: "bg-violet-50", 
@@ -64,6 +71,7 @@ export default function UnifiedDomainSelector({
   assessmentInfo, 
   onComplete 
 }: UnifiedDomainSelectorProps) {
+  const { t } = useLanguage()
   const [allSteps, setAllSteps] = React.useState<any[]>([])
   const [loading, setLoading] = React.useState(true)
   const [error, setError] = React.useState<string | null>(null)
@@ -228,6 +236,22 @@ export default function UnifiedDomainSelector({
     setStarted(true)
   }
 
+  // Loading state message helper
+  const getLoadingMessage = () => {
+    if (assessmentType === 'resilience') return t('unifiedDomain.loadingResilience')
+    if (assessmentType === 'sustainability') return t('unifiedDomain.loadingSustainability')
+    if (assessmentType === 'human_centricity') return t('unifiedDomain.loadingHumanCentricity')
+    return t('unifiedDomain.loadingDomains')
+  }
+
+  // Error message helper
+  const getNoScenariosMessage = () => {
+    if (assessmentType === 'resilience') return t('unifiedDomain.noResilienceScenarios')
+    if (assessmentType === 'sustainability') return t('unifiedDomain.noSustainabilityScenarios')
+    if (assessmentType === 'human_centricity') return t('unifiedDomain.noHumanCentricityDomains')
+    return t('unifiedDomain.noDomainsAvailable')
+  }
+
   // Show PaginatedForm when started
   if (started) {
     return (
@@ -283,12 +307,7 @@ export default function UnifiedDomainSelector({
         <div className="text-center">
           <div className="flex items-center justify-center space-x-3">
             <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-gray-900"></div>
-            <span className="text-sm text-gray-600">
-              {assessmentType === 'resilience' ? 'Loading resilience scenarios...' : 
-               assessmentType === 'sustainability' ? 'Loading sustainability scenarios...' :
-               assessmentType === 'human_centricity' ? 'Loading human centricity structure...' :
-               'Loading domains...'}
-            </span>
+            <span className="text-sm text-gray-600">{getLoadingMessage()}</span>
           </div>
         </div>
       </div>
@@ -303,7 +322,7 @@ export default function UnifiedDomainSelector({
 
   // Error state
   if (currentError) {
-    const displayError = error || currentError?.message || 'Unknown error'
+    const displayError = error || currentError?.message || t('error.unknown')
     return (
       <div className="max-w-4xl mx-auto space-y-8">
         <div className="text-center space-y-4">
@@ -311,9 +330,9 @@ export default function UnifiedDomainSelector({
             <AlertCircle className={`w-8 h-8 ${config.textColor}`} />
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{config.title}</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">{t(config.titleKey || 'assessment.title')}</h1>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              Unable to load assessment configuration.
+              {t('unifiedDomain.unableToLoad')}
             </p>
           </div>
         </div>
@@ -331,7 +350,7 @@ export default function UnifiedDomainSelector({
             variant="outline"
             className="px-6 py-2"
           >
-            Try Again
+            {t('common.tryAgain')}
           </Button>
         </div>
       </div>
@@ -347,9 +366,9 @@ export default function UnifiedDomainSelector({
             <span className="text-2xl">{config.icon}</span>
           </div>
           <div>
-            <h1 className="text-3xl font-bold text-gray-900 mb-2">{config.title}</h1>
+            <h1 className="text-3xl font-bold text-gray-900 mb-2">{t(config.titleKey || 'assessment.title')}</h1>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-              No domains are currently available for this assessment type.
+              {t('unifiedDomain.noDomainsCurrently')}
             </p>
           </div>
         </div>
@@ -357,14 +376,7 @@ export default function UnifiedDomainSelector({
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription className="text-base">
-            {assessmentType === 'resilience' 
-              ? 'No resilience scenarios are currently configured. Please contact your administrator.'
-              : assessmentType === 'sustainability'
-              ? 'No sustainability scenarios are currently configured. Please contact your administrator.'
-              : assessmentType === 'human_centricity'
-              ? 'No human centricity domains are currently configured. Please contact your administrator.'
-              : 'No domains are available for this assessment type.'
-            }
+            {getNoScenariosMessage()}
           </AlertDescription>
         </Alert>
       </div>
@@ -384,9 +396,9 @@ export default function UnifiedDomainSelector({
           <span className="text-2xl">{config.icon}</span>
         </div>
         <div>
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">{config.title}</h1>
+          <h1 className="text-3xl font-bold text-gray-900 mb-2">{t(config.titleKey || 'assessment.title')}</h1>
           <p className="text-lg text-gray-600 max-w-2xl mx-auto">
-            Select the specific domains you'd like to focus on for a personalized assessment experience.
+            {t('unifiedDomain.selectDomains')}
           </p>
         </div>
       </div>
@@ -396,10 +408,10 @@ export default function UnifiedDomainSelector({
         <CardHeader className="pb-6">
           <div className="flex items-center space-x-3">
             <Sparkles className={`w-5 h-5 ${config.textColor}`} />
-            <CardTitle className="text-xl">Choose Your Domains</CardTitle>
+            <CardTitle className="text-xl">{t('unifiedDomain.chooseYourDomains')}</CardTitle>
           </div>
           <CardDescription className="text-base">
-            {config.description}
+            {t(config.descriptionKey || 'unifiedDomain.chooseDescription')}
           </CardDescription>
         </CardHeader>
         
@@ -442,7 +454,7 @@ export default function UnifiedDomainSelector({
                 className="text-sm"
                 disabled={selectedDomains.size === domainTitles.length}
               >
-                Select All ({domainTitles.length})
+                {t('common.selectAll')} ({domainTitles.length})
               </Button>
               <Button 
                 variant="ghost" 
@@ -450,12 +462,12 @@ export default function UnifiedDomainSelector({
                 className="text-sm text-gray-500 hover:text-gray-700"
                 disabled={selectedDomains.size === 0}
               >
-                Clear Selection
+                {t('common.clearSelection')}
               </Button>
             </div>
             
             <div className="text-sm text-gray-500">
-              {selectedDomains.size} of {domainTitles.length} selected
+              {selectedDomains.size} {t('common.of')} {domainTitles.length} {t('common.selected')}
             </div>
           </div>
 
@@ -468,10 +480,10 @@ export default function UnifiedDomainSelector({
             >
               <div className="flex items-center justify-center space-x-3">
                 <span>
-                  Start Assessment
+                  {t('unifiedDomain.startAssessment')}
                   {selectedDomains.size > 0 && (
                     <span className="ml-2">
-                      ({selectedDomains.size} domain{selectedDomains.size !== 1 ? 's' : ''})
+                      ({selectedDomains.size} {selectedDomains.size !== 1 ? t('unifiedDomain.domains') : t('unifiedDomain.domain')})
                     </span>
                   )}
                 </span>
@@ -481,7 +493,7 @@ export default function UnifiedDomainSelector({
             
             {selectedDomains.size === 0 && (
               <p className="text-center text-sm text-gray-500 mt-3">
-                Please select at least one domain to continue
+                {t('unifiedDomain.selectAtLeastOne')}
               </p>
             )}
           </div>
@@ -492,11 +504,11 @@ export default function UnifiedDomainSelector({
       {selectedDomains.size > 0 && (
         <div className={`text-center p-4 rounded-xl ${config.accentColor} ${config.borderColor} border`}>
           <p className={`text-sm font-medium ${config.textColor}`}>
-            Your assessment will include {selectedDomains.size} domain{selectedDomains.size !== 1 ? 's' : ''} with approximately{' '}
+            {t('unifiedDomain.assessmentWillInclude')} {selectedDomains.size} {selectedDomains.size !== 1 ? t('unifiedDomain.domains') : t('unifiedDomain.domain')} {t('unifiedDomain.withApproximately')}{' '}
             {assessmentType === 'human_centricity' 
               ? `${selectedDomains.size * 2}-${selectedDomains.size * 8}` 
               : `${selectedDomains.size * 3}-${selectedDomains.size * 5}`
-            } questions
+            } {t('unifiedDomain.questions')}
           </p>
         </div>
       )}

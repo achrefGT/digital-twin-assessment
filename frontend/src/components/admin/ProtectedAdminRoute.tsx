@@ -1,6 +1,8 @@
 import { Navigate } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
 import { Shield, AlertCircle } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
+
 
 interface ProtectedAdminRouteProps {
   children: React.ReactNode;
@@ -10,6 +12,7 @@ const isAdminish = (role: string | undefined) => ['admin', 'super_admin'].includ
 
 export function ProtectedAdminRoute({ children }: ProtectedAdminRouteProps) {
   const { user, isAuthenticated, isLoading } = useAuth();
+  const { t } = useLanguage();
 
   // Show loading spinner while checking authentication
   if (isLoading) {
@@ -17,7 +20,7 @@ export function ProtectedAdminRoute({ children }: ProtectedAdminRouteProps) {
       <div className="min-h-screen flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Checking authentication...</p>
+          <p className="text-gray-600">{t('auth.checkingAuth')}</p>
         </div>
       </div>
     );
@@ -39,15 +42,14 @@ export function ProtectedAdminRoute({ children }: ProtectedAdminRouteProps) {
             </div>
           </div>
           <h1 className="text-xl font-semibold text-gray-900 mb-2">
-            Access Denied
+            {t('admin.accessDenied')}
           </h1>
           <p className="text-gray-600 mb-6">
-            You don't have administrator privileges to access this area. 
-            Please contact your system administrator if you believe this is an error.
+           {t('admin.noPrivileges')}
           </p>
           <div className="space-y-2 text-sm text-gray-500">
-            <p>Current role: <span className="font-medium">{user?.role || 'unknown'}</span></p>
-            <p>Required role: <span className="font-medium">admin</span></p>
+            <p>{t('profile.role')}: <span className="font-medium">{user?.role || 'unknown'}</span></p>
+            <p>{t('admin.requiredRole')}: <span className="font-medium">admin</span></p>
           </div>
           <div className="mt-6">
             <Navigate to="/" replace />

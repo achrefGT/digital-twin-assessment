@@ -20,10 +20,12 @@ import {
   Shield
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export const UserProfile: React.FC = () => {
   const { user, changePassword, updateProfile } = useAuth();
   const { toast } = useToast();
+  const { t, language } = useLanguage();
 
   // Profile editing state
   const [isEditingProfile, setIsEditingProfile] = useState(false);
@@ -48,7 +50,8 @@ export const UserProfile: React.FC = () => {
   const [isChangingPassword, setIsChangingPassword] = useState(false);
 
   const formatDate = (dateString: string) => {
-    return new Date(dateString).toLocaleDateString('en-US', {
+    const locale = language === 'fr' ? 'fr-FR' : 'en-US';
+    return new Date(dateString).toLocaleDateString(locale, {
       year: 'numeric',
       month: 'long',
       day: 'numeric'
@@ -63,6 +66,17 @@ export const UserProfile: React.FC = () => {
         return 'bg-red-100 text-red-800 border-red-200';
       default:
         return 'bg-gray-100 text-gray-800 border-gray-200';
+    }
+  };
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case 'admin':
+        return t('userNav.admin');
+      case 'super_admin':
+        return t('userNav.superAdmin');
+      default:
+        return t('userNav.user');
     }
   };
 
@@ -91,13 +105,13 @@ export const UserProfile: React.FC = () => {
         first_name: profileData.first_name.trim() || undefined,
         last_name: profileData.last_name.trim() || undefined
       });
-      toast({ title: 'Profile Updated', description: 'Your profile was updated successfully.' });
+      toast({ title: t('profile.profileUpdated'), description: t('profile.profileUpdatedDesc') });
       setIsEditingProfile(false);
     } catch (error) {
       console.error('Profile update error:', error);
       toast({
-        title: 'Update Failed',
-        description: error instanceof Error ? error.message : 'Failed to update profile',
+        title: t('profile.updateFailed'),
+        description: error instanceof Error ? error.message : t('profile.updateFailedDesc'),
         variant: 'destructive'
       });
     } finally {
@@ -110,8 +124,8 @@ export const UserProfile: React.FC = () => {
 
     if (passwordData.new_password !== passwordData.confirm_password) {
       toast({
-        title: 'Password Mismatch',
-        description: "New password and confirmation don't match",
+        title: t('profile.passwordMismatch'),
+        description: t('profile.passwordMismatchDesc'),
         variant: 'destructive'
       });
       return;
@@ -119,8 +133,8 @@ export const UserProfile: React.FC = () => {
 
     if (passwordData.new_password.length < 8) {
       toast({
-        title: 'Password Too Short',
-        description: 'New password must be at least 8 characters long',
+        title: t('profile.passwordTooShort'),
+        description: t('auth.passwordTooShort'),
         variant: 'destructive'
       });
       return;
@@ -129,7 +143,7 @@ export const UserProfile: React.FC = () => {
     setIsChangingPassword(true);
     try {
       await changePassword(passwordData.current_password, passwordData.new_password);
-      toast({ title: 'Password Changed', description: 'Your password has been updated.' });
+      toast({ title: t('profile.passwordChanged'), description: t('profile.passwordChangedDesc') });
       setPasswordData({
         current_password: '',
         new_password: '',
@@ -140,8 +154,8 @@ export const UserProfile: React.FC = () => {
     } catch (error) {
       console.error('Password change error:', error);
       toast({
-        title: 'Password Change Failed',
-        description: error instanceof Error ? error.message : 'Failed to change password',
+        title: t('profile.passwordChangeFailed'),
+        description: error instanceof Error ? error.message : t('profile.passwordChangeFailedDesc'),
         variant: 'destructive'
       });
     } finally {
@@ -160,7 +174,7 @@ export const UserProfile: React.FC = () => {
     return (
       <div className="container mx-auto px-6 py-8">
         <div className="text-center">
-          <p className="text-gray-500">User information not available</p>
+          <p className="text-gray-500">{t('profile.notAvailable')}</p>
         </div>
       </div>
     );
@@ -176,9 +190,9 @@ export const UserProfile: React.FC = () => {
               <div>
                 <CardTitle className="flex items-center gap-2">
                   <User className="w-5 h-5" />
-                  Profile Information
+                  {t('profile.personalInfo')}
                 </CardTitle>
-                <CardDescription>Manage your personal information and account details</CardDescription>
+                <CardDescription>{t('profile.managePersonalInfo')}</CardDescription>
               </div>
               {!isEditingProfile && (
                 <Button
@@ -188,7 +202,7 @@ export const UserProfile: React.FC = () => {
                   className="flex items-center gap-2"
                 >
                   <Edit2 className="w-4 h-4" />
-                  Edit
+                  {t('common.edit')}
                 </Button>
               )}
             </div>
@@ -197,7 +211,7 @@ export const UserProfile: React.FC = () => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* First Name */}
               <div className="space-y-2">
-                <Label htmlFor="first_name">First Name</Label>
+                <Label htmlFor="first_name">{t('auth.firstName')}</Label>
                 {isEditingProfile ? (
                   <Input
                     id="first_name"
@@ -206,16 +220,16 @@ export const UserProfile: React.FC = () => {
                       ...prev,
                       first_name: e.target.value
                     }))}
-                    placeholder="Enter your first name"
+                    placeholder={t('profile.enterFirstName')}
                   />
                 ) : (
-                  <p className="text-sm font-medium text-gray-900">{user.first_name || 'Not provided'}</p>
+                  <p className="text-sm font-medium text-gray-900">{user.first_name || t('profile.notProvided')}</p>
                 )}
               </div>
 
               {/* Last Name */}
               <div className="space-y-2">
-                <Label htmlFor="last_name">Last Name</Label>
+                <Label htmlFor="last_name">{t('auth.lastName')}</Label>
                 {isEditingProfile ? (
                   <Input
                     id="last_name"
@@ -224,10 +238,10 @@ export const UserProfile: React.FC = () => {
                       ...prev,
                       last_name: e.target.value
                     }))}
-                    placeholder="Enter your last name"
+                    placeholder={t('profile.enterLastName')}
                   />
                 ) : (
-                  <p className="text-sm font-medium text-gray-900">{user.last_name || 'Not provided'}</p>
+                  <p className="text-sm font-medium text-gray-900">{user.last_name || t('profile.notProvided')}</p>
                 )}
               </div>
             </div>
@@ -240,7 +254,7 @@ export const UserProfile: React.FC = () => {
                   className="flex items-center gap-2"
                 >
                   <Save className="w-4 h-4" />
-                  {isUpdatingProfile ? 'Saving...' : 'Save Changes'}
+                  {isUpdatingProfile ? t('profile.saving') : t('profile.saveChanges')}
                 </Button>
                 <Button
                   variant="outline"
@@ -249,7 +263,7 @@ export const UserProfile: React.FC = () => {
                   className="flex items-center gap-2"
                 >
                   <X className="w-4 h-4" />
-                  Cancel
+                  {t('common.cancel')}
                 </Button>
               </div>
             )}
@@ -261,34 +275,34 @@ export const UserProfile: React.FC = () => {
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Mail className="w-4 h-4" />
-                  Email
+                  {t('auth.email')}
                 </Label>
                 <p className="text-sm font-medium text-gray-900">{user.email}</p>
               </div>
 
               <div className="space-y-2">
-                <Label>Username</Label>
+                <Label>{t('auth.username')}</Label>
                 <p className="text-sm font-medium text-gray-900">{user.username}</p>
               </div>
 
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Shield className="w-4 h-4" />
-                  Role
+                  {t('profile.role')}
                 </Label>
                 <Badge className={getRoleColor(user.role)}>
-                  {user.role.charAt(0).toUpperCase() + user.role.slice(1)}
+                  {getRoleLabel(user.role)}
                 </Badge>
               </div>
 
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <UserCheck className="w-4 h-4" />
-                  Account Status
+                  {t('profile.accountStatus')}
                 </Label>
                 <div className="flex items-center gap-2">
                   <Badge variant={user.is_active ? 'default' : 'secondary'}>
-                    {user.is_active ? 'Active' : 'Inactive'}
+                    {user.is_active ? t('profile.active') : t('profile.inactive')}
                   </Badge>
                 </div>
               </div>
@@ -296,14 +310,14 @@ export const UserProfile: React.FC = () => {
               <div className="space-y-2">
                 <Label className="flex items-center gap-2">
                   <Calendar className="w-4 h-4" />
-                  Member Since
+                  {t('profile.memberSince')}
                 </Label>
                 <p className="text-sm font-medium text-gray-900">{formatDate(user.created_at)}</p>
               </div>
 
               {user.last_login && (
                 <div className="space-y-2">
-                  <Label>Last Login</Label>
+                  <Label>{t('profile.lastLogin')}</Label>
                   <p className="text-sm font-medium text-gray-900">{formatDate(user.last_login)}</p>
                 </div>
               )}
@@ -317,9 +331,9 @@ export const UserProfile: React.FC = () => {
             <div>
               <CardTitle className="flex items-center gap-2">
                 <Lock className="w-5 h-5" />
-                Security Settings
+                {t('profile.securitySettings')}
               </CardTitle>
-              <CardDescription>Manage your account security and password</CardDescription>
+              <CardDescription>{t('profile.manageAccountSecurity')}</CardDescription>
             </div>
           </CardHeader>
           <CardContent>
@@ -330,14 +344,14 @@ export const UserProfile: React.FC = () => {
                 className="flex items-center gap-2"
               >
                 <Lock className="w-4 h-4" />
-                Change Password
+                {t('profile.changePassword')}
               </Button>
             ) : (
               <form onSubmit={handlePasswordChange} className="space-y-4">
                 <div className="grid grid-cols-1 gap-4">
                   {/* Current Password */}
                   <div className="space-y-2">
-                    <Label htmlFor="current_password">Current Password</Label>
+                    <Label htmlFor="current_password">{t('profile.currentPassword')}</Label>
                     <div className="relative">
                       <Input
                         id="current_password"
@@ -360,7 +374,7 @@ export const UserProfile: React.FC = () => {
 
                   {/* New Password */}
                   <div className="space-y-2">
-                    <Label htmlFor="new_password">New Password</Label>
+                    <Label htmlFor="new_password">{t('profile.newPassword')}</Label>
                     <div className="relative">
                       <Input
                         id="new_password"
@@ -384,7 +398,7 @@ export const UserProfile: React.FC = () => {
 
                   {/* Confirm Password */}
                   <div className="space-y-2">
-                    <Label htmlFor="confirm_password">Confirm New Password</Label>
+                    <Label htmlFor="confirm_password">{t('profile.confirmNewPassword')}</Label>
                     <div className="relative">
                       <Input
                         id="confirm_password"
@@ -410,7 +424,7 @@ export const UserProfile: React.FC = () => {
                 <div className="flex items-center gap-3">
                   <Button type="submit" disabled={isChangingPassword} className="flex items-center gap-2">
                     <Save className="w-4 h-4" />
-                    {isChangingPassword ? 'Changing...' : 'Change Password'}
+                    {isChangingPassword ? t('profile.changing') : t('profile.changePassword')}
                   </Button>
                   <Button
                     type="button"
@@ -423,7 +437,7 @@ export const UserProfile: React.FC = () => {
                     className="flex items-center gap-2"
                   >
                     <X className="w-4 h-4" />
-                    Cancel
+                    {t('common.cancel')}
                   </Button>
                 </div>
               </form>

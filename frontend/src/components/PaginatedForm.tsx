@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Progress } from "@/components/ui/progress"
 import { Badge } from "@/components/ui/badge"
 import { ArrowLeft, ArrowRight, CheckCircle } from "lucide-react"
+import { useLanguage } from "@/contexts/LanguageContext"
 
 interface PaginatedFormProps {
   steps: {
@@ -16,14 +17,13 @@ interface PaginatedFormProps {
 }
 
 export const PaginatedForm = ({ steps, onComplete, assessmentInfo }: PaginatedFormProps) => {
+  const { t } = useLanguage()
   
-  if (!steps || steps.length === 0) return <div className="text-center p-12">No steps available.</div>
+  if (!steps || steps.length === 0) return <div className="text-center p-12">{t('paginatedForm.noSteps')}</div>
 
   const [currentStep, setCurrentStep] = useState(0)
   const [stepData, setStepData] = useState<Record<number, any>>({})
   const [completedSteps, setCompletedSteps] = useState<Set<number>>(new Set())
-
-  // Track accumulated assessment data across all steps
   const [accumulatedAssessments, setAccumulatedAssessments] = useState<any>({})
 
   const progress = ((currentStep + 1) / steps.length) * 100
@@ -31,43 +31,35 @@ export const PaginatedForm = ({ steps, onComplete, assessmentInfo }: PaginatedFo
   const handleStepComplete = (data: any) => {
     console.log('🔥 PaginatedForm: Received data from step', currentStep, ':', data)
     
-    // Store the step data
     const updatedStepData = {
       ...stepData,
       [currentStep]: data
     }
     setStepData(updatedStepData)
 
-    // CRITICAL: Calculate the final accumulated assessments INCLUDING this step's data
     const finalAccumulatedAssessments = data.assessments 
       ? { ...accumulatedAssessments, ...data.assessments }
       : accumulatedAssessments
 
-    // Update state for next step (if any)
     setAccumulatedAssessments(finalAccumulatedAssessments)
     console.log('📊 PaginatedForm: Final accumulated assessments (including current step):', finalAccumulatedAssessments)
     
     setCompletedSteps(prev => new Set([...prev, currentStep]))
 
     if (currentStep < steps.length - 1) {
-      // Move to next step
       setCurrentStep(currentStep + 1)
     } else {
-      // Final step completed - prepare final data
       console.log('🏁 Final step completed. Preparing final data...')
-      console.log('🔍 All step data:', updatedStepData)
+      console.log('📋 All step data:', updatedStepData)
       
-      // Merge all non-assessment data from all steps
       const allStepData = Object.values(updatedStepData).reduce((acc, curr) => {
         const { assessments, ...otherData } = curr as any
         return { ...acc, ...otherData }
       }, {})
       
-      // CRITICAL: Use the finalAccumulatedAssessments that includes the current step
       const finalData = {
         ...allStepData,
-        assessments: finalAccumulatedAssessments, // ← Use the updated version, not the stale state
-        // Include metadata if present in the final step
+        assessments: finalAccumulatedAssessments,
         ...(data.metadata && { metadata: data.metadata })
       }
       
@@ -100,8 +92,8 @@ export const PaginatedForm = ({ steps, onComplete, assessmentInfo }: PaginatedFo
         <CardContent className="pt-6">
           <div className="space-y-4">
             <div className="flex items-center justify-between text-sm">
-              <span>Step {currentStep + 1} of {steps.length}</span>
-              <span>{Math.round(progress)}% Complete</span>
+              <span>{t('paginatedForm.step')} {currentStep + 1} {t('assessment.of')} {steps.length}</span>
+              <span>{Math.round(progress)}% {t('paginatedForm.complete')}</span>
             </div>
             <Progress value={progress} className="h-2" />
             
@@ -138,9 +130,7 @@ export const PaginatedForm = ({ steps, onComplete, assessmentInfo }: PaginatedFo
           {React.cloneElement(steps[currentStep].component as React.ReactElement, {
             onSubmit: handleStepComplete,
             initialData: {
-              // Pass accumulated assessments to each step
               assessments: accumulatedAssessments,
-              // Also include current step data for form restoration
               ...stepData[currentStep]
             },
             allStepData: stepData,
@@ -157,7 +147,7 @@ export const PaginatedForm = ({ steps, onComplete, assessmentInfo }: PaginatedFo
           disabled={currentStep === 0}
         >
           <ArrowLeft className="w-4 h-4 mr-2" />
-          Previous
+          {t('common.previous')}
         </Button>
         
         {currentStep < steps.length - 1 && (
@@ -166,7 +156,7 @@ export const PaginatedForm = ({ steps, onComplete, assessmentInfo }: PaginatedFo
             onClick={handleNext}
             disabled={!canGoNext}
           >
-            Next Step
+            {t('common.nextStep')}
             <ArrowRight className="w-4 h-4 ml-2" />
           </Button>
         )}

@@ -5,6 +5,7 @@ import { Label } from '@/components/ui/label';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAuth } from '@/auth/useAuth';
 import { Eye, EyeOff, User, Lock, LogIn, Loader2, AlertCircle } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface LoginFormProps {
   onSuccess?: () => void;
@@ -19,6 +20,7 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, className = '' 
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useLanguage();
 
   const { login } = useAuth();
 
@@ -55,13 +57,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, className = '' 
       )}
       
       <div className="space-y-2">
-        <Label htmlFor="username">Username or Email</Label>
+        <Label htmlFor="username">{t('auth.usernameOrEmail')}</Label>
         <div className="relative">
           <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
             id="username"
             type="text"
-            placeholder="Enter username or email"
+            placeholder={t('auth.enterUsername')}
             value={formData.username}
             onChange={handleInputChange('username')}
             className="pl-10"
@@ -72,13 +74,13 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, className = '' 
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="password">Password</Label>
+        <Label htmlFor="password">{t('auth.password')}</Label>
         <div className="relative">
           <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
             id="password"
             type={showPassword ? 'text' : 'password'}
-            placeholder="Enter password"
+            placeholder={t('auth.enterPassword')}
             value={formData.password}
             onChange={handleInputChange('password')}
             className="pl-10 pr-10"
@@ -104,12 +106,12 @@ export const LoginForm: React.FC<LoginFormProps> = ({ onSuccess, className = '' 
         {isLoading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Signing in...
+            {t('auth.signingIn')}
           </>
         ) : (
           <>
             <LogIn className="mr-2 h-4 w-4" />
-            Sign In
+            {t('auth.signIn')}
           </>
         )}
       </Button>

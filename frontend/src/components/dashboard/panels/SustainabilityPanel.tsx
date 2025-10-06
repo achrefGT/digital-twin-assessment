@@ -2,6 +2,7 @@ import React from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
+import { useLanguage } from '@/contexts/LanguageContext'
 import { Leaf, Zap, Factory, Globe, TrendingUp, Sparkles } from 'lucide-react'
 
 interface SustainabilityPanelProps {
@@ -34,6 +35,7 @@ interface SustainabilityPanelProps {
 }
 
 export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }) => {
+  const { t } = useLanguage()
   if (!data?.scores) {
     return (
       <Card className="border-0 shadow-sm">
@@ -46,8 +48,8 @@ export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }
               <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-gradient-to-br from-green-900 to-green-400 opacity-20 animate-pulse" />
             </div>
             <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Awaiting sustainability assessment</p>
-              <p className="text-xs text-muted-foreground/70">Triple-bottom-line evaluation</p>
+              <p className="text-sm text-muted-foreground">{t('sustainability.awaiting')}</p>
+              <p className="text-xs text-muted-foreground/70">{t('sustainability.tripleBottomLine')}</p>
             </div>
           </div>
         </CardContent>
@@ -58,9 +60,9 @@ export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }
   const { overall_score, dimension_scores, sustainability_metrics } = data.scores
   
   const dimensions = [
-    { key: 'environmental', label: 'Environmental', icon: Leaf, color: '#10b981' },
-    { key: 'social', label: 'Social', icon: Globe, color: '#3b82f6' },
-    { key: 'economic', label: 'Economic', icon: TrendingUp, color: '#f59e0b' }
+    { key: 'environmental', label: t('domain.sustainability.environmental'), icon: Leaf, color: '#10b981' },
+    { key: 'social', label: t('domain.sustainability.social'), icon: Globe, color: '#3b82f6' },
+    { key: 'economic', label: t('domain.sustainability.economic'), icon: TrendingUp, color: '#f59e0b' }
   ]
 
   const getScoreColor = (score: number) => {
@@ -82,7 +84,7 @@ export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }
     // Selected domains count
     if (sustainability_metrics?.selected_domains?.length) {
       insights.push({
-        label: 'Domains Assessed',
+        label: t('sustainability.domainsAssessed'),
         value: `${sustainability_metrics.selected_domains.length}/3`,
         type: 'count'
       })
@@ -100,7 +102,7 @@ export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }
         const [firstKey, firstValue] = envCriteria[0]
         if (firstValue?.description && firstValue.description !== 'None') {
           insights.push({
-            label: 'DT Realism',
+            label: t('sustainability.dtRealism'),
             value: firstValue.description,
             type: 'level'
           })
@@ -110,7 +112,7 @@ export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }
         const energyKey = envCriteria.find(([key]) => key === 'ENV_03')
         if (energyKey && energyKey[1]?.description && energyKey[1].description !== 'None') {
           insights.push({
-            label: 'Energy Tracking',
+            label: t('sustainability.energyTracking'),
             value: energyKey[1].description,
             type: 'level'
           })
@@ -148,7 +150,7 @@ export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }
                       <span className="text-sm font-medium text-slate-700">{label}</span>
                       {!score && isSelected && (
                         <Badge variant="outline" className="text-xs w-fit mt-1">
-                          Selected
+                          {t('sustainability.selected')}
                         </Badge>
                       )}
                     </div>
@@ -168,7 +170,7 @@ export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }
                       </>
                     ) : (
                       <span className="text-xs text-slate-400 w-20 text-right">
-                        Pending
+                        {t('dashboard.pending')}
                       </span>
                     )}
                   </div>
@@ -182,7 +184,7 @@ export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }
         {keyInsights.length > 0 && (
           <div className="pt-4 border-t border-slate-100">
             <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
-              Key Insights
+              {t('dashboard.keyInsights')}
             </div>
             <div className="grid grid-cols-2 gap-3">
               {keyInsights.map((insight, index) => (
@@ -203,7 +205,7 @@ export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }
         {sustainability_metrics?.recommendations && sustainability_metrics.recommendations.length > 0 && (
           <div className="pt-4 border-t border-slate-100">
             <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
-              Recommendations
+              {t('sustainability.recommendations')}
             </div>
             <div className="space-y-2">
               {sustainability_metrics.recommendations.map((recommendation, index) => (

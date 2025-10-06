@@ -2,6 +2,7 @@ import React from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Wifi, WifiOff, AlertCircle } from 'lucide-react'
 import { ConnectionStatus } from '@/hooks/useWebSocket'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 interface ConnectionIndicatorProps {
   connectionStatus: ConnectionStatus
@@ -10,11 +11,13 @@ interface ConnectionIndicatorProps {
 export const ConnectionIndicator: React.FC<ConnectionIndicatorProps> = ({
   connectionStatus
 }) => {
+  const { t } = useLanguage()
+
   const getStatusInfo = () => {
     if (connectionStatus.isConnecting) {
       return {
         icon: AlertCircle,
-        text: 'Connecting...',
+        text: t('connection.connecting'),
         variant: 'secondary' as const,
         className: 'animate-pulse'
       }
@@ -23,7 +26,7 @@ export const ConnectionIndicator: React.FC<ConnectionIndicatorProps> = ({
     if (connectionStatus.isConnected) {
       return {
         icon: Wifi,
-        text: 'Connected',
+        text: t('connection.connected'),
         variant: 'secondary' as const,
         className: 'text-green-600'
       }
@@ -40,7 +43,7 @@ export const ConnectionIndicator: React.FC<ConnectionIndicatorProps> = ({
     
     return {
       icon: WifiOff,
-      text: 'Disconnected',
+      text: t('connection.disconnected'),
       variant: 'secondary' as const,
       className: ''
     }
@@ -52,7 +55,7 @@ export const ConnectionIndicator: React.FC<ConnectionIndicatorProps> = ({
     <div className="flex items-center gap-3">
       {connectionStatus.lastMessage && (
         <div className="text-xs text-muted-foreground">
-          Last update: {connectionStatus.lastMessage.toLocaleTimeString()}
+          {t('connection.lastUpdate')}: {connectionStatus.lastMessage.toLocaleTimeString()}
         </div>
       )}
       <Badge variant={variant} className={`flex items-center gap-2 ${className}`}>

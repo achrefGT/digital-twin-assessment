@@ -3,9 +3,11 @@ import { useAdminApi } from '@/hooks/useAdminApi';
 import { CriteriaList } from './CriteriaList';
 import { CriterionEditor } from './CriterionEditor';
 import { SustainabilityDomain, CriterionResponse } from '@/types/admin';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Plus, RefreshCw, Leaf, BarChart3, DollarSign, Users } from 'lucide-react';
 
 export function CriteriaManager() {
+  const { t } = useLanguage();
   const { sustainabilityCriteria, mutations, isDeleting } = useAdminApi();
   const [selectedDomain, setSelectedDomain] = useState<SustainabilityDomain | 'all'>('all');
   const [editingCriterion, setEditingCriterion] = useState<CriterionResponse | null>(null);
@@ -20,28 +22,28 @@ export function CriteriaManager() {
   }[] = [
     { 
       value: 'all', 
-      label: 'All Domains',
+      label: t('sustainability.allDomains'),
       color: 'text-gray-600',
       bgColor: 'bg-gray-50',
       icon: <BarChart3 className="w-4 h-4" />
     },
     { 
       value: 'environmental', 
-      label: 'Environmental',
+      label: t('sustainability.environmental'),
       color: 'text-green-600',
       bgColor: 'bg-green-50',
       icon: <Leaf className="w-4 h-4" />
     },
     { 
       value: 'economic', 
-      label: 'Economic',
+      label: t('sustainability.economic'),
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
       icon: <DollarSign className="w-4 h-4" />
     },
     { 
       value: 'social', 
-      label: 'Social',
+      label: t('sustainability.social'),
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
       icon: <Users className="w-4 h-4" />
@@ -64,7 +66,9 @@ export function CriteriaManager() {
       return;
     }
 
-    const confirmMessage = `Are you sure you want to delete "${criterion.name}"?\n\nThis action cannot be undone.`;
+    const confirmMessage = t('confirm.deleteAssessment')
+      .replace('assessment', 'criterion')
+      .replace(`"${criterion.name}"`, criterion.name);
     
     if (window.confirm(confirmMessage)) {
       mutations.deleteSustainabilityCriterion.mutate(criterion.id);
@@ -72,8 +76,8 @@ export function CriteriaManager() {
   };
 
   const handleReset = async (domain?: SustainabilityDomain) => {
-    const domainText = domain ? ` for ${domain}` : '';
-    const confirmMessage = `Are you sure you want to reset all criteria${domainText}?\n\nThis will delete all existing criteria and restore defaults. This cannot be undone.`;
+    const domainText = domain ? ` ${t('resilience.forDomain').replace('{domain}', t(`sustainability.${domain}`))}` : '';
+    const confirmMessage = `${t('confirm.reset')}${domainText}`;
     
     if (window.confirm(confirmMessage)) {
       mutations.resetSustainabilityCriteria.mutate(domain);
@@ -125,10 +129,10 @@ export function CriteriaManager() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Sustainability Criteria
+          {t('sustainability.criteria')}
         </h1>
         <p className="text-gray-600">
-          Manage environmental, economic, and social sustainability criteria for comprehensive assessments
+          {t('sustainability.manageCriteria')}
         </p>
       </div>
 
@@ -169,7 +173,7 @@ export function CriteriaManager() {
               className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-sm"
             >
               <Plus className="w-4 h-4" />
-              <span>Add Scenario</span>
+              <span>{t('sustainability.addCriterion')}</span>
             </button>
             <button
               onClick={() => handleReset(selectedDomain === 'all' ? undefined : selectedDomain)}
@@ -177,7 +181,7 @@ export function CriteriaManager() {
               className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg font-medium transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-sm"
             >
               <RefreshCw className={`w-4 h-4 ${isResetLoading ? 'animate-spin' : ''}`} />
-              <span>{isResetLoading ? 'Resetting...' : 'Reset to Default'}</span>
+              <span>{isResetLoading ? t('humanCentricity.resetting') : t('humanCentricity.resetToDefault')}</span>
             </button>
           </div>
         </div>
@@ -186,7 +190,7 @@ export function CriteriaManager() {
         {deletingIds.length > 0 && (
           <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
             <p className="text-sm text-yellow-800">
-              Deleting {deletingIds.length} criterion{deletingIds.length > 1 ? 's' : ''}...
+              {t('sustainability.deletingCriteria').replace('{count}', deletingIds.length.toString())}
             </p>
           </div>
         )}
@@ -194,7 +198,8 @@ export function CriteriaManager() {
         {isResetLoading && (
           <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
             <p className="text-sm text-orange-800">
-              Resetting criteria{selectedDomain !== 'all' ? ` for ${selectedDomain}` : ''}...
+              {t('sustainability.resettingCriteria')}
+              {selectedDomain !== 'all' ? ` ${t('resilience.forDomain').replace('{domain}', t(`sustainability.${selectedDomain}`))}` : ''}...
             </p>
           </div>
         )}
@@ -206,14 +211,16 @@ export function CriteriaManager() {
           <div className="flex items-center gap-2 mb-2">
             <Leaf className="w-5 h-5 text-green-600" />
             <h3 className="font-medium text-gray-900">
-              {selectedDomain === 'all' ? 'Total Criteria' : `${selectedDomain.charAt(0).toUpperCase() + selectedDomain.slice(1)} Criteria`}
+              {selectedDomain === 'all' 
+                ? t('sustainability.totalCriteria') 
+                : t('sustainability.domainCriteria').replace('{domain}', t(`sustainability.${selectedDomain}`))}
             </h3>
           </div>
           <div className="text-2xl font-bold text-gray-900">
             {filteredCriteria.length}
           </div>
           <div className="text-sm text-gray-600">
-            Active criteria
+            {t('sustainability.activeCriteria')}
           </div>
         </div>
         
@@ -236,7 +243,7 @@ export function CriteriaManager() {
                 </h3>
               </div>
               <div className={`text-2xl font-bold ${domain.color}`}>{count}</div>
-              <div className={`text-sm ${domain.color} opacity-75`}>criteria defined</div>
+              <div className={`text-sm ${domain.color} opacity-75`}>{t('sustainability.criteriaDefined')}</div>
             </div>
           );
         })}

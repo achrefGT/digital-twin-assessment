@@ -26,7 +26,7 @@ import {
   Eye,
   Check,
   Trash2,
-  Server, // Added for system name icon
+  Server,
 } from 'lucide-react';
 import { useAuth } from '@/auth';
 import {
@@ -38,10 +38,13 @@ import {
 import { useAssessment } from '@/hooks/useAssessment';
 import { useWebSocket } from '@/hooks/useWebSocket';
 import { useToast } from '@/hooks/use-toast';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface AssessmentsListProps {
   onSelectAssessment: (assessment: Assessment) => void;
   currentAssessmentId?: string;
+  onCreateAssessment?: () => void;
+  isCreating?: boolean;
 }
 
 const isCompleted = (status?: string) => {
@@ -55,11 +58,11 @@ const isInProgress = (status?: string) => {
   const s = status.toUpperCase()
   return s === 'STARTED' || 
          s === 'PROCESSING' || 
-         s.includes('_COMPLETE') || // This will catch RESILIENCE_COMPLETE, etc.
+         s.includes('_COMPLETE') ||
          (s.includes('COMPLETE') && !isCompleted(status))
 }
 
-// Local storage cleanup utility (kept as-is)
+// Local storage cleanup utility
 const cleanupAssessmentFromLocalStorage = (assessmentId: string) => {
   const STORAGE_KEYS = {
     CURRENT_ASSESSMENT: 'currentAssessment',
@@ -84,28 +87,27 @@ const cleanupAssessmentFromLocalStorage = (assessmentId: string) => {
   }
 };
 
-// Small helper: derive simplified status category to style consistently
+// Helper: derive simplified status category
 const getStatusCategory = (status?: string) => {
   if (!status) return 'unknown';
   const s = status.toUpperCase();
   if (s === 'COMPLETED' || s === 'ALL_COMPLETE') return 'completed';
   if (s === 'FAILED') return 'failed';
   if (s === 'STARTED') return 'started';
-  // statuses that are actively being worked on: PROCESSING or any *_COMPLETE except ALL_COMPLETE/COMPLETED
   if (s.includes('PROCESS') || (s.includes('COMPLETE') && s !== 'COMPLETED' && s !== 'ALL_COMPLETE')) return 'in-progress';
   return 'other';
 };
 
-// A compact status pill component so styling is consistent and accessible
-function StatusPill({ status }: { status?: string }) {
+// Status pill component
+function StatusPill({ status, t }: { status?: string; t: (key: string) => string }) {
   const category = getStatusCategory(status);
   const statusLabelMap: Record<string, string> = {
-    'completed': 'Completed',
-    'in-progress': 'In Progress',
-    'started': 'Started',
-    'failed': 'Failed',
-    'other': (status || 'Unknown') as string,
-    'unknown': 'Unknown',
+    'completed': t('assessments.completed'),
+    'in-progress': t('assessments.inProgress'),
+    'started': t('assessments.started'),
+    'failed': t('assessments.failed'),
+    'other': (status || t('assessments.unknown')) as string,
+    'unknown': t('assessments.unknown'),
   };
 
   const icon = (() => {
@@ -136,19 +138,18 @@ function StatusPill({ status }: { status?: string }) {
   );
 }
 
-export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: AssessmentsListProps) {
+export function AssessmentsList({ onSelectAssessment, currentAssessmentId, onCreateAssessment, isCreating }: AssessmentsListProps) {
   const { token, user } = useAuth();
   const navigate = useNavigate();
   const [createError, setCreateError] = useState<Error | null>(null);
   const { createAssessment, clearAssessment, switchToAssessment, currentAssessment } = useAssessment();
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [isCreating, setIsCreating] = useState(false);
   const [isSwitching, setIsSwitching] = useState<string | null>(null);
+  const { t } = useLanguage();
 
   const activeAssessmentId = currentAssessmentId || currentAssessment?.assessment_id;
 
-  // Keep listening for incoming messages (no visual live indicator in this version)
   const { messages: wsMessages } = useWebSocket(activeAssessmentId || '');
 
   const {
@@ -165,7 +166,6 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
   });
 
   useEffect(() => {
-    // only lightweight debug
     console.debug('[AssessmentsList] Active assessment ID:', activeAssessmentId);
   }, [activeAssessmentId]);
 
@@ -177,20 +177,27 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
     switch (latestMessage.type) {
       case 'score_update':
         queryClient.invalidateQueries({ queryKey: assessmentKeys.userAssessments() });
-        toast({ title: 'Score Updated', description: `${latestMessage.domain || 'Assessment'} score updated`, duration: 3000 });
+        toast({ 
+          title: t('notification.assessment.updated'), 
+          description: `${latestMessage.domain || t('assessment.assessmentForm')} ${t('common.updated')}`, 
+          duration: 3000 
+        });
         break;
       case 'assessment_completed':
         queryClient.invalidateQueries({ queryKey: assessmentKeys.userAssessments() });
-        toast({ title: 'Assessment Completed', description: `Assessment ${latestMessage.assessment_id?.slice(0,8)} completed`, duration: 4000 });
+        toast({ 
+          title: t('dashboard.assessmentComplete'), 
+          description: `${t('assessment.assessmentForm')} ${latestMessage.assessment_id?.slice(0,8)} ${t('assessments.completed')}`, 
+          duration: 4000 
+        });
         break;
       case 'test_message':
         queryClient.invalidateQueries({ queryKey: assessmentKeys.userAssessments() });
         break;
       default:
-        // no-op for other message types
         break;
     }
-  }, [wsMessages, queryClient, toast]);
+  }, [wsMessages, queryClient, toast, t]);
 
   useEffect(() => {
     const handleStorageChange = (e: StorageEvent) => {
@@ -218,26 +225,25 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
     })))
   }, [assessments])
 
-  const handleCreateAssessment = async () => {
-    try {
-      setIsCreating(true);
-      setCreateError(null);
-      clearAssessment();
-      navigate('/assessment');
-    } catch (error) {
-      console.error('Failed to navigate to create assessment:', error);
-      setCreateError(error instanceof Error ? error : new Error('Failed to navigate to create assessment'));
-    } finally {
-      setIsCreating(false);
+  const handleCreateAssessmentClick = async () => {
+    if (onCreateAssessment) {
+      onCreateAssessment();
+    } else {
+      try {
+        setCreateError(null);
+        clearAssessment();
+        navigate('/assessment');
+      } catch (error) {
+        console.error('Failed to navigate to create assessment:', error);
+        setCreateError(error instanceof Error ? error : new Error('Failed to navigate to create assessment'));
+      }
     }
   };
 
-  // NEW: Handle viewing assessment dashboard (navigate to dashboard)
   const handleViewAssessment = (assessment: Assessment) => {
     navigate(`/dashboard/${assessment.assessment_id}`);
   };
 
-  // NEW: Handle selecting assessment (make it active without showing dashboard)
   const handleSelectAssessment = async (assessment: Assessment, event?: React.MouseEvent) => {
     if (event) {
       event.stopPropagation();
@@ -246,8 +252,8 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
 
     if (activeAssessmentId === assessment.assessment_id) {
       toast({ 
-        title: 'Already Active', 
-        description: `Assessment ${assessment.assessment_id.slice(0,8)} is already the active assessment` 
+        title: t('assessments.alreadyActive'), 
+        description: t('assessments.alreadyActiveDesc').replace('{id}', assessment.assessment_id.slice(0,8))
       });
       return;
     }
@@ -255,16 +261,15 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
     try {
       setIsSwitching(assessment.assessment_id);
       const switchedAssessment = await switchToAssessment(assessment);
-      // Don't call onSelectAssessment here since we're not showing the dashboard
       toast({ 
-        title: 'Assessment Selected', 
-        description: `Assessment ${assessment.assessment_id.slice(0,8)} is now active` 
+        title: t('assessments.assessmentSelected'), 
+        description: t('assessments.assessmentSelectedDesc').replace('{id}', assessment.assessment_id.slice(0,8))
       });
     } catch (error) {
       console.error('Failed to select assessment:', error);
       toast({ 
-        title: 'Selection Failed', 
-        description: error instanceof Error ? error.message : 'Could not select assessment', 
+        title: t('assessments.selectionFailed'), 
+        description: error instanceof Error ? error.message : t('assessments.couldNotSwitch'), 
         variant: 'destructive' 
       });
     } finally {
@@ -278,7 +283,7 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
       event.preventDefault();
     }
 
-    if (!window.confirm('Are you sure you want to delete this assessment? This action cannot be undone.')) return;
+    if (!window.confirm(t('assessments.confirmDelete'))) return;
 
     try {
       await AssessmentAPI.deleteAssessment(assessmentId, token!);
@@ -290,42 +295,28 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
       queryClient.removeQueries({ queryKey: assessmentKeys.detail(assessmentId) });
       queryClient.removeQueries({ queryKey: assessmentKeys.domainScores(assessmentId) });
 
-      toast({ title: 'Assessment Deleted', description: `Assessment ${assessmentId.slice(0,8)} has been deleted.` });
+      toast({ 
+        title: t('assessments.deletedSuccess'), 
+        description: t('assessments.deletedMessage').replace('{id}', assessmentId.slice(0,8))
+      });
     } catch (error) {
       console.error('Failed to delete assessment:', error);
-      toast({ title: 'Deletion Failed', description: error instanceof Error ? error.message : 'Failed to delete assessment', variant: 'destructive' });
+      toast({ 
+        title: t('notification.error.deleteFailed'), 
+        description: error instanceof Error ? error.message : t('notification.error.deleteFailed'), 
+        variant: 'destructive' 
+      });
     }
   };
 
-  const formatStatus = (status?: string) => {
-    if (!status) return 'Unknown';
-    const map: Record<string, string> = {
-      'ALL_COMPLETE': 'All Complete',
-      'RESILIENCE_COMPLETE': 'Resilience Done',
-      'SUSTAINABILITY_COMPLETE': 'Sustainability Done',
-      'HUMAN_CENTRICITY_COMPLETE': 'Human Centricity Done',
-    };
-    return map[status] || status;
-  };
-
-  const formatDate = (dateString: string) => new Date(dateString).toLocaleString('en-US', { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+  const formatDate = (dateString: string) => new Date(dateString).toLocaleString(
+    t('language.english') === 'English' ? 'en-US' : 'fr-FR', 
+    { year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' }
+  );
 
   if (isLoading) {
     return (
       <div className="max-w-6xl mx-auto px-6 py-16">
-        <div className="flex items-center justify-between mb-8">
-          <div>
-            <h2 className="text-3xl font-extrabold text-gray-900">My Assessments</h2>
-            <p className="text-gray-600 mt-1">Loading your assessments...</p>
-          </div>
-          <div className="flex items-center gap-3">
-            <Button disabled className="flex items-center gap-2 px-4 py-2 rounded-md shadow-sm bg-gradient-to-r from-blue-600 to-purple-600 text-white">
-              <Plus className="w-4 h-4" />
-              New Assessment
-            </Button>
-          </div>
-        </div>
-
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
           {[...Array(6)].map((_, i) => (
             <Card key={i} className="rounded-2xl border-transparent shadow-sm">
@@ -356,13 +347,13 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
     return (
       <div className="text-center py-12">
         <AlertCircle className="w-16 h-16 text-red-500 mx-auto mb-4" />
-        <h3 className="text-xl font-semibold text-gray-900 mb-2">Error Loading Assessments</h3>
-        <p className="text-gray-600 mb-6 max-w-md mx-auto">{(error as Error).message || 'There was a problem loading your assessments.'}</p>
+        <h3 className="text-xl font-semibold text-gray-900 mb-2">{t('error.error')}</h3>
+        <p className="text-gray-600 mb-6 max-w-md mx-auto">{(error as Error).message || t('error.tryAgainLater')}</p>
         <div className="flex gap-3 justify-center">
-          <Button onClick={() => refetch()} variant="outline">Try Again</Button>
-          <Button onClick={handleCreateAssessment} disabled={isCreating} className="flex items-center gap-2 px-4 py-2 rounded-md bg-gradient-to-r from-blue-600 to-purple-600 text-white">
+          <Button onClick={() => refetch()} variant="outline">{t('common.tryAgain')}</Button>
+          <Button onClick={handleCreateAssessmentClick} disabled={isCreating} className="flex items-center gap-2 px-4 py-2 rounded-md bg-gradient-to-r from-blue-600 to-purple-600 text-white">
             <Plus className="w-4 h-4" />
-            Create New Assessment
+            {t('assessments.create')}
           </Button>
         </div>
       </div>
@@ -371,19 +362,6 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-10">
-      <div className="flex items-start justify-between mb-8">
-        <div>
-          <h2 className="text-2xl font-bold text-gray-900">My Assessments</h2>
-        </div>
-
-        <div className="flex items-center gap-3">
-          <Button onClick={handleCreateAssessment} disabled={isCreating} className="flex items-center gap-2 px-4 py-2 rounded-md bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-md hover:shadow-lg">
-            <Plus className="w-4 h-4" />
-            {isCreating ? 'Creating...' : 'New Assessment'}
-          </Button>
-        </div>
-      </div>
-
       {assessments.length === 0 ? (
         <Card className="mt-16 mx-auto max-w-2xl rounded-2xl border-dotted border-gray-300 bg-white shadow-sm hover:shadow-md transition-shadow">
           <CardContent className="p-10 text-center">
@@ -391,17 +369,14 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
               <BarChart3 className="w-12 h-12 text-gray-500" />
             </div>
             <h3 className="text-xl font-semibold text-gray-800 mb-4">
-              Start Your First Assessment
+              {t('assessments.startFirst')}
             </h3>
             <p className="text-gray-600 leading-relaxed max-w-md mx-auto">
-              Create your first digital twin assessment to get started with a
-              comprehensive system evaluation.
+              {t('assessments.startFirstDesc')}
             </p>
           </CardContent>
         </Card>
-
       ) : (
-        // center the whole grid and each card, while letting cards keep a max width for readability
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 justify-items-center">
           {assessments.map((assessment) => {
             const isActive = activeAssessmentId === assessment.assessment_id;
@@ -419,11 +394,10 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
                   <div className="flex items-start justify-between">
                     <div className="flex-1">
                       <CardTitle className="text-lg font-semibold text-gray-900 mb-2 flex items-center gap-2">
-                        <span>Assessment #{assessment.assessment_id.slice(0,8)}</span>
+                        <span>{t('assessment.assessmentForm')} #{assessment.assessment_id.slice(0,8)}</span>
                         {isSwitching === assessment.assessment_id && <div className="w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin ml-2" />}
                       </CardTitle>
 
-                      {/* System Name Display */}
                       {assessment.system_name && (
                         <div className="flex items-center gap-2 mb-3">
                           <Server className="w-4 h-4 text-gray-500" />
@@ -434,7 +408,7 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
                       )}
 
                       <div className="mt-1">
-                        <StatusPill status={assessment.status} />
+                        <StatusPill status={assessment.status} t={t} />
                       </div>
                     </div>
 
@@ -448,7 +422,7 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
                             className="h-8 w-8 p-0 hover:bg-gray-100 rounded-md"
                           >
                             <MoreVertical className="h-4 w-4" />
-                            <span className="sr-only">Open menu</span>
+                            <span className="sr-only">{t('common.actions')}</span>
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="w-48">
@@ -461,7 +435,7 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
                             className="flex items-center gap-2 cursor-pointer"
                           >
                             <Check className="h-4 w-4" />
-                            {isActive ? 'Currently Active' : 'Make Active'}
+                            {isActive ? t('assessments.currentlyActive') : t('assessments.makeActive')}
                           </DropdownMenuItem>
                           <DropdownMenuItem
                             onClick={(e) => {
@@ -471,7 +445,7 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
                             className="flex items-center gap-2 cursor-pointer"
                           >
                             <Eye className="h-4 w-4" />
-                            View Dashboard
+                            {t('assessments.viewDashboard')}
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
@@ -480,7 +454,7 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
                             role="menuitem"
                           >
                             <Trash2 className="h-4 w-4" />
-                            Delete
+                            {t('common.delete')}
                           </DropdownMenuItem>
                         </DropdownMenuContent>
                       </DropdownMenu>
@@ -492,7 +466,7 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
                   <div className="space-y-4">
                     <div>
                       <div className="flex justify-between text-sm mb-2">
-                        <span className="text-gray-600 font-medium">Progress</span>
+                        <span className="text-gray-600 font-medium">{t('assessments.progress')}</span>
                         <span className="font-bold text-gray-900">{Math.round(assessment.progress?.completion_percentage || 0)}%</span>
                       </div>
 
@@ -506,18 +480,18 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className={`rounded-lg p-3 ${isActive ? 'bg-blue-50' : 'bg-gray-50'}`}>
-                        <p className="text-xs text-gray-600 font-medium mb-1">Domains</p>
+                        <p className="text-xs text-gray-600 font-medium mb-1">{t('assessments.domains')}</p>
                         <p className="text-lg font-bold text-gray-900">{assessment.progress?.completed_domains?.length || 0}/3</p>
                       </div>
                       <div className={`rounded-lg p-3 ${isActive ? 'bg-blue-50' : 'bg-gray-50'}`}>
-                        <p className="text-xs text-gray-600 font-medium mb-1">Score</p>
+                        <p className="text-xs text-gray-600 font-medium mb-1">{t('assessments.score')}</p>
                         <p className="text-lg font-bold text-gray-900">{assessment.progress?.overall_score ? `${assessment.progress.overall_score.toFixed(1)}` : '--'}</p>
                       </div>
                     </div>
 
                     {assessment.progress?.completed_domains && assessment.progress.completed_domains.length > 0 && (
                       <div>
-                        <p className="text-xs text-gray-600 font-medium mb-2">Completed:</p>
+                        <p className="text-xs text-gray-600 font-medium mb-2">{t('assessments.completed')}:</p>
                         <div className="flex flex-wrap gap-2">
                           {assessment.progress.completed_domains.map((domain) => (
                             <span key={domain} className="inline-flex px-3 py-1 text-xs font-medium bg-green-50 text-green-800 rounded-full">
@@ -531,14 +505,13 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
                     <div className="flex items-center justify-between text-xs text-gray-500 pt-3 border-t border-gray-100">
                       <div className="flex items-center">
                         <Calendar className="w-3 h-3 mr-1" />
-                        Created: {formatDate(assessment.created_at)}
+                        {t('assessments.created')}: {formatDate(assessment.created_at)}
                       </div>
                       {isActive && (
                         <div>
                           <span className="inline-flex items-center justify-center text-[10px] font-medium text-white bg-blue-600 rounded-full px-2 py-0.5">
-                            ACTIVE
+                            {t('dashboard.active').toUpperCase()}
                           </span>
-
                         </div>
                       )}
                     </div>
@@ -559,19 +532,19 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
                 <div className="text-2xl font-bold text-gray-900 mb-1">
                   {assessments.length}
                 </div>
-                <div className="text-sm text-gray-600">Total Assessments</div>
+                <div className="text-sm text-gray-600">{t('assessments.totalAssessments')}</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-green-600 mb-1">
                   {assessments.filter(a => isCompleted(a.status)).length}
                 </div>
-                <div className="text-sm text-gray-600">Completed</div>
+                <div className="text-sm text-gray-600">{t('assessments.completed')}</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-blue-600 mb-1">
-  {assessments.filter(a => isInProgress(a.status)).length}
-</div>
-                <div className="text-sm text-gray-600">In Progress</div>
+                  {assessments.filter(a => isInProgress(a.status)).length}
+                </div>
+                <div className="text-sm text-gray-600">{t('assessments.inProgress')}</div>
               </div>
               <div>
                 <div className="text-2xl font-bold text-purple-600 mb-1">
@@ -581,7 +554,7 @@ export function AssessmentsList({ onSelectAssessment, currentAssessmentId }: Ass
                    Math.max(1, assessments.filter(a => a.progress?.overall_score).length)
                   ).toFixed(1)}
                 </div>
-                <div className="text-sm text-gray-600">Avg. Score</div>
+                <div className="text-sm text-gray-600">{t('assessments.avgScore')}</div>
               </div>
             </div>
           </CardContent>

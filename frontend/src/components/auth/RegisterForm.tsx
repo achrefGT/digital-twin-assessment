@@ -1,5 +1,3 @@
-// src/components/auth/RegisterForm.tsx
-
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -17,6 +15,7 @@ import {
   Loader2, 
   AlertCircle 
 } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface RegisterFormProps {
   onSuccess?: () => void;
@@ -35,20 +34,21 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, className
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const { t } = useLanguage();
 
   const { register } = useAuth();
 
   const validateForm = (): string | null => {
     if (formData.password.length < 8) {
-      return 'Password must be at least 8 characters long';
+      return t('auth.passwordTooShort');
     }
     
     if (formData.password !== formData.confirmPassword) {
-      return 'Passwords do not match';
+      return t('auth.passwordsDoNotMatch');
     }
     
     if (!/^[a-zA-Z0-9_-]+$/.test(formData.username)) {
-      return 'Username can only contain letters, numbers, hyphens, and underscores';
+      return t('auth.invalidUsername');
     }
     
     return null;
@@ -71,14 +71,14 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, className
       await register(registrationData);
       onSuccess?.();
     } catch (err) {
-    const errorMessage = err instanceof Error 
-      ? err.message 
-      : typeof err === 'string' 
-        ? err 
-        : 'Registration failed';
-    setError(errorMessage);
-    console.error('Registration error:', err); 
-  } finally {
+      const errorMessage = err instanceof Error 
+        ? err.message 
+        : typeof err === 'string' 
+          ? err 
+          : 'Registration failed';
+      setError(errorMessage);
+      console.error('Registration error:', err); 
+    } finally {
       setIsLoading(false);
     }
   };
@@ -102,22 +102,22 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, className
 
       <div className="grid grid-cols-2 gap-4">
         <div className="space-y-2">
-          <Label htmlFor="firstName">First Name</Label>
+          <Label htmlFor="firstName">{t('auth.firstName')}</Label>
           <Input
             id="firstName"
             type="text"
-            placeholder="First name"
+            placeholder={t('auth.firstName')}
             value={formData.first_name}
             onChange={handleInputChange('first_name')}
             disabled={isLoading}
           />
         </div>
         <div className="space-y-2">
-          <Label htmlFor="lastName">Last Name</Label>
+          <Label htmlFor="lastName">{t('auth.lastName')}</Label>
           <Input
             id="lastName"
             type="text"
-            placeholder="Last name"
+            placeholder={t('auth.lastName')}
             value={formData.last_name}
             onChange={handleInputChange('last_name')}
             disabled={isLoading}
@@ -126,13 +126,13 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, className
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="email">Email *</Label>
+        <Label htmlFor="email">{t('auth.email')} *</Label>
         <div className="relative">
           <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
             id="email"
             type="email"
-            placeholder="Enter email address"
+            placeholder={t('auth.enterEmail')}
             value={formData.email}
             onChange={handleInputChange('email')}
             className="pl-10"
@@ -143,13 +143,13 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, className
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="username">Username *</Label>
+        <Label htmlFor="username">{t('auth.username')} *</Label>
         <div className="relative">
           <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
             id="username"
             type="text"
-            placeholder="Choose username"
+            placeholder={t('auth.chooseUsername')}
             value={formData.username}
             onChange={handleInputChange('username')}
             className="pl-10"
@@ -158,18 +158,18 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, className
           />
         </div>
         <p className="text-xs text-gray-500">
-          Only letters, numbers, hyphens, and underscores allowed
+          {t('auth.usernameRule')}
         </p>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="password">Password *</Label>
+        <Label htmlFor="password">{t('auth.password')} *</Label>
         <div className="relative">
           <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
             id="password"
             type={showPassword ? 'text' : 'password'}
-            placeholder="Enter password"
+            placeholder={t('auth.enterPassword')}
             value={formData.password}
             onChange={handleInputChange('password')}
             className="pl-10 pr-10"
@@ -187,18 +187,18 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, className
           </button>
         </div>
         <p className="text-xs text-gray-500">
-          Minimum 8 characters
+          {t('auth.passwordMinLength')}
         </p>
       </div>
 
       <div className="space-y-2">
-        <Label htmlFor="confirmPassword">Confirm Password *</Label>
+        <Label htmlFor="confirmPassword">{t('auth.confirmPasswordLabel')} *</Label>
         <div className="relative">
           <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
           <Input
             id="confirmPassword"
             type={showPassword ? 'text' : 'password'}
-            placeholder="Confirm password"
+            placeholder={t('auth.confirmPasswordPlaceholder')}
             value={formData.confirmPassword}
             onChange={handleInputChange('confirmPassword')}
             className="pl-10"
@@ -216,12 +216,12 @@ export const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess, className
         {isLoading ? (
           <>
             <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            Creating account...
+            {t('auth.creatingAccount')}
           </>
         ) : (
           <>
             <UserPlus className="mr-2 h-4 w-4" />
-            Create Account
+            {t('auth.createAccountButton')}
           </>
         )}
       </Button>

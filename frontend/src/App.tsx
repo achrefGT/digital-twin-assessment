@@ -1,10 +1,11 @@
-// App.tsx - Updated with separated dashboard routes
+// App.tsx - Updated with LanguageProvider
 import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { AuthProvider } from "@/auth/AuthProvider";
+import { LanguageProvider } from "@/contexts/LanguageContext";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ProtectedAdminRoute } from '@/components/admin/ProtectedAdminRoute';
 import Home from "./pages/Home";
@@ -105,85 +106,87 @@ const App = () => {
     <QueryClientProvider client={enhancedQueryClient}>
       <QueryErrorBoundary>
         <TooltipProvider>
-          <AuthProvider>
-            <Toaster />
-            <Sonner />
-            <BrowserRouter>
-              <Routes>
-                {/* Public Routes */}
-                <Route path="/" element={<Home />} />
-                <Route path="/auth/login" element={<Login />} />
-                
-                {/* Protected Routes */}
-                <Route 
-                  path="/assessment" 
-                  element={
-                    <ProtectedRoute>
-                      <Assessment />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/assessment/:domain" 
-                  element={
-                    <ProtectedRoute>
-                      <Assessment />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* NEW: Separated Dashboard Routes */}
-                <Route 
-                  path="/assessments" 
-                  element={
-                    <ProtectedRoute>
-                      <AssessmentsListPage />
-                    </ProtectedRoute>
-                  } 
-                />
-                <Route 
-                  path="/dashboard/:assessmentId" 
-                  element={
-                    <ProtectedRoute>
-                      <AssessmentDashboardPage />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* Legacy dashboard route - redirect to assessments list */}
-                <Route 
-                  path="/dashboard" 
-                  element={<Navigate to="/assessments" replace />}
-                />
-                
-                <Route 
-                  path="/profile" 
-                  element={
-                    <ProtectedRoute>
-                      <Profile />
-                    </ProtectedRoute>
-                  } 
-                />
-                
-                {/* Admin routes */}
-                <Route path="/admin/*" element={
-                  <ProtectedAdminRoute>
-                    <Routes>
-                      <Route index element={<AdminDashboardPage />} />
-                      <Route path="sustainability" element={<SustainabilityPage />} />
-                      <Route path="resilience" element={<ResiliencePage />} />
-                      <Route path="human-centricity" element={<HumanCentricityPage />} />
-                      <Route path="users" element={<UserManagementPage />} />
-                    </Routes>
-                  </ProtectedAdminRoute>
-                } />
-                
-                
-                {/* Catch-all route - must be last */}
-                <Route path="*" element={<NotFound />} />
-              </Routes>
-            </BrowserRouter>
-          </AuthProvider>
+          <LanguageProvider>
+            <AuthProvider>
+              <Toaster />
+              <Sonner />
+              <BrowserRouter>
+                <Routes>
+                  {/* Public Routes */}
+                  <Route path="/" element={<Home />} />
+                  <Route path="/auth/login" element={<Login />} />
+                  
+                  {/* Protected Routes */}
+                  <Route 
+                    path="/assessment" 
+                    element={
+                      <ProtectedRoute>
+                        <Assessment />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/assessment/:domain" 
+                    element={
+                      <ProtectedRoute>
+                        <Assessment />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  {/* NEW: Separated Dashboard Routes */}
+                  <Route 
+                    path="/assessments" 
+                    element={
+                      <ProtectedRoute>
+                        <AssessmentsListPage />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  <Route 
+                    path="/dashboard/:assessmentId" 
+                    element={
+                      <ProtectedRoute>
+                        <AssessmentDashboardPage />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  {/* Legacy dashboard route - redirect to assessments list */}
+                  <Route 
+                    path="/dashboard" 
+                    element={<Navigate to="/assessments" replace />}
+                  />
+                  
+                  <Route 
+                    path="/profile" 
+                    element={
+                      <ProtectedRoute>
+                        <Profile />
+                      </ProtectedRoute>
+                    } 
+                  />
+                  
+                  {/* Admin routes */}
+                  <Route path="/admin/*" element={
+                    <ProtectedAdminRoute>
+                      <Routes>
+                        <Route index element={<AdminDashboardPage />} />
+                        <Route path="sustainability" element={<SustainabilityPage />} />
+                        <Route path="resilience" element={<ResiliencePage />} />
+                        <Route path="human-centricity" element={<HumanCentricityPage />} />
+                        <Route path="users" element={<UserManagementPage />} />
+                      </Routes>
+                    </ProtectedAdminRoute>
+                  } />
+                  
+                  
+                  {/* Catch-all route - must be last */}
+                  <Route path="*" element={<NotFound />} />
+                </Routes>
+              </BrowserRouter>
+            </AuthProvider>
+          </LanguageProvider>
         </TooltipProvider>
       </QueryErrorBoundary>
     </QueryClientProvider>

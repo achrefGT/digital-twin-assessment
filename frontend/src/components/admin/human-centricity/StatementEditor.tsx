@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useAdminApi } from '@/hooks/useAdminApi';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { StatementResponse, HumanCentricityDomain, StatementCreate, StatementUpdate, PerformanceWidgetConfig } from '@/types/admin';
 import { 
   X, 
@@ -23,13 +24,13 @@ interface StatementEditorProps {
   onClose: () => void;
 }
 
-// Type guard for PerformanceWidgetConfig
 const isPerformanceConfig = (config: any): config is PerformanceWidgetConfig => {
   return config && ('min' in config || 'max' in config || 'normalization' in config);
 };
 
 export function StatementEditor({ statement, onClose }: StatementEditorProps) {
   const { mutations } = useAdminApi();
+  const { t } = useLanguage();
   const isEdit = !!statement;
   
   const [formData, setFormData] = useState<StatementCreate>({
@@ -56,26 +57,25 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
     const newErrors: Record<string, string> = {};
 
     if (!formData.statement_text.trim()) {
-      newErrors.statement_text = 'Statement text is required';
+      newErrors.statement_text = t('humanCentricity.statementTextRequired');
     } else if (formData.statement_text.trim().length < 5) {
-      newErrors.statement_text = 'Statement text must be at least 5 characters';
+      newErrors.statement_text = t('humanCentricity.statementMinLength');
     } else if (formData.statement_text.trim().length > 500) {
-      newErrors.statement_text = 'Statement text must be less than 500 characters';
+      newErrors.statement_text = t('humanCentricity.statementMaxLength');
     }
 
-    // Validate Performance domain widget config
     if (formData.domain_key === 'Performance' && formData.widget_config) {
       const config = formData.widget_config;
       
       if (isPerformanceConfig(config)) {
         if (config.min === undefined || config.max === undefined) {
-          newErrors.widget_config = 'Performance metrics require min and max values';
+          newErrors.widget_config = t('humanCentricity.performanceMetricsMinMax');
         } else if (config.min >= config.max) {
-          newErrors.widget_config = 'Min value must be less than max value';
+          newErrors.widget_config = t('humanCentricity.minLessThanMax');
         }
         
         if (!config.normalization || !['direct', 'inverse'].includes(config.normalization)) {
-          newErrors.widget_config = 'Performance metrics require normalization type (direct or inverse)';
+          newErrors.widget_config = t('humanCentricity.normalizationRequired');
         }
       }
     }
@@ -119,71 +119,69 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
   }[] = [
     { 
       value: 'Core_Usability', 
-      label: 'Core Usability', 
-      description: 'Basic usability and interface design principles',
+      label: t('humanCentricity.coreUsability'), 
+      description: t('humanCentricity.basicUsability'),
       color: 'border-blue-200 bg-blue-50',
       icon: <BarChart3 className="w-5 h-5 text-blue-600" />,
-      widget: 'Likert Scale'
+      widget: t('humanCentricity.likertScale')
     },
     { 
       value: 'Trust_Transparency', 
-      label: 'Trust & Transparency', 
-      description: 'System transparency and user trust factors',
+      label: t('humanCentricity.trustTransparency'), 
+      description: t('humanCentricity.systemTransparency'),
       color: 'border-green-200 bg-green-50',
       icon: <Shield className="w-5 h-5 text-green-600" />,
-      widget: 'Likert Scale'
+      widget: t('humanCentricity.likertScale')
     },
     { 
       value: 'Workload_Comfort', 
-      label: 'Workload & Comfort', 
-      description: 'Cognitive load and physical comfort assessment',
+      label: t('humanCentricity.workloadComfort'), 
+      description: t('humanCentricity.cognitiveLoad'),
       color: 'border-purple-200 bg-purple-50',
       icon: <Brain className="w-5 h-5 text-purple-600" />,
-      widget: 'Slider (0-100)'
+      widget: t('humanCentricity.slider')
     },
     { 
       value: 'Cybersickness', 
-      label: 'Cybersickness', 
-      description: 'Motion sickness and discomfort in digital environments',
+      label: t('humanCentricity.cybersickness'), 
+      description: t('humanCentricity.motionSickness'),
       color: 'border-red-200 bg-red-50',
       icon: <AlertCircle className="w-5 h-5 text-red-600" />,
-      widget: 'Likert Scale'
+      widget: t('humanCentricity.likertScale')
     },
     { 
       value: 'Emotional_Response', 
-      label: 'Emotional Response', 
-      description: 'User emotional reactions and engagement patterns',
+      label: t('humanCentricity.emotionalResponse'), 
+      description: t('humanCentricity.emotionalReactions'),
       color: 'border-orange-200 bg-orange-50',
       icon: <Activity className="w-5 h-5 text-orange-600" />,
-      widget: 'SAM Scale'
+      widget: t('humanCentricity.samScale')
     },
     { 
       value: 'Performance', 
-      label: 'Performance', 
-      description: 'Task performance and efficiency metrics',
+      label: t('humanCentricity.performance'), 
+      description: t('humanCentricity.taskPerformance'),
       color: 'border-indigo-200 bg-indigo-50',
       icon: <Hash className="w-5 h-5 text-indigo-600" />,
-      widget: 'Numeric Input'
+      widget: t('humanCentricity.numericInput')
     }
   ];
 
   const selectedDomain = domains.find(d => d.value === formData.domain_key);
   const isPerformanceDomain = formData.domain_key === 'Performance';
 
-  // Get domain scale info
   const getDomainScaleInfo = (domain: HumanCentricityDomain) => {
     const scaleMap: Record<HumanCentricityDomain, string> = {
-      'Core_Usability': '1-7 Likert (Strongly Disagree to Strongly Agree)',
-      'Trust_Transparency': '1-7 Likert (Strongly Disagree to Strongly Agree)',
-      'Workload_Comfort': '0-100 Slider (Very Low to Very High)',
-      'Cybersickness': '1-5 Severity (None to Very Severe)',
-      'Emotional_Response': '1-5 SAM (Valence & Arousal)',
-      'Performance': 'Numeric metrics (time, errors, help requests)'
+      'Core_Usability': t('humanCentricity.likertRange'),
+      'Trust_Transparency': t('humanCentricity.likertRange'),
+      'Workload_Comfort': t('humanCentricity.sliderRange'),
+      'Cybersickness': t('humanCentricity.severityRange'),
+      'Emotional_Response': t('humanCentricity.samRange'),
+      'Performance': t('humanCentricity.numericMetrics')
     };
     return scaleMap[domain];
   };
 
-  // Handle widget config changes for Performance domain
   const handleWidgetConfigChange = (field: string, value: any) => {
     setFormData(prev => ({
       ...prev,
@@ -206,10 +204,10 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">
-                  {isEdit ? 'Edit Statement' : 'Create New Statement'}
+                  {isEdit ? t('humanCentricity.editStatement') : t('humanCentricity.createNewStatement')}
                 </h2>
                 <p className="text-sm text-gray-600">
-                  {isEdit ? 'Modify the human centricity statement' : 'Add a custom assessment statement to a domain'}
+                  {isEdit ? t('humanCentricity.modifyStatement') : t('humanCentricity.addCustomStatement')}
                 </p>
               </div>
             </div>
@@ -228,10 +226,10 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
           <div className="space-y-4">
             <div>
               <label className="text-lg font-semibold text-gray-900">
-                Assessment Domain *
+                {t('humanCentricity.assessmentDomain')} *
               </label>
               <p className="text-sm text-gray-600 mt-1">
-                Select which domain this statement belongs to. Each domain has a fixed scale.
+                {t('humanCentricity.selectDomain')}
               </p>
             </div>
             
@@ -276,13 +274,13 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
                 <div className="flex items-start gap-3">
                   <Info className="w-5 h-5 text-blue-600 mt-0.5" />
                   <div className="flex-1">
-                    <h4 className="text-sm font-medium text-blue-900 mb-1">Domain Configuration</h4>
+                    <h4 className="text-sm font-medium text-blue-900 mb-1">{t('humanCentricity.domainConfiguration')}</h4>
                     <div className="space-y-1">
                       <p className="text-sm text-blue-700">
-                        <span className="font-medium">Scale:</span> {getDomainScaleInfo(formData.domain_key)}
+                        <span className="font-medium">{t('humanCentricity.scale')}:</span> {getDomainScaleInfo(formData.domain_key)}
                       </p>
                       <p className="text-sm text-blue-700">
-                        <span className="font-medium">Widget:</span> {selectedDomain?.widget}
+                        <span className="font-medium">{t('humanCentricity.widget')}:</span> {selectedDomain?.widget}
                       </p>
                     </div>
                   </div>
@@ -294,10 +292,10 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
           {/* Statement Text */}
           <div>
             <label className="block text-lg font-semibold text-gray-900 mb-2">
-              Statement Text *
+              {t('humanCentricity.statementText')} *
             </label>
             <p className="text-sm text-gray-600 mb-3">
-              Write a clear, actionable statement or question. This will be presented to users during assessment.
+              {t('humanCentricity.writeStatement')}
             </p>
             <textarea
               value={formData.statement_text}
@@ -307,7 +305,7 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
                 w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors resize-none text-base
                 ${errors.statement_text ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'}
               `}
-              placeholder="Enter the assessment statement or question...&#10;&#10;Example: 'The system interface was easy to navigate and understand'"
+              placeholder={t('humanCentricity.enterStatement') + '\n\n' + t('humanCentricity.exampleStatement')}
             />
             <div className="flex justify-between items-center mt-2">
               <div>
@@ -319,7 +317,7 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
                 )}
               </div>
               <span className="text-sm text-gray-500">
-                {formData.statement_text.length}/500 characters
+                {formData.statement_text.length}/500 {t('humanCentricity.characters')}
               </span>
             </div>
           </div>
@@ -330,15 +328,15 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
               <div className="flex items-start gap-3 mb-4">
                 <Settings className="w-5 h-5 text-indigo-600 mt-0.5" />
                 <div className="flex-1">
-                  <h4 className="text-sm font-medium text-indigo-900 mb-1">Performance Metric Configuration</h4>
-                  <p className="text-sm text-indigo-700">Configure the measurement range and scoring behavior for this performance metric.</p>
+                  <h4 className="text-sm font-medium text-indigo-900 mb-1">{t('humanCentricity.performanceMetricConfig')}</h4>
+                  <p className="text-sm text-indigo-700">{t('humanCentricity.configureRange')}</p>
                 </div>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Minimum Value *
+                    {t('humanCentricity.minimumValue')} *
                   </label>
                   <input
                     type="number"
@@ -352,7 +350,7 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Maximum Value *
+                    {t('humanCentricity.maximumValue')} *
                   </label>
                   <input
                     type="number"
@@ -366,15 +364,15 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
 
                 <div>
                   <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Normalization *
+                    {t('humanCentricity.normalization')} *
                   </label>
                   <select
                     value={isPerformanceConfig(formData.widget_config) ? formData.widget_config.normalization : 'inverse'}
                     onChange={(e) => handleWidgetConfigChange('normalization', e.target.value)}
                     className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500"
                   >
-                    <option value="inverse">Inverse (lower is better)</option>
-                    <option value="direct">Direct (higher is better)</option>
+                    <option value="inverse">{t('humanCentricity.inverse')}</option>
+                    <option value="direct">{t('humanCentricity.direct')}</option>
                   </select>
                 </div>
               </div>
@@ -383,13 +381,13 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
                 <div className="flex items-start gap-2">
                   <Info className="w-4 h-4 text-indigo-600 mt-0.5 flex-shrink-0" />
                   <p className="text-xs text-indigo-700">
-                    <span className="font-medium">Inverse normalization:</span> Used for metrics where lower values are better (e.g., task time, error count). Score = 100 × (max - value) / (max - min)
+                    <span className="font-medium">{t('humanCentricity.inverseNormalization')}:</span> {t('humanCentricity.usedForMetrics')}
                   </p>
                 </div>
                 <div className="flex items-start gap-2">
                   <Info className="w-4 h-4 text-indigo-600 mt-0.5 flex-shrink-0" />
                   <p className="text-xs text-indigo-700">
-                    <span className="font-medium">Direct normalization:</span> Used for metrics where higher values are better (e.g., accuracy, completion rate). Score = 100 × (value - min) / (max - min)
+                    <span className="font-medium">{t('humanCentricity.directNormalization')}:</span> {t('humanCentricity.higherBetter')}
                   </p>
                 </div>
               </div>
@@ -407,29 +405,29 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
           <div className="bg-blue-50 rounded-lg p-4 border border-blue-200">
             <h4 className="text-sm font-medium text-blue-900 mb-3 flex items-center gap-2">
               <Eye className="w-4 h-4" />
-              Statement Preview
+              {t('humanCentricity.statementPreview')}
             </h4>
             <div className="bg-white rounded-lg p-4 border border-blue-200">
               <div className="flex items-center gap-2 mb-2">
                 <span className={`text-xs px-2 py-1 rounded ${selectedDomain?.color || 'bg-gray-100 text-gray-700'}`}>
-                  {selectedDomain?.label || 'Select Domain'}
+                  {selectedDomain?.label || t('humanCentricity.selectDomainPrompt')}
                 </span>
               </div>
               <p className="text-gray-900 mb-3">
-                {formData.statement_text || 'Enter your statement text above to see preview...'}
+                {formData.statement_text || t('humanCentricity.enterPreview')}
               </p>
               <div className="flex items-center gap-2 text-sm text-gray-600">
-                <span>Widget: {selectedDomain?.widget || 'Auto-detect'}</span>
+                <span>{t('humanCentricity.widget')}: {selectedDomain?.widget || t('humanCentricity.autoDetect')}</span>
                 <span>•</span>
-                <span>Scale: {formData.domain_key ? getDomainScaleInfo(formData.domain_key) : 'Select domain'}</span>
+                <span>{t('humanCentricity.scale')}: {formData.domain_key ? getDomainScaleInfo(formData.domain_key) : t('humanCentricity.selectDomainPrompt')}</span>
               </div>
               {isPerformanceDomain && formData.widget_config && isPerformanceConfig(formData.widget_config) && (
                 <div className="mt-3 pt-3 border-t border-gray-200">
-                  <p className="text-xs text-gray-600 mb-1">Performance Configuration:</p>
+                  <p className="text-xs text-gray-600 mb-1">{t('humanCentricity.performanceConfiguration')}:</p>
                   <div className="flex gap-4 text-xs text-gray-700">
-                    <span>Range: {formData.widget_config.min} - {formData.widget_config.max}</span>
+                    <span>{t('humanCentricity.range')}: {formData.widget_config.min} - {formData.widget_config.max}</span>
                     <span>•</span>
-                    <span>Type: {formData.widget_config.normalization === 'inverse' ? 'Lower is Better' : 'Higher is Better'}</span>
+                    <span>{t('humanCentricity.type')}: {formData.widget_config.normalization === 'inverse' ? t('humanCentricity.lowerIsBetter') : t('humanCentricity.higherIsBetter')}</span>
                   </div>
                 </div>
               )}
@@ -441,7 +439,7 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
               <div className="flex items-center gap-2 mb-3">
                 <Info className="w-5 h-5 text-gray-600" />
-                <h4 className="font-medium text-gray-900">Statement Information</h4>
+                <h4 className="font-medium text-gray-900">{t('humanCentricity.statementInformation')}</h4>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div className="flex items-center gap-2">
@@ -451,17 +449,17 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
                 </div>
                 <div className="flex items-center gap-2">
                   <Type className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">Type:</span>
+                  <span className="text-gray-600">{t('humanCentricity.type')}:</span>
                   <span className="font-medium text-gray-900">{statement.statement_type}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">Created:</span>
+                  <span className="text-gray-600">{t('humanCentricity.created')}:</span>
                   <span className="font-medium text-gray-900">{new Date(statement.created_at).toLocaleDateString()}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">Updated:</span>
+                  <span className="text-gray-600">{t('humanCentricity.updated')}:</span>
                   <span className="font-medium text-gray-900">{new Date(statement.updated_at).toLocaleDateString()}</span>
                 </div>
               </div>
@@ -477,7 +475,7 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
               onClick={onClose}
               className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
             >
-              Cancel
+              {t('common.cancel')}
             </button>
             <button
               onClick={handleSubmit}
@@ -486,8 +484,8 @@ export function StatementEditor({ statement, onClose }: StatementEditorProps) {
             >
               <Save className="w-4 h-4" />
               {(mutations.createHumanCentricityStatement.isPending || mutations.updateHumanCentricityStatement.isPending)
-                ? 'Saving...' 
-                : (isEdit ? 'Update Statement' : 'Create Statement')
+                ? t('humanCentricity.saving')
+                : (isEdit ? t('humanCentricity.updateStatement') : t('humanCentricity.createStatement'))
               }
             </button>
           </div>

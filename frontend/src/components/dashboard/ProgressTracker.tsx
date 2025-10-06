@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle, Circle, Brain, Shield, Sparkles } from 'lucide-react'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 interface ProgressTrackerProps {
   modules: Record<string, {
@@ -20,6 +21,8 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
   domainData,
   domainScores
 }) => {
+  const { t } = useLanguage()
+
   const getModuleIcon = (moduleKey: string) => {
     switch (moduleKey) {
       case 'human_centricity': return Brain
@@ -65,13 +68,12 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center justify-between">
-          Assessment Progress
+          {t('module.assessmentProgress')}
           <span className="text-2xl font-bold text-blue-600">{overallPercentage.toFixed(0)}%</span>
         </CardTitle>
         <Progress value={overallPercentage} className="h-2" />
       </CardHeader>
       <CardContent className="space-y-6">
-        {/* Module Progress */}
         {Object.entries(modules).map(([moduleKey, module]) => {
           const status = getModuleStatus(moduleKey)
           const score = getModuleScore(moduleKey)
@@ -79,14 +81,13 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
 
           return (
             <div key={moduleKey} className="space-y-3">
-              {/* Module Header */}
               <div className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border">
                 <div className="flex items-center gap-3">
                   <Icon className={`h-5 w-5 ${status.isComplete ? 'text-success' : 'text-muted-foreground'}`} />
                   <div>
                     <div className="font-medium">{module.name}</div>
                     <div className="text-sm text-muted-foreground">
-                      {status.completed}/{status.total} domains • {status.percentage.toFixed(0)}% complete
+                      {status.completed}/{status.total} {t('assessments.domains').toLowerCase()} • {status.percentage.toFixed(0)}% {t('module.complete').toLowerCase()}
                     </div>
                   </div>
                 </div>
@@ -97,19 +98,18 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
                       <div className={`text-lg font-bold text-${getScoreColor(score)}`}>
                         {score.toFixed(1)}
                       </div>
-                      <div className="text-xs text-muted-foreground">Score</div>
+                      <div className="text-xs text-muted-foreground">{t('module.score')}</div>
                     </div>
                   )}
                   <Badge 
                     variant='secondary'
                     className={status.isComplete ? 'text-green-600' : ''}
                   >
-                    {status.isComplete ? 'Complete' : 'In Progress'}
+                    {status.isComplete ? t('module.complete') : t('assessments.inProgress')}
                   </Badge>
                 </div>
               </div>
 
-              {/* Domain Progress - NOW SHOWS ALL DOMAINS */}
               <div className="ml-8 space-y-2">
                 {module.domains.map((domain) => {
                   const isCompleted = completedDomains.includes(domain)
@@ -134,7 +134,7 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
                           </div>
                           {processingTime && (
                             <div className="text-xs text-muted-foreground">
-                              Processed in {processingTime.toFixed(2)}ms
+                              {t('dashboard.processedIn')} {processingTime.toFixed(2)}ms
                             </div>
                           )}
                         </div>
@@ -146,14 +146,14 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
                             <div className={`text-sm font-bold text-${getScoreColor(domainScore)}`}>
                               {domainScore.toFixed(1)}
                             </div>
-                            <div className="text-xs text-muted-foreground">Score</div>
+                            <div className="text-xs text-muted-foreground">{t('module.score')}</div>
                           </div>
                         )}
                         <Badge
                           variant={isCompleted ? 'secondary' : 'outline'}
                           className={`text-xs ${isCompleted ? 'text-green-600' : ''}`}
                         >
-                          {isCompleted ? 'Complete' : 'Pending'}
+                          {isCompleted ? t('module.complete') : t('dashboard.pending')}
                         </Badge>
                       </div>
                     </div>
@@ -164,20 +164,19 @@ export const ProgressTracker: React.FC<ProgressTrackerProps> = ({
           )
         })}
 
-        {/* Progress Summary */}
         <div className="pt-4 border-t">
           <div className="grid grid-cols-3 gap-4 text-center">
             <div>
               <div className="text-2xl font-bold text-primary">{totalCompleted}</div>
-              <div className="text-sm text-muted-foreground">Completed</div>
+              <div className="text-sm text-muted-foreground">{t('summaryStats.completed')}</div>
             </div>
             <div>
               <div className="text-2xl font-bold text-warning">{totalDomains - totalCompleted}</div>
-              <div className="text-sm text-muted-foreground">Remaining</div>
+              <div className="text-sm text-muted-foreground">{t('assessments.progress')}</div>
             </div>
             <div>
               <div className="text-2xl font-bold text-success">{overallPercentage.toFixed(0)}%</div>
-              <div className="text-sm text-muted-foreground">Progress</div>
+              <div className="text-sm text-muted-foreground">{t('assessments.progress')}</div>
             </div>
           </div>
         </div>

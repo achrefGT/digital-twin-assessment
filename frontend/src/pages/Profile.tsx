@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { ArrowLeft, User, Sparkles } from 'lucide-react';
 import { UserProfile } from '@/components/auth/UserProfile';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const Profile: React.FC = () => {
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-white to-cyan-50 relative overflow-hidden">
@@ -22,12 +24,13 @@ const Profile: React.FC = () => {
           <div className="flex items-center justify-between h-20">
             <div className="flex items-center gap-4">
               <Button 
-                variant="ghost" 
+                variant="ghost"
                 onClick={() => navigate('/')}
-                className="group -ml-2 p-3 hover:bg-gradient-to-r hover:from-gray-50 hover:to-gray-100 rounded-xl transition-all duration-300 hover:shadow-md hover:scale-105"
+                className="-ml-2 p-2 hover:translate-x-[-4px] transition-transform duration-200 hover:bg-white"
               >
-                <ArrowLeft className="w-5 h-5 text-gray-700 group-hover:text-gray-900 group-hover:-translate-x-1 transition-all duration-300" />
+                <ArrowLeft className="w-5 h-5 text-black" />
               </Button>
+
               
               <div className="h-8 w-px bg-gradient-to-b from-transparent via-gray-300 to-transparent" />
               
@@ -40,7 +43,7 @@ const Profile: React.FC = () => {
                 
                 <div className="flex flex-col">
                   <span className="text-xl font-bold bg-gradient-to-r from-gray-900 via-gray-800 to-gray-900 bg-clip-text text-transparent">
-                    Profile
+                    {t('profile.title')}
                   </span>
                 </div>
               </div>
@@ -56,13 +59,13 @@ const Profile: React.FC = () => {
           <div className="text-center mb-12">
             <div className="inline-flex items-center gap-2 px-4 py-2 bg-gradient-to-r from-indigo-50 to-purple-50 rounded-full border border-indigo-100 mb-6">
               <Sparkles className="w-4 h-4 text-indigo-500" />
-              <span className="text-sm font-medium text-indigo-700">Your Personal Space</span>
+              <span className="text-sm font-medium text-indigo-700">{t('profile.yourPersonalSpace')}</span>
             </div>
             <h1 className="text-4xl md:text-5xl font-bold bg-gradient-to-r from-gray-900 via-indigo-900 to-cyan-900 bg-clip-text text-transparent mb-4">
-              Welcome Back
+              {t('profile.welcomeBack')}
             </h1>
             <p className="text-lg text-gray-600 max-w-2xl mx-auto leading-relaxed">
-              Manage your profile settings, preferences, and account information all in one place.
+              {t('profile.manageSettings')}
             </p>
           </div>
 

@@ -3,6 +3,7 @@ import { useAdminApi } from '@/hooks/useAdminApi';
 import { ScenariosList } from './ScenariosList';
 import { ScenarioEditor } from './ScenarioEditor';
 import { ResilienceDomain, ScenarioResponse } from '@/types/admin';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { 
   Plus, 
   RefreshCw, 
@@ -16,6 +17,7 @@ import {
 } from 'lucide-react';
 
 export function ScenarioManager() {
+  const { t } = useLanguage();
   const { resilienceScenarios, mutations, isDeleting } = useAdminApi();
   const [selectedDomain, setSelectedDomain] = useState<ResilienceDomain | 'all'>('all');
   const [editingScenario, setEditingScenario] = useState<ScenarioResponse | null>(null);
@@ -30,42 +32,42 @@ export function ScenarioManager() {
   }[] = [
     { 
       value: 'all', 
-      label: 'All Domains',
+      label: t('resilience.allDomains'),
       color: 'text-gray-600',
       bgColor: 'bg-gray-50',
       icon: <BarChart3 className="w-4 h-4" />
     },
     { 
       value: 'Robustness', 
-      label: 'Robustness',
+      label: t('resilience.robustness'),
       color: 'text-blue-600',
       bgColor: 'bg-blue-50',
       icon: <Shield className="w-4 h-4" />
     },
     { 
       value: 'Redundancy', 
-      label: 'Redundancy',
+      label: t('resilience.redundancy'),
       color: 'text-green-600',
       bgColor: 'bg-green-50',
       icon: <Copy className="w-4 h-4" />
     },
     { 
       value: 'Adaptability', 
-      label: 'Adaptability',
+      label: t('resilience.adaptability'),
       color: 'text-purple-600',
       bgColor: 'bg-purple-50',
       icon: <Layers className="w-4 h-4" />
     },
     { 
       value: 'Rapidity', 
-      label: 'Rapidity',
+      label: t('resilience.rapidity'),
       color: 'text-orange-600',
       bgColor: 'bg-orange-50',
       icon: <Zap className="w-4 h-4" />
     },
     { 
       value: 'PHM', 
-      label: 'PHM',
+      label: t('resilience.phm'),
       color: 'text-indigo-600',
       bgColor: 'bg-indigo-50',
       icon: <Activity className="w-4 h-4" />
@@ -88,7 +90,7 @@ export function ScenarioManager() {
       return;
     }
 
-    const confirmMessage = `Are you sure you want to delete this scenario?\n\nThis action cannot be undone.`;
+    const confirmMessage = t('confirm.deleteAssessment').replace('assessment', 'scenario');
     
     if (window.confirm(confirmMessage)) {
       mutations.deleteResilienceScenario.mutate(scenario.id);
@@ -96,8 +98,8 @@ export function ScenarioManager() {
   };
 
   const handleReset = async (domain?: ResilienceDomain) => {
-    const domainText = domain ? ` for ${domain}` : '';
-    const confirmMessage = `Are you sure you want to reset all scenarios${domainText}?\n\nThis will delete all existing scenarios and restore defaults. This cannot be undone.`;
+    const domainText = domain ? ` ${t('resilience.forDomain').replace('{domain}', t(`resilience.${domain.toLowerCase()}`))}` : '';
+    const confirmMessage = `${t('confirm.reset')}${domainText}`;
     
     if (window.confirm(confirmMessage)) {
       mutations.resetResilienceScenarios.mutate(domain);
@@ -149,10 +151,10 @@ export function ScenarioManager() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Resilience Scenarios
+          {t('resilience.scenarios')}
         </h1>
         <p className="text-gray-600">
-          Manage robustness, redundancy, adaptability, rapidity, and PHM scenarios for comprehensive assessments
+          {t('resilience.manageScenarios')}
         </p>
       </div>
 
@@ -193,7 +195,7 @@ export function ScenarioManager() {
               className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-lg font-medium transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-sm"
             >
               <Plus className="w-5 h-5" />
-              <span>Add Scenario</span>
+              <span>{t('resilience.addScenario')}</span>
             </button>
             <button
               onClick={() => handleReset(selectedDomain === 'all' ? undefined : selectedDomain)}
@@ -201,7 +203,7 @@ export function ScenarioManager() {
               className="flex items-center gap-2 px-5 py-2.5 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white rounded-lg font-medium transition-all shadow-sm hover:shadow-md disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:shadow-sm"
             >
               <RefreshCw className={`w-5 h-5 ${isResetLoading ? 'animate-spin' : ''}`} />
-              <span>{isResetLoading ? 'Resetting...' : 'Reset to Default'}</span>
+              <span>{isResetLoading ? t('humanCentricity.resetting') : t('humanCentricity.resetToDefault')}</span>
             </button>
           </div>
         </div>
@@ -210,7 +212,7 @@ export function ScenarioManager() {
         {deletingIds.length > 0 && (
           <div className="mt-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
             <p className="text-sm text-yellow-800">
-              Deleting {deletingIds.length} scenario{deletingIds.length > 1 ? 's' : ''}...
+              {t('resilience.deletingScenarios').replace('{count}', deletingIds.length.toString())}
             </p>
           </div>
         )}
@@ -218,7 +220,8 @@ export function ScenarioManager() {
         {isResetLoading && (
           <div className="mt-4 p-3 bg-orange-50 border border-orange-200 rounded-lg">
             <p className="text-sm text-orange-800">
-              Resetting scenarios{selectedDomain !== 'all' ? ` for ${selectedDomain}` : ''}...
+              {t('resilience.resettingScenarios')}
+              {selectedDomain !== 'all' ? ` ${t('resilience.forDomain').replace('{domain}', t(`resilience.${selectedDomain.toLowerCase()}`))}` : ''}...
             </p>
           </div>
         )}
@@ -230,14 +233,16 @@ export function ScenarioManager() {
           <div className="flex items-center gap-2 mb-2">
             <Shield className="w-5 h-5 text-blue-600" />
             <h3 className="font-medium text-gray-900">
-              {selectedDomain === 'all' ? 'Total Scenarios' : `${selectedDomain} Scenarios`}
+              {selectedDomain === 'all' 
+                ? t('resilience.totalScenarios') 
+                : t('resilience.domainScenarios').replace('{domain}', t(`resilience.${selectedDomain.toLowerCase()}`))}
             </h3>
           </div>
           <div className="text-2xl font-bold text-gray-900">
             {filteredScenarios.length}
           </div>
           <div className="text-sm text-gray-600">
-            All scenarios
+            {t('resilience.allStatements')}
           </div>
         </div>
         
@@ -260,7 +265,7 @@ export function ScenarioManager() {
                 </h3>
               </div>
               <div className={`text-2xl font-bold ${domain.color}`}>{count}</div>
-              <div className={`text-sm ${domain.color} opacity-75`}>scenarios defined</div>
+              <div className={`text-sm ${domain.color} opacity-75`}>{t('resilience.scenariosDefined')}</div>
             </div>
           );
         })}
@@ -287,7 +292,7 @@ export function ScenarioManager() {
                 </h3>
               </div>
               <div className={`text-2xl font-bold ${domain.color}`}>{count}</div>
-              <div className={`text-sm ${domain.color} opacity-75`}>scenarios defined</div>
+              <div className={`text-sm ${domain.color} opacity-75`}>{t('resilience.scenariosDefined')}</div>
             </div>
           );
         })}

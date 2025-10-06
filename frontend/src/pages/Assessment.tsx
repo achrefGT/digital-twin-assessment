@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { useAuth } from "@/auth"
+import { useLanguage } from "@/contexts/LanguageContext"
 
 const domainInfo = {
   slca: { 
@@ -22,7 +23,8 @@ const domainInfo = {
     bgColor: "bg-blue-50", 
     borderColor: "border-blue-200",
     icon: "👥",
-    description: "social"
+    description: "social",
+    titleKey: "domain.sustainability.social"
   },
   lcc: { 
     title: "Life Cycle Costing", 
@@ -30,7 +32,8 @@ const domainInfo = {
     bgColor: "bg-purple-50", 
     borderColor: "border-purple-200",
     icon: "💰",
-    description: "economic"
+    description: "economic",
+    titleKey: "domain.sustainability.economic"
   },
   elca: { 
     title: "Environmental Life Cycle Assessment", 
@@ -38,7 +41,8 @@ const domainInfo = {
     bgColor: "bg-green-50", 
     borderColor: "border-green-200",
     icon: "🌱",
-    description: "environmental"
+    description: "environmental",
+    titleKey: "domain.sustainability.environmental"
   },
   human_centricity: { 
     title: "Human Centricity Assessment", 
@@ -46,7 +50,8 @@ const domainInfo = {
     bgColor: "bg-violet-50", 
     borderColor: "border-violet-200",
     icon: Brain,
-    description: "human-centric"
+    description: "human-centric",
+    titleKey: "domain.humanCentricity.title"
   },
   sustainability: { 
     title: "Sustainability Assessment", 
@@ -54,7 +59,8 @@ const domainInfo = {
     bgColor: "bg-emerald-50", 
     borderColor: "border-emerald-200",
     icon: Sparkles,
-    description: "sustainability"
+    description: "sustainability",
+    titleKey: "domain.sustainability.title"
   },
   resilience: { 
     title: "Resilience Assessment", 
@@ -62,7 +68,8 @@ const domainInfo = {
     bgColor: "bg-blue-50", 
     borderColor: "border-blue-200",
     icon: Shield,
-    description: "resilience"
+    description: "resilience",
+    titleKey: "domain.resilience.title"
   }
 }
 
@@ -71,6 +78,7 @@ const Assessment = () => {
   const navigate = useNavigate()
   const { toast } = useToast()
   const { token, isAuthenticated, user } = useAuth()
+  const { t } = useLanguage()
   
   // Get assessment from localStorage to persist across domain switches
   const [assessment, setAssessment] = useState<any>(() => {
@@ -104,7 +112,7 @@ const Assessment = () => {
                   <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-blue-600 rounded-lg flex items-center justify-center">
                     <Sparkles className="w-5 h-5 text-white" />
                   </div>
-                  <span className="text-xl font-bold text-gray-900">Create Assessment</span>
+                  <span className="text-xl font-bold text-gray-900">{t('assessment.create')}</span>
                 </div>
               </div>
             </div>
@@ -131,8 +139,8 @@ const Assessment = () => {
                     <div className="w-16 h-16 bg-gradient-to-br from-green-500 to-emerald-600 rounded-2xl mx-auto mb-6 flex items-center justify-center">
                       <CheckCircle className="w-8 h-8 text-white" />
                     </div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-4">Assessment Already Created</h2>
-                    <p className="text-gray-600 mb-2">Assessment ID:</p>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-4">{t('assessment.alreadyCreated')}</h2>
+                    <p className="text-gray-600 mb-2">{t('assessment.assessmentId')}</p>
                     <p className="font-mono text-sm bg-white px-3 py-2 rounded-lg border border-gray-200 mb-8">
                       {assessment.assessment_id}
                     </p>
@@ -142,7 +150,7 @@ const Assessment = () => {
                         onClick={() => navigate('/')}
                         className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white"
                       >
-                        Continue to Domain Selection
+                        {t('assessment.continueToDomain')}
                       </Button>
                       <Button 
                         variant="outline" 
@@ -153,7 +161,7 @@ const Assessment = () => {
                           setAssessment(null)
                         }}
                       >
-                        Create New Assessment
+                        {t('assessment.createNew')}
                       </Button>
                     </div>
                   </CardContent>
@@ -171,13 +179,13 @@ const Assessment = () => {
       <div className="min-h-screen bg-white flex items-center justify-center">
         <Card className="max-w-md mx-auto border-2 border-red-200 bg-red-50">
           <CardContent className="p-8 text-center">
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">Invalid Assessment Domain</h2>
-            <p className="text-gray-600 mb-6">The requested assessment domain could not be found.</p>
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">{t('assessment.invalidDomain')}</h2>
+            <p className="text-gray-600 mb-6">{t('assessment.domainNotFound')}</p>
             <Button 
               onClick={() => navigate('/')}
               className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white"
             >
-              Return Home
+              {t('assessment.returnHome')}
             </Button>
           </CardContent>
         </Card>
@@ -195,9 +203,9 @@ const Assessment = () => {
               <FileText className="w-8 h-8 text-white" />
             </div>
 
-            <h2 className="text-2xl font-bold text-gray-900 mb-4">No Assessment Found</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-4">{t('assessment.noAssessmentFound')}</h2>
             <p className="text-gray-600 mb-6">
-              You need to create an assessment or select one before completing domain-specific forms.
+              {t('assessment.needToCreate')}
             </p>
 
             {/* Button group */}
@@ -207,7 +215,7 @@ const Assessment = () => {
                 className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white"
                 aria-label="Create Assessment"
               >
-                Create Assessment
+                {t('assessment.create')}
               </Button>
 
               <Button
@@ -215,7 +223,7 @@ const Assessment = () => {
                 className="border border-blue-200 bg-white hover:bg-blue-50 text-blue-600 font-medium"
                 aria-label="View Assessments"
               >
-                View Assessments
+                {t('assessment.viewAssessments')}
               </Button>
             </div>
           </CardContent>
@@ -234,14 +242,14 @@ const Assessment = () => {
     setIsSubmitting(true)
 
     if (!isAuthenticated || !token) {
-      throw new Error('Please log in to submit assessment')
+      throw new Error(t('createAssessment.loginRequired'))
     }
 
     // Validate we have proper backend IDs
     if (!assessment.assessment_id) {
       toast({
-        title: "Error",
-        description: "Invalid assessment - missing ID",
+        title: t('notification.error.title'),
+        description: t('notification.error.invalidData'),
         variant: "destructive"
       })
       setIsSubmitting(false)
@@ -265,8 +273,8 @@ const Assessment = () => {
     }
 
     const assessmentData = {
-      assessment_id: assessment.assessment_id, // Use backend-provided ID
-      user_id: assessment.user_id, // Use backend-provided user ID
+      assessment_id: assessment.assessment_id,
+      user_id: assessment.user_id,
       system_name: assessment.system_name,
       domain: domain,
       form_data: data,
@@ -291,7 +299,6 @@ const Assessment = () => {
     try {
       console.log('Submitting to backend:', `http://localhost:8000/assessments/${assessment.assessment_id}/submit/`)
       
-      // Submit to backend 
       const response = await fetch(
         `http://localhost:8000/assessments/${assessment.assessment_id}/submit/`, 
         {
@@ -302,7 +309,7 @@ const Assessment = () => {
       )
 
       if (response.status === 401) {
-        throw new Error('Session expired. Please log in again.')
+        throw new Error(t('createAssessment.sessionExpired'))
       }
 
       if (!response.ok) {
@@ -313,20 +320,19 @@ const Assessment = () => {
       const result = await response.json()
       console.log('Backend response:', result)
       
-      // Update local state with backend response
       setFormData(result)
       setIsCompleted(true)
       
       toast({
-        title: "Assessment Submitted Successfully", 
-        description: `Your ${domain?.toUpperCase()} assessment has been processed. You can now view the results in the dashboard.`
+        title: t('assessment.submittedSuccessfully'), 
+        description: t('assessment.canViewDashboard')
       })
       
     } catch (error) {
       console.error('Submission failed:', error)
       toast({
-        title: error.message.includes('log in') ? "Authentication Required" : "Submission Failed",
-        description: error instanceof Error ? error.message : "Failed to submit assessment",
+        title: error.message.includes('log in') ? t('createAssessment.authRequired') : t('notification.error.title'),
+        description: error instanceof Error ? error.message : t('notification.error.failed'),
         variant: "destructive"
       })
     } finally {
@@ -350,6 +356,14 @@ const Assessment = () => {
   // Check if this is a unified domain selector assessment type
   const isUnifiedDomain = ['human_centricity', 'sustainability', 'resilience'].includes(domain as string)
 
+  // Get translated title
+  const getDomainTitle = () => {
+    if (info.titleKey) {
+      return t(info.titleKey)
+    }
+    return info.title
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-gray-50">
       {/* Navigation Header */}
@@ -366,8 +380,12 @@ const Assessment = () => {
               </Button>
               <div className="h-6 w-px bg-gray-300" />
               <div className="flex items-center gap-3">
-                <span className="text-2xl"><info.icon /></span>
-                <span className="text-lg font-semibold text-gray-900">{info.title}</span>
+                {typeof info.icon === 'string' ? (
+                  <span className="text-2xl">{info.icon}</span>
+                ) : (
+                  <info.icon className="w-6 h-6" />
+                )}
+                <span className="text-lg font-semibold text-gray-900">{getDomainTitle()}</span>
               </div>
             </div>
             <Badge className={`${info.bgColor} ${info.borderColor} border text-gray-700 font-medium px-3 py-1`}>
@@ -385,46 +403,47 @@ const Assessment = () => {
                 <div className="w-20 h-20 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mx-auto mb-8 flex items-center justify-center">
                   <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-white"></div>
                 </div>
-                <h3 className="text-2xl font-semibold text-gray-900 mb-4">Processing Assessment</h3>
-                <p className="text-gray-600 text-lg">Submitting your assessment data to the backend system...</p>
+                <h3 className="text-2xl font-semibold text-gray-900 mb-4">{t('assessment.processingAssessment')}</h3>
+                <p className="text-gray-600 text-lg">{t('assessment.submittingData')}</p>
                 <div className="mt-8">
                   <div className="w-full bg-gray-200 rounded-full h-2">
                     <div className="bg-blue-600 h-2 rounded-full animate-pulse" style={{width: '75%'}}></div>
                   </div>
-                  <p className="text-sm text-gray-500 mt-3">Almost done...</p>
+                  <p className="text-sm text-gray-500 mt-3">{t('assessment.almostDone')}</p>
                 </div>
               </CardContent>
             </Card>
           </div>
         ) : isUnifiedDomain ? (
-          // Use UnifiedDomainSelector for the three assessment types
           <UnifiedDomainSelector
             assessmentType={domain as 'sustainability' | 'resilience' | 'human_centricity'}
             assessmentInfo={assessment}
             onComplete={(finalSubmission: any) => {
-              // Handle the submission from UnifiedDomainSelector
               const payload = finalSubmission?.form_data ?? finalSubmission
               handleFormSubmit(payload)
             }}
           />
         ) : (
-          // Use PaginatedForm for traditional assessment types (SLCA, LCC, ELCA)
           <div className="max-w-4xl mx-auto">
             <Card className={`border-2 ${info.borderColor} shadow-xl bg-white`}>
               <CardHeader className={`bg-gradient-to-r ${info.bgColor} border-b border-gray-200`}>
                 <CardTitle className="flex items-center gap-4 text-2xl text-gray-900">
                   <div className={`p-4 rounded-xl bg-gradient-to-br ${info.gradient} shadow-lg`}>
-                    <span className="text-2xl"><info.icon /></span>
+                    {typeof info.icon === 'string' ? (
+                      <span className="text-2xl">{info.icon}</span>
+                    ) : (
+                      <info.icon className="w-8 h-8 text-white" />
+                    )}
                   </div>
                   <div>
-                    <div className="text-2xl font-bold">{info.title}</div>
+                    <div className="text-2xl font-bold">{getDomainTitle()}</div>
                     <div className="text-sm font-normal text-gray-600 mt-1">
-                      Complete this comprehensive assessment
+                      {t('assessment.comprehensiveAssessment')}
                     </div>
                   </div>
                 </CardTitle>
                 <CardDescription className="text-base mt-4">
-                  Evaluate your digital twin system across {info.description} parameters with detailed analysis and recommendations.
+                  {t('assessment.evaluateSystem')} {info.description} {t('assessment.parameters')}
                 </CardDescription>
               </CardHeader>
               <CardContent className="p-8">
@@ -438,7 +457,7 @@ const Assessment = () => {
           </div>
         )}
 
-        {/* Success State - Show Results if Available */}
+        {/* Success State */}
         {isCompleted && (
           <div className="max-w-4xl mx-auto mt-8">
             <Card className="border-2 border-green-200 shadow-2xl bg-white overflow-hidden">
@@ -448,9 +467,9 @@ const Assessment = () => {
                     <CheckCircle className="w-8 h-8 text-white" />
                   </div>
                   <div>
-                    <h2 className="text-3xl font-bold mb-2">Assessment Completed!</h2>
+                    <h2 className="text-3xl font-bold mb-2">{t('assessment.completed')}</h2>
                     <p className="text-green-100 text-lg">
-                      Your {info.title.toLowerCase()} has been successfully processed
+                      {getDomainTitle()} {t('assessment.successfullyProcessed')}
                     </p>
                   </div>
                 </div>
@@ -458,15 +477,18 @@ const Assessment = () => {
               
               <CardContent className="p-8">
                 <div className="space-y-6">
-                  {/* Assessment Summary */}
                   <div className="bg-gradient-to-r from-green-50 to-emerald-50 p-6 rounded-2xl border border-green-200">
                     <div className="flex items-center justify-between">
                       <div className="flex items-center gap-4">
                         <div className="w-12 h-12 bg-gradient-to-br from-green-500 to-emerald-600 rounded-xl flex items-center justify-center">
-                          <span className="text-xl"><info.icon /></span>
+                          {typeof info.icon === 'string' ? (
+                            <span className="text-xl">{info.icon}</span>
+                          ) : (
+                            <info.icon className="w-6 h-6 text-white" />
+                          )}
                         </div>
                         <div>
-                          <p className="font-bold text-gray-900 text-lg">{info.title}</p>
+                          <p className="font-bold text-gray-900 text-lg">{getDomainTitle()}</p>
                           <p className="text-sm text-gray-600 font-mono bg-white px-3 py-1 rounded-lg border border-gray-200 mt-2">
                             ID: {assessment.assessment_id}
                           </p>
@@ -483,7 +505,6 @@ const Assessment = () => {
                     </div>
                   </div>
                   
-                  {/* Action Buttons */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <Button
                       onClick={() => navigate('/dashboard')}
@@ -492,8 +513,8 @@ const Assessment = () => {
                     >
                       <Activity className="w-6 h-6" />
                       <div className="text-left">
-                        <div className="font-bold">View Dashboard</div>
-                        <div className="text-xs opacity-90">Analyze results</div>
+                        <div className="font-bold">{t('assessment.viewDashboard')}</div>
+                        <div className="text-xs opacity-90">{t('assessment.analyzResults')}</div>
                       </div>
                     </Button>
                     
@@ -505,16 +526,15 @@ const Assessment = () => {
                     >
                       <ArrowLeft className="w-6 h-6" />
                       <div className="text-left">
-                        <div className="font-bold">Back to Domains</div>
-                        <div className="text-xs opacity-70">Start new assessment</div>
+                        <div className="font-bold">{t('assessment.backToDomains')}</div>
+                        <div className="text-xs opacity-70">{t('assessment.startNew')}</div>
                       </div>
                     </Button>
                   </div>
-
-                  {/* Additional Actions */}
+                  
                   <div className="pt-4 border-t border-gray-200">
                     <p className="text-center text-sm text-gray-500 mb-4">
-                      Next steps: Review your results in the dashboard or start a new assessment for comprehensive analysis
+                      {t('assessment.nextSteps')}
                     </p>
                   </div>
                 </div>

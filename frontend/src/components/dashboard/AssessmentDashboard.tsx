@@ -9,6 +9,7 @@ import { useAssessment } from '@/hooks/useAssessment'
 import { useAuth } from '@/auth'
 import { useToast } from '@/hooks/use-toast'
 import { assessmentKeys } from '@/services/assessmentApi'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 import { RadarScoreChart } from './RadarScoreChart'
 import { HumanCentricityPanel } from './panels/HumanCentricityPanel'
@@ -81,25 +82,25 @@ interface PendingUpdate {
 // Updated module structure with icons
 const MODULES = {
   human_centricity: {
-    name: 'Human Centricity',
+    name: 'module.humanCentricity',
     domains: ['human_centricity'],
     icon: Brain,
     color: 'blue',
-    description: 'User experience and accessibility metrics'
+    description: 'module.userExperience'
   },
   resilience: {
-    name: 'Resilience',
+    name: 'module.resilience',
     domains: ['resilience'],
     icon: Shield,
     color: 'purple',
-    description: 'System reliability and fault tolerance'
+    description: 'module.systemReliability'
   },
   sustainability: {
-    name: 'Sustainability',
+    name: 'module.sustainability',
     domains: ['sustainability'],
     icon: Sparkles,
     color: 'green',
-    description: 'Triple-bottom-line lifecycle impacts'
+    description: 'module.lifecycleImpacts'
   }
 }
 
@@ -115,6 +116,7 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
   } = useAssessment()
   const { token, isAuthenticated } = useAuth()
   const { toast } = useToast()
+  const { t } = useLanguage()
   
   const [selectedModule, setSelectedModule] = useState<string | null>(null)
   const [localAssessmentData, setLocalAssessmentData] = useState<AssessmentData | null>(null)
@@ -260,8 +262,10 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
           
           if (rolledBack) {
             toast({
-              title: "Processing Error",
-              description: `Failed to process ${domain.replace('_', ' ')}: ${latestMessage.error_message}. Changes have been rolled back.`,
+              title: t('dashboard.processingError'),
+              description: t('dashboard.processingErrorDesc')
+                .replace('{domain}', domain.replace('_', ' '))
+                .replace('{error}', latestMessage.error_message),
               variant: "destructive",
             })
             
@@ -278,8 +282,8 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
         } else {
           // General error not related to a specific update
           toast({
-            title: "Assessment Error",
-            description: latestMessage.error_message || "An error occurred during assessment processing",
+            title: t('error.error'),
+            description: latestMessage.error_message || t('dashboard.unexpectedError'),
             variant: "destructive",
           })
         }
@@ -293,8 +297,8 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
       } else {
         // Error without domain context
         toast({
-          title: "System Error",
-          description: latestMessage.error_message || "An unexpected error occurred",
+          title: t('dashboard.systemError'),
+          description: latestMessage.error_message || t('dashboard.unexpectedError'),
           variant: "destructive",
         })
       }
@@ -403,8 +407,8 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
           
           // Show success toast
           toast({
-            title: "Domain Processed",
-            description: `${domain.replace('_', ' ')} has been successfully evaluated`,
+            title: t('dashboard.domainProcessed'),
+            description: t('dashboard.domainProcessedDesc').replace('{domain}', domain.replace('_', ' ')),
           })
         }, 2000) // Wait 2 seconds for potential error
         
@@ -469,8 +473,8 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
       
       // Show completion toast
       toast({
-        title: "Assessment Complete",
-        description: `All domains have been evaluated. Overall score: ${latestMessage.overall_score?.toFixed(1) || 'N/A'}`,
+        title: t('dashboard.assessmentComplete'),
+        description: t('dashboard.assessmentCompleteDesc').replace('{score}', latestMessage.overall_score?.toFixed(1) || 'N/A'),
       })
       
       // Refetch to ensure we have the latest data
@@ -486,7 +490,8 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
     isActiveAssessment, 
     toast, 
     pendingUpdates,
-    refetch
+    refetch,
+    t
   ])
 
   // Show loading state
@@ -497,8 +502,8 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
           <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mx-auto mb-6 flex items-center justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
           </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">Loading Assessment</h3>
-          <p className="text-gray-600">Fetching assessment data for {assessmentId.slice(0, 8)}...</p>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">{t('dashboard.loadingDashboard')}</h3>
+          <p className="text-gray-600">{t('dashboard.fetchingData')}</p>
         </div>
       </div>
     )
@@ -512,9 +517,9 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
           <div className="w-16 h-16 bg-gradient-to-br from-red-500 to-orange-600 rounded-2xl mx-auto mb-6 flex items-center justify-center">
             <AlertCircle className="w-8 h-8 text-white" />
           </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">Failed to Load Assessment</h3>
-          <p className="text-gray-600 mb-4">Could not load data for assessment {assessmentId.slice(0, 8)}</p>
-          <Button onClick={() => refetch()}>Retry</Button>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">{t('dashboard.assessmentNotFound')}</h3>
+          <p className="text-gray-600 mb-4">{t('dashboard.couldNotLoad')}</p>
+          <Button onClick={() => refetch()}>{t('common.tryAgain')}</Button>
         </div>
       </div>
     )
@@ -563,7 +568,7 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
               <div className="flex items-center gap-3 text-amber-800">
                 <AlertCircle className="w-5 h-5" />
                 <span className="font-medium">
-                  Viewing historical assessment
+                  {t('dashboard.historicalAssessment')}
                 </span>
               </div>
             </CardContent>
@@ -580,13 +585,13 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
                     connectionStatus.isConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
                   }`} />
                   <span className="text-sm text-muted-foreground">
-                    {connectionStatus.isConnected ? 'Live updates active' : 'Disconnected'}
+                    {connectionStatus.isConnected ? t('dashboard.liveUpdatesActive') : t('dashboard.disconnected')}
                   </span>
                 </div>
                 {pendingUpdates.size > 0 && (
                   <Badge variant="secondary" className="gap-1">
                     <Clock className="w-3 h-3" />
-                    {pendingUpdates.size} pending
+                    {pendingUpdates.size} {t('dashboard.pending')}
                   </Badge>
                 )}
               </div>
@@ -611,9 +616,9 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
                 <Activity className="w-6 h-6 text-primary" />
               </div>
               <div>
-                <span>Assessment Modules</span>
+                <span>{t('dashboard.assessmentModules')}</span>
                 <p className="text-sm text-muted-foreground font-normal mt-1">
-                  Detailed breakdown by evaluation domains
+                  {t('dashboard.detailedBreakdown')}
                 </p>
               </div>
             </CardTitle>
@@ -660,12 +665,12 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
                           <div>
                             <div className="flex items-center gap-2">
                               <h3 className="text-lg font-semibold text-foreground">
-                                {module.name}
+                                {t(module.name)}
                               </h3>
                               {isProcessing && (
                                 <Badge variant="secondary" className="gap-1 text-xs">
                                   <Clock className="w-3 h-3 animate-spin" />
-                                  Processing
+                                  {t('dashboard.processing')}
                                 </Badge>
                               )}
                               {status.completed === status.total && !isProcessing && (
@@ -673,7 +678,7 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
                               )}
                             </div>
                             <p className="text-sm text-muted-foreground mt-1">
-                              {module.description}
+                              {t(module.description)}
                             </p>
                           </div>
                         </div>
@@ -695,7 +700,7 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
                         {score !== undefined && (
                           <div className="pt-4 border-t border-border/30">
                             <div className="flex items-center justify-between">
-                              <span className="text-sm font-medium text-muted-foreground">Score</span>
+                              <span className="text-sm font-medium text-muted-foreground">{t('module.score')}</span>
                               <div className="flex items-center gap-3">
                                 <div className={`p-1.5 rounded-lg ${
                                   score >= 80 ? 'bg-green-100 text-green-600' :

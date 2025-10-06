@@ -9,11 +9,13 @@ import { useAssessment } from '@/hooks/useAssessment'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useToast } from '@/hooks/use-toast'
 import { Assessment } from '@/services/assessmentApi'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 export default function Dashboard() {
   const navigate = useNavigate()
   const location = useLocation()
   const { toast } = useToast()
+  const { t } = useLanguage()
   const { 
     currentAssessment, 
     isLoading, 
@@ -48,10 +50,10 @@ export default function Dashboard() {
         setLastRefreshTime(Date.now())
         
         toast({
-          title: "Assessment Updated",
+          title: t('assessments.dataRefreshed'),
           description: latestMessage.domain 
-            ? `${latestMessage.domain} domain updated` 
-            : "Assessment data updated",
+            ? `${latestMessage.domain} ${t('common.updated')}` 
+            : t('assessments.dataUpdated'),
           duration: 3000,
         })
         break
@@ -63,7 +65,7 @@ export default function Dashboard() {
       default:
         console.log('Dashboard: Unhandled message type:', latestMessage.type)
     }
-  }, [messages, refreshAssessmentData, toast])
+  }, [messages, refreshAssessmentData, toast, t])
 
   // Auto-refresh assessment data periodically (as backup to WebSocket)
   useEffect(() => {
@@ -91,7 +93,6 @@ export default function Dashboard() {
     const switchToId = urlParams.get('switchTo')
     
     if (switchToId && currentAssessment?.assessment_id !== switchToId) {
-      // This will be handled by the parent component or routing logic
       console.log('Dashboard: URL indicates switch to assessment:', switchToId)
     }
   }, [location.search, currentAssessment])
@@ -102,7 +103,6 @@ export default function Dashboard() {
       setIsCreating(true)
       setCreateError(null)
       
-      // Clear current assessment and redirect to create page
       clearAssessment()
       navigate('/assessment')
       
@@ -119,33 +119,27 @@ export default function Dashboard() {
     try {
       setIsSwitching(true)
       
-      // If it's the same assessment, just close the list
       if (currentAssessment?.assessment_id === assessment.assessment_id) {
         setShowAssessmentsList(false)
         return
       }
 
-      // Show immediate feedback
       toast({
-        title: "Switching Assessment",
-        description: `Loading assessment ${assessment.assessment_id.slice(0, 8)}...`,
+        title: t('assessments.switchingAssessment'),
+        description: `${t('assessments.loadingAssessment')} ${assessment.assessment_id.slice(0, 8)}...`,
         duration: 2000,
       })
 
-      // The actual switching logic should be handled by the useAssessment hook
-      // For now, we'll refresh the data and show success
       await refreshAssessmentData(assessment.assessment_id)
       
       toast({
-        title: "Assessment Switched",
-        description: `Now viewing assessment ${assessment.assessment_id.slice(0, 8)}`,
+        title: t('assessments.assessmentSwitched'),
+        description: `${t('assessments.nowViewing')} ${assessment.assessment_id.slice(0, 8)}`,
         duration: 4000,
       })
 
-      // Hide the assessments list
       setShowAssessmentsList(false)
 
-      // Update URL without page reload
       const newUrl = new URL(window.location.href)
       newUrl.searchParams.delete('switchTo')
       window.history.replaceState({}, '', newUrl.toString())
@@ -153,8 +147,8 @@ export default function Dashboard() {
     } catch (error) {
       console.error('Failed to switch assessment:', error)
       toast({
-        title: "Switch Failed",
-        description: error instanceof Error ? error.message : "Could not switch to selected assessment",
+        title: t('assessments.switchFailed'),
+        description: error instanceof Error ? error.message : t('assessments.couldNotSwitch'),
         variant: "destructive",
         duration: 5000,
       })
@@ -170,14 +164,14 @@ export default function Dashboard() {
     try {
       await refreshAssessmentData()
       toast({
-        title: "Data Refreshed",
-        description: "Assessment data has been updated",
+        title: t('assessments.dataRefreshed'),
+        description: t('assessments.dataUpdated'),
         duration: 2000,
       })
     } catch (error) {
       toast({
-        title: "Refresh Failed", 
-        description: "Could not refresh assessment data",
+        title: t('assessments.refreshFailed'), 
+        description: t('assessments.couldNotRefresh'),
         variant: "destructive",
         duration: 3000,
       })
@@ -192,14 +186,14 @@ export default function Dashboard() {
           <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mx-auto mb-6 flex items-center justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
           </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">Loading Dashboard</h3>
-          <p className="text-gray-600">Fetching your assessment data...</p>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">{t('dashboard.loadingDashboard')}</h3>
+          <p className="text-gray-600">{t('dashboard.fetchingData')}</p>
         </div>
       </div>
     )
   }
 
-  // Show assessments list view. Also render the list when there is no current assessment
+  // Show assessments list view
   if (showAssessmentsList || !currentAssessment) {
     return (
       <div className="min-h-screen bg-white">
@@ -220,7 +214,7 @@ export default function Dashboard() {
                   <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-blue-600 rounded-lg flex items-center justify-center">
                     <List className="w-5 h-5 text-white" />
                   </div>
-                  <span className="text-l font-bold text-gray-900">Assessments List</span>
+                  <span className="text-l font-bold text-gray-900">{t('assessments.title')}</span>
                 </div>
               </div>
               <div className="flex items-center gap-2">
@@ -231,7 +225,7 @@ export default function Dashboard() {
                     onClick={() => setShowAssessmentsList(false)}
                   >
                     <Eye className="w-4 h-4 mr-2" />
-                    View Current Dashboard
+                    {t('dashboard.detailedView')}
                   </Button>
                 )}
                 <Button
@@ -242,7 +236,7 @@ export default function Dashboard() {
                   className="bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700"
                 >
                   <Plus className="w-4 h-4 mr-2" />
-                  {isCreating ? 'Creating...' : 'New Assessment'}
+                  {isCreating ? t('createAssessment.creating') : t('dashboard.newAssessment')}
                 </Button>
               </div>
             </div>
@@ -253,7 +247,7 @@ export default function Dashboard() {
           {createError && (
             <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
               <p className="text-red-600 text-sm">
-                {createError.message || 'Failed to create assessment'}
+                {createError.message || t('notification.error.createFailed')}
               </p>
             </div>
           )}
@@ -288,16 +282,15 @@ export default function Dashboard() {
                   <BarChart3 className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-l font-bold text-gray-900">Dashboard</span>
+                  <span className="text-l font-bold text-gray-900">{t('dashboard.title')}</span>
                   <span className="text-xs text-gray-500">
-                    Assessment: {currentAssessment.assessment_id.slice(0, 8)}...
+                    {t('assessment.create')}: {currentAssessment.assessment_id.slice(0, 8)}...
                   </span>
                 </div>
               </div>
             </div>
             
             <div className="flex items-center gap-2">
-
               {/* Switch/Browse Assessments Button */}
               <Button
                 variant="outline" 
@@ -307,7 +300,7 @@ export default function Dashboard() {
                 className="flex items-center gap-2"
               >
                 <List className="w-4 h-4" />
-                {isSwitching ? 'Switching...' : 'Switch Assessment'}
+                {isSwitching ? t('dashboard.switching') : t('assessments.selectAssessment')}
               </Button>
             </div>
           </div>
@@ -317,7 +310,7 @@ export default function Dashboard() {
       {/* Dashboard Content */}
       <AssessmentDashboard 
         assessmentId={currentAssessment.assessment_id} 
-        key={currentAssessment.assessment_id} // Force re-render on assessment change
+        key={currentAssessment.assessment_id}
       />
     </div>
   )

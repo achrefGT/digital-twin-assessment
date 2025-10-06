@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { Button } from '@/components/ui/button';
 import { UserRole } from '@/auth/auth.types';
 import { 
@@ -33,6 +34,7 @@ export const UserNavigation: React.FC<UserNavigationProps> = ({ className = '' }
   const { user, isAuthenticated, logout, isLoading } = useAuth();
   const navigate = useNavigate();
   const [isLoggingOut, setIsLoggingOut] = useState(false);
+  const { t } = useLanguage();
 
   const isAdminish = (role: string | undefined) => ['admin', 'super_admin'].includes(role ?? '');
 
@@ -98,7 +100,7 @@ export const UserNavigation: React.FC<UserNavigationProps> = ({ className = '' }
           className="rounded-xl border-gray-300 text-gray-700 hover:bg-gray-100 hover:text-gray-900 shadow-sm transition-all"
         >
           <LogIn className="w-4 h-4 mr-2" />
-          Sign In
+          {t('auth.signIn')}
         </Button>
       </div>
     );
@@ -163,7 +165,7 @@ export const UserNavigation: React.FC<UserNavigationProps> = ({ className = '' }
 
           <DropdownMenuItem onClick={() => navigate('/profile')} className="cursor-pointer rounded-lg px-3 py-2 hover:bg-gray-100">
             <User className="w-4 h-4 mr-3 text-gray-600" />
-            View Profile
+            {t('profile.title')}
           </DropdownMenuItem>
 
           {isAdminish(user.role) && (
@@ -171,7 +173,7 @@ export const UserNavigation: React.FC<UserNavigationProps> = ({ className = '' }
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => navigate('/admin')} className="cursor-pointer rounded-lg px-3 py-2 hover:bg-gray-100">
                 <Crown className="w-4 h-4 mr-3 text-gray-600" />
-                Admin Panel
+                {t('admin.dashboard')}
               </DropdownMenuItem>
             </>
           )}
@@ -187,12 +189,12 @@ export const UserNavigation: React.FC<UserNavigationProps> = ({ className = '' }
             {isLoggingOut ? (
               <>
                 <div className="w-4 h-4 mr-3 animate-spin rounded-full border-2 border-red-600 border-t-transparent" />
-                Signing out...
+                {t('auth.logout')}...
               </>
             ) : (
               <>
                 <LogOut className="w-4 h-4 mr-3" />
-                Sign Out
+                {t('auth.logout')}
               </>
             )}
           </DropdownMenuItem>

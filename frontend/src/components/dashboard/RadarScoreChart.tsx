@@ -2,10 +2,9 @@ import React from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
-import { Button } from '@/components/ui/button'
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer } from 'recharts'
-import { Brain, Shield, Sparkles, Target, TrendingUp, Award, Trophy, Star, CheckCircle, Clock, ArrowRight } from 'lucide-react'
-import { useNavigate } from 'react-router-dom'
+import { Brain, Shield, Sparkles, Target, TrendingUp, Award, Trophy, Star, CheckCircle, Clock } from 'lucide-react'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 interface RadarScoreChartProps {
   domainScores?: Record<string, number>
@@ -21,6 +20,8 @@ const CircularProgress: React.FC<{
   strokeWidth?: number
   className?: string
 }> = ({ value, size = 140, strokeWidth = 10, className = "" }) => {
+  const { t } = useLanguage()
+  
   const safeValue = value ?? 0
   const percentage = Math.max(0, Math.min(100, safeValue))
   
@@ -30,11 +31,11 @@ const CircularProgress: React.FC<{
   const strokeDashoffset = circumference - (percentage / 100) * circumference
 
   const getColor = (score: number) => {
-    if (score >= 85) return '#10b981' // emerald-500
-    if (score >= 75) return '#84cc16' // lime-500
-    if (score >= 65) return '#eab308' // yellow-500
-    if (score >= 50) return '#f97316' // orange-500
-    return '#ef4444' // red-500
+    if (score >= 85) return '#10b981'
+    if (score >= 75) return '#84cc16'
+    if (score >= 65) return '#eab308'
+    if (score >= 50) return '#f97316'
+    return '#ef4444'
   }
 
   const strokeColor = getColor(percentage)
@@ -42,7 +43,6 @@ const CircularProgress: React.FC<{
   return (
     <div className={`relative inline-flex items-center justify-center ${className}`}>
       <svg width={size} height={size} className="rotate-[-90deg]">
-        {/* Background circle */}
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -52,7 +52,6 @@ const CircularProgress: React.FC<{
           strokeWidth={strokeWidth}
           className="text-muted stroke-current opacity-10"
         />
-        {/* Progress circle */}
         <circle
           cx={size / 2}
           cy={size / 2}
@@ -66,13 +65,12 @@ const CircularProgress: React.FC<{
           className="transition-all duration-1000 ease-out drop-shadow-sm"
         />
       </svg>
-      {/* Center content */}
       <div className="absolute inset-0 flex items-center justify-center flex-col">
         <div className="text-4xl font-bold text-foreground mb-1">
           {value !== null && value !== undefined ? value.toFixed(1) : '--'}
         </div>
         <div className="text-sm text-muted-foreground uppercase tracking-wide">
-          Overall Score
+          {t('dashboard.overallScore')}
         </div>
       </div>
     </div>
@@ -86,36 +84,34 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
   completionPercentage = 0,
   totalDomains = 3
 }) => {
-  const navigate = useNavigate()
+  const { t } = useLanguage()
 
-  // Transform domain scores into radar chart data
   const radarData = React.useMemo(() => {
     const domains = [
-      { key: 'human_centricity', name: 'Human Centricity', shortName: 'Human Centricity', icon: Brain, color: '#3b82f6', path: '/assessment/human_centricity' },
-      { key: 'resilience', name: 'Resilience', shortName: 'Resilience', icon: Shield, color: '#8b5cf6', path: '/assessment/resilience' },
-      { key: 'sustainability', name: 'Sustainability', shortName: 'Sustainability', icon: Sparkles, color: '#10b981', path: '/assessment/sustainability' }
+      { key: 'human_centricity', name: t('module.humanCentricity'), shortName: t('module.humanCentricity'), icon: Brain, color: '#3b82f6' },
+      { key: 'resilience', name: t('module.resilience'), shortName: t('module.resilience'), icon: Shield, color: '#8b5cf6' },
+      { key: 'sustainability', name: t('module.sustainability'), shortName: t('module.sustainability'), icon: Sparkles, color: '#10b981' }
     ]
 
     return domains.map(domain => ({
       domain: domain.shortName,
       fullName: domain.name,
-      score: domainScores?.[domain.key] ?? null,  
+      score: domainScores?.[domain.key] || 0,
       fullMark: 100,
       color: domain.color,
       icon: domain.icon,
-      isCompleted: completedDomains.includes(domain.key),
-      assessmentPath: domain.path
+      isCompleted: completedDomains.includes(domain.key)
     }))
-  }, [domainScores, completedDomains])
+  }, [domainScores, completedDomains, t])
 
-  const getScoreRating = (score?: number | null) => {
-    if (score === null || score === undefined) return { text: 'Not Assessed', color: 'text-slate-500', bgColor: 'bg-slate-100', iconColor: 'text-slate-400', icon: Clock }
-    if (score >= 90) return { text: 'Excellent', color: 'text-emerald-600', bgColor: 'bg-emerald-50', iconColor: 'text-emerald-500', icon: Trophy }
-    if (score >= 80) return { text: 'Very Good', color: 'text-green-600', bgColor: 'bg-green-50', iconColor: 'text-green-500', icon: Star }
-    if (score >= 70) return { text: 'Good', color: 'text-lime-600', bgColor: 'bg-lime-50', iconColor: 'text-lime-500', icon: CheckCircle }
-    if (score >= 60) return { text: 'Satisfactory', color: 'text-yellow-600', bgColor: 'bg-yellow-50', iconColor: 'text-yellow-500', icon: TrendingUp }
-    if (score >= 50) return { text: 'Fair', color: 'text-orange-600', bgColor: 'bg-orange-50', iconColor: 'text-orange-500', icon: TrendingUp }
-    return { text: 'Poor', color: 'text-red-600', bgColor: 'bg-red-50', iconColor: 'text-red-500', icon: TrendingUp }
+  const getScoreRating = (score?: number) => {
+    if (!score || score === 0) return { text: t('dashboard.notAssessed'), color: 'text-slate-500', bgColor: 'bg-slate-100', iconColor: 'text-slate-400', icon: Clock }
+    if (score >= 90) return { text: t('module.excellent'), color: 'text-emerald-600', bgColor: 'bg-emerald-50', iconColor: 'text-emerald-500', icon: Trophy }
+    if (score >= 80) return { text: t('module.veryGood'), color: 'text-green-600', bgColor: 'bg-green-50', iconColor: 'text-green-500', icon: Star }
+    if (score >= 70) return { text: t('module.good'), color: 'text-lime-600', bgColor: 'bg-lime-50', iconColor: 'text-lime-500', icon: CheckCircle }
+    if (score >= 60) return { text: t('module.satisfactory'), color: 'text-yellow-600', bgColor: 'bg-yellow-50', iconColor: 'text-yellow-500', icon: TrendingUp }
+    if (score >= 50) return { text: t('module.fair'), color: 'text-orange-600', bgColor: 'bg-orange-50', iconColor: 'text-orange-500', icon: TrendingUp }
+    return { text: t('module.poor'), color: 'text-red-600', bgColor: 'bg-red-50', iconColor: 'text-red-500', icon: TrendingUp }
   }
 
   const overallRating = getScoreRating(overallScore)
@@ -124,10 +120,8 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
 
   return (
     <div className="space-y-8">
-      {/* Main Chart and Score Container */}
       <div className="grid grid-cols-1 xl:grid-cols-3 gap-8">
         
-        {/* Radar Chart Section */}
         <div className="xl:col-span-2">
           <Card className="border-0 shadow-lg bg-gradient-to-br from-background via-background to-muted/20 h-full flex flex-col">
             <CardHeader className="bg-gradient-to-r from-primary/5 to-transparent border-b border-border/50">
@@ -136,11 +130,9 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
                   <TrendingUp className="w-6 h-6 text-primary" />
                 </div>
                 <div>
-                  <span >
-                    Performance Overview
-                  </span>
+                  <span>{t('dashboard.performanceOverview')}</span>
                   <p className="text-sm text-muted-foreground font-normal mt-1">
-                    Multi-dimensional assessment across key domains
+                    {t('dashboard.multiDimensionalAssessment')}
                   </p>
                 </div>
               </CardTitle>
@@ -171,12 +163,14 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
                       dataKey="domain"
                       tick={({ x, y, payload }) => {
                         const getLabelAdjustment = (label: string) => {
-                          switch (label) {
-                            case 'Human Centricity': return -12;
-                            case 'Sustainability': return 28;
-                            case 'Resilience': return 28;  
-                            default: return 0;
-                          }
+                          const hcLabels = [t('module.humanCentricity'), 'Human Centricity'];
+                          const susLabels = [t('module.sustainability'), 'Sustainability'];
+                          const resLabels = [t('module.resilience'), 'Resilience'];
+                          
+                          if (hcLabels.includes(label)) return -12;
+                          if (susLabels.includes(label)) return 28;
+                          if (resLabels.includes(label)) return 28;
+                          return 0;
                         };
 
                         const adjustedY = y + getLabelAdjustment(payload.value);
@@ -214,7 +208,7 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
                     />
 
                     <Radar
-                      name="Score"
+                      name={t('module.score')}
                       dataKey="score"
                       stroke="#3b82f6"
                       fill="url(#radarGradient)"
@@ -234,81 +228,72 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
           </Card>
         </div>
 
-        {/* Overall Score Section */}
         <div className="xl:col-span-1">
-          <div className="sticky top-8 space-y-6">
-            
-            {/* Main Score Card */}
-            <Card className="border-0 shadow-lg bg-gradient-to-br from-primary/5 via-background to-secondary/5">
-              <CardHeader className="text-center pb-4">
-                <CardTitle className="flex items-center justify-center gap-2 text-lg">
-                  <Target className="w-6 h-6 text-primary" />
-                  Assessment Score
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="text-center space-y-6">
-                
-                {/* Circular Progress */}
-                <CircularProgress 
-                  value={overallScore} 
-                  size={220} 
-                  strokeWidth={14}
-                />
-                {/* Score Rating */}
-                {overallScore && (
-                  <div className="space-y-3">
-                    <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${overallRating.bgColor}`}>
-                      <OverallRatingIcon className={`w-5 h-5 ${overallRating.iconColor}`} />
-                      <span className={`font-semibold text-sm ${overallRating.color}`}>
-                        {overallRating.text}
-                      </span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      Assessment Quality Rating
-                    </p>
-                  </div>
-                )}
-
-                {/* Completion Progress */}
-                <div className="space-y-3 pt-4 border-t border-border/50">
-                  <div className="flex justify-between items-center">
-                    <span className="text-sm font-medium text-muted-foreground">
-                      Progress
+          <Card className="border-0 shadow-lg bg-gradient-to-br from-primary/5 via-background to-secondary/5 h-full flex flex-col">
+            <CardHeader className="text-center pb-4">
+              <CardTitle className="flex items-center justify-center gap-2 text-lg">
+                <Target className="w-6 h-6 text-primary" />
+                {t('module.overallAssessmentScore')}
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="text-center space-y-6 flex-1 flex flex-col justify-center">
+              
+              <CircularProgress 
+                value={overallScore} 
+                size={220} 
+                strokeWidth={14}
+              />
+              
+              {overallScore && (
+                <div className="space-y-3">
+                  <div className={`inline-flex items-center gap-2 px-4 py-2 rounded-full ${overallRating.bgColor}`}>
+                    <OverallRatingIcon className={`w-5 h-5 ${overallRating.iconColor}`} />
+                    <span className={`font-semibold text-sm ${overallRating.color}`}>
+                      {overallRating.text}
                     </span>
-                    <Badge variant="outline" className="text-xs bg-primary/5">
-                      {completedDomains_}/{totalDomains} domains
-                    </Badge>
                   </div>
-                  <Progress 
-                    value={completionPercentage} 
-                    className="h-2.5"
-                  />
                   <p className="text-xs text-muted-foreground">
-                    {completionPercentage.toFixed(0)}% Complete
+                    {t('module.assessmentQuality')}
                   </p>
                 </div>
+              )}
 
-                {/* Status Indicator */}
-                <div className="flex items-center justify-center gap-2 pt-2">
-                  {completionPercentage === 100 ? (
-                    <>
-                      <CheckCircle className="w-4 h-4 text-green-600" />
-                      <span className="text-sm font-medium text-green-600">Complete</span>
-                    </>
-                  ) : (
-                    <>
-                      <Clock className="w-4 h-4 text-blue-600 animate-pulse" />
-                      <span className="text-sm font-medium text-blue-600">In Progress</span>
-                    </>
-                  )}
+              <div className="space-y-3 pt-4 border-t border-border/50">
+                <div className="flex justify-between items-center">
+                  <span className="text-sm font-medium text-muted-foreground">
+                    {t('assessments.progress')}
+                  </span>
+                  <Badge variant="outline" className="text-xs bg-primary/5">
+                    {completedDomains_}/{totalDomains} {t('assessments.domains').toLowerCase()}
+                  </Badge>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+                <Progress 
+                  value={completionPercentage} 
+                  className="h-2.5"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {completionPercentage.toFixed(0)}% {t('module.complete')}
+                </p>
+              </div>
+
+              <div className="flex items-center justify-center gap-2 pt-2 mt-auto">
+                {completionPercentage === 100 ? (
+                  <>
+                    <CheckCircle className="w-4 h-4 text-green-600" />
+                    <span className="text-sm font-medium text-green-600">{t('module.complete')}</span>
+                  </>
+                ) : (
+                  <>
+                    <Clock className="w-4 h-4 text-blue-600 animate-pulse" />
+                    <span className="text-sm font-medium text-blue-600">{t('assessments.inProgress')}</span>
+                  </>
+                )}
+              </div>
+            </CardContent>
+          </Card>
         </div>
       </div>
 
-      {/* Domain Scores Grid */}
       <Card className="border-0 shadow-lg">
         <CardHeader>
           <CardTitle className="flex items-center gap-3">
@@ -316,9 +301,9 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
               <Award className="w-5 h-5 text-primary" />
             </div>
             <div>
-              <span>Domain Performance</span>
+              <span>{t('dashboard.domainPerformance')}</span>
               <p className="text-sm text-muted-foreground font-normal mt-1">
-                Individual scores across assessment domains
+                {t('dashboard.individualScores')}
               </p>
             </div>
           </CardTitle>
@@ -329,23 +314,18 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
               const rating = getScoreRating(item.score)
               const IconComponent = item.icon
               const RatingIcon = rating.icon
-              const isNotAssessed = item.score === null || item.score === undefined
               
               return (
                 <div 
                   key={index}
                   className="group relative overflow-hidden rounded-xl border border-border/50 bg-gradient-to-br from-background via-background to-muted/30 p-6 transition-all duration-300 hover:shadow-lg hover:scale-[1.02]"
                 >
-                  {/* Background Gradient Overlay */}
                   <div 
                     className="absolute inset-0 opacity-5 transition-opacity group-hover:opacity-10"
                     style={{ background: `linear-gradient(135deg, ${item.color}20, ${item.color}05)` }}
                   />
                   
-                  {/* Content */}
                   <div className="relative space-y-4">
-                    
-                    {/* Header */}
                     <div className="flex items-start justify-between">
                       <div className="flex items-center gap-3">
                         <div 
@@ -359,33 +339,32 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
                             {item.fullName}
                           </h3>
                           <p className="text-xs text-muted-foreground mt-1">
-                            Domain Assessment
+                            {t('domain.explore')}
                           </p>
                         </div>
                       </div>
                       
                       {item.isCompleted && (
                         <Badge className="bg-green-50 text-green-700 border-green-200 text-xs">
-                          ✓ Complete
+                          ✓ {t('module.complete')}
                         </Badge>
                       )}
                     </div>
 
-                    {/* Score Display */}
                     <div className="flex items-center justify-between">
                       <div className="flex items-baseline gap-2">
                         <span 
                           className="text-3xl font-bold"
                           style={{ color: item.color }}
                         >
-                          {item.score !== null ? item.score.toFixed(1) : '--'}
+                          {item.score > 0 ? item.score.toFixed(1) : '--'}
                         </span>
                         <span className="text-sm text-muted-foreground font-medium">
                           /100
                         </span>
                       </div>
                       
-                      {!isNotAssessed && (
+                      {item.score > 0 && (
                         <div className={`flex items-center gap-2 px-3 py-1.5 rounded-lg ${rating.bgColor}`}>
                           <RatingIcon className={`w-4 h-4 ${rating.iconColor}`} />
                           <span className={`text-xs font-medium ${rating.color}`}>
@@ -395,52 +374,23 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
                       )}
                     </div>
 
-                    {/* Progress Bar or Start Button */}
-                    {isNotAssessed ? (
-                      <div className="space-y-3 pt-2">
-                        <Button
-  onClick={() => navigate(item.assessmentPath)}
-  className="w-full"
-  variant="outline"
-  style={{
-    borderColor: item.color,
-    color: item.color,
-  }}
-  onMouseEnter={(e) => {
-    e.currentTarget.style.backgroundColor = item.color
-    e.currentTarget.style.color = 'white'
-  }}
-  onMouseLeave={(e) => {
-    e.currentTarget.style.backgroundColor = 'transparent'
-    e.currentTarget.style.color = item.color
-  }}
->
-  <span>Start Assessment</span>
-  <ArrowRight className="w-4 h-4 ml-2" />
-</Button>
-                        <p className="text-xs text-center text-muted-foreground">
-                          Complete this assessment to see your score
-                        </p>
+                    <div className="space-y-2">
+                      <Progress 
+                        value={item.score} 
+                        className="h-2"
+                        style={{
+                          background: `${item.color}15`
+                        }}
+                      />
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-muted-foreground">
+                          {t('dashboard.performanceLevel')}
+                        </span>
+                        <span className="text-xs font-medium text-muted-foreground">
+                          {item.score > 0 ? `${item.score.toFixed(0)}%` : t('assessments.inProgress')}
+                        </span>
                       </div>
-                    ) : (
-                      <div className="space-y-2">
-                        <Progress 
-                          value={item.score ?? 0} 
-                          className="h-2"
-                          style={{
-                            background: `${item.color}15`
-                          }}
-                        />
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-muted-foreground">
-                            Performance Level
-                          </span>
-                          <span className="text-xs font-medium text-muted-foreground">
-                            {item.score !== null ? `${item.score.toFixed(0)}%` : 'Pending'}
-                          </span>
-                        </div>
-                      </div>
-                    )}
+                    </div>
                   </div>
                 </div>
               )

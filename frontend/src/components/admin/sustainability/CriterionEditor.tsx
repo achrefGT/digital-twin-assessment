@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useAdminApi } from '@/hooks/useAdminApi';
 import { CriterionResponse, SustainabilityDomain, CriterionCreate, CriterionUpdate } from '@/types/admin';
+import { useLanguage } from '@/contexts/LanguageContext';
 import { X, Save, AlertCircle, Info, Key, FileText, Shield, Calendar } from 'lucide-react';
 
 interface CriterionEditorProps {
@@ -9,6 +10,7 @@ interface CriterionEditorProps {
 }
 
 export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
+  const { t } = useLanguage();
   const { mutations } = useAdminApi();
   const isEdit = !!criterion;
   
@@ -42,25 +44,25 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
     const newErrors: Record<string, string> = {};
 
     if (!formData.name.trim()) {
-      newErrors.name = 'Name is required';
+      newErrors.name = t('manager.nameRequired');
     } else if (formData.name.trim().length < 3) {
-      newErrors.name = 'Name must be at least 3 characters';
+      newErrors.name = t('manager.nameMinLength').replace('{min}', '3');
     }
 
     if (!formData.description.trim()) {
-      newErrors.description = 'Description is required';
+      newErrors.description = t('manager.descriptionRequired');
     } else if (formData.description.trim().length < 10) {
-      newErrors.description = 'Description must be at least 10 characters';
+      newErrors.description = t('manager.descriptionMinLength').replace('{min}', '10');
     }
 
     if (formData.level_count < 2 || formData.level_count > 10) {
-      newErrors.level_count = 'Level count must be between 2 and 10';
+      newErrors.level_count = t('manager.levelCountRange').replace('{min}', '2').replace('{max}', '10');
     }
 
     if (customLevelsInput.trim()) {
       const levels = customLevelsInput.split(';').map(l => l.trim()).filter(l => l);
       if (levels.length !== formData.level_count) {
-        newErrors.custom_levels = `Custom levels must match level count (${formData.level_count})`;
+        newErrors.custom_levels = t('sustainability.customLevelsMustMatch').replace('{count}', formData.level_count.toString());
       }
     }
 
@@ -113,20 +115,20 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
   }[] = [
     { 
       value: 'environmental', 
-      label: 'Environmental', 
-      description: 'Impact on natural environment and resources',
+      label: t('sustainability.environmental'), 
+      description: t('sustainability.naturalEnvironment'),
       color: 'border-green-200 bg-green-50'
     },
     { 
       value: 'economic', 
-      label: 'Economic', 
-      description: 'Financial sustainability and economic impact',
+      label: t('sustainability.economic'), 
+      description: t('sustainability.financialSustainability'),
       color: 'border-blue-200 bg-blue-50'
     },
     { 
       value: 'social', 
-      label: 'Social', 
-      description: 'Social responsibility and community impact',
+      label: t('sustainability.social'), 
+      description: t('sustainability.socialResponsibility'),
       color: 'border-purple-200 bg-purple-50'
     }
   ];
@@ -143,10 +145,10 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
               </div>
               <div>
                 <h2 className="text-2xl font-bold text-gray-900">
-                  {isEdit ? 'Edit Criterion' : 'Create New Criterion'}
+                  {isEdit ? t('sustainability.editCriterion') : t('sustainability.createNewCriterion')}
                 </h2>
                 <p className="text-sm text-gray-600">
-                  {isEdit ? 'Modify the sustainability criterion details' : 'Define a new sustainability assessment criterion'}
+                  {isEdit ? t('sustainability.modifyCriterion') : t('sustainability.defineCriterion')}
                 </p>
               </div>
             </div>
@@ -164,7 +166,7 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
           {/* Domain Selection */}
           <div className="space-y-4">
             <label className="text-lg font-semibold text-gray-900">
-              Domain Selection *
+              {t('sustainability.domainSelection')} *
             </label>
             
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
@@ -201,7 +203,7 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
               <div className="flex items-start gap-2 p-3 bg-blue-50 rounded-lg border border-blue-200">
                 <Info className="w-4 h-4 text-blue-600 mt-0.5 flex-shrink-0" />
                 <p className="text-sm text-blue-700">
-                  Domain cannot be changed for existing criteria to maintain data consistency.
+                  {t('sustainability.domainCannotChange')}
                 </p>
               </div>
             )}
@@ -212,7 +214,7 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
             {/* Name */}
             <div>
               <label className="block text-sm font-medium text-gray-900 mb-2">
-                Criterion Name *
+                {t('sustainability.criterionName')} *
               </label>
               <input
                 type="text"
@@ -222,7 +224,7 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
                   w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors
                   ${errors.name ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'}
                 `}
-                placeholder="Enter criterion name"
+                placeholder={t('sustainability.enterCriterionName')}
               />
               {errors.name && (
                 <div className="flex items-center gap-2 mt-1 text-red-600">
@@ -235,7 +237,7 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
             {/* Level Count */}
             <div>
               <label className="block text-sm font-medium text-gray-900 mb-2">
-                Assessment Levels *
+                {t('sustainability.assessmentLevels')} *
               </label>
               <input
                 type="number"
@@ -254,14 +256,14 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
                   <span className="text-sm">{errors.level_count}</span>
                 </div>
               )}
-              <p className="text-sm text-gray-600 mt-1">Number of assessment levels (2-10)</p>
+              <p className="text-sm text-gray-600 mt-1">{t('sustainability.numberOfLevels')}</p>
             </div>
           </div>
 
           {/* Description */}
           <div>
             <label className="block text-sm font-medium text-gray-900 mb-2">
-              Description *
+              {t('sustainability.description')} *
             </label>
             <textarea
               value={formData.description}
@@ -271,7 +273,7 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
                 w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors resize-none
                 ${errors.description ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'}
               `}
-              placeholder="Describe what this criterion measures and how it should be assessed..."
+              placeholder={t('sustainability.describeCriterion')}
             />
             {errors.description && (
               <div className="flex items-center gap-2 mt-1 text-red-600">
@@ -285,10 +287,10 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
           <div className="space-y-3">
             <div>
               <label className="block text-lg font-semibold text-gray-900 mb-2">
-                Custom Level Labels <span className="text-gray-500 font-normal text-base">(Optional)</span>
+                {t('sustainability.customLevelLabels')} <span className="text-gray-500 font-normal text-base">({t('form.optional')})</span>
               </label>
               <p className="text-gray-600 mb-3">
-                Define custom labels for each assessment level. This helps evaluators understand what each level represents.
+                {t('sustainability.defineCustomLabels')}
               </p>
             </div>
             
@@ -301,16 +303,16 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
                   w-full px-4 py-3 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors text-base resize-none
                   ${errors.custom_levels ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'}
                 `}
-                placeholder="Enter level labels separated by semicolons:&#10;Poor; Fair; Good; Very Good; Excellent&#10;&#10;Or try: Not Sustainable; Partially Sustainable; Moderately Sustainable; Highly Sustainable; Fully Sustainable"
+                placeholder={t('sustainability.enterLevelLabels') + ':\n' + t('sustainability.exampleLevels') + '\n\n' + t('sustainability.alternativeExample')}
               />
               
               <div className="mt-3 flex items-center justify-between">
                 <div className="text-sm text-gray-600">
-                  <span className="font-medium">Required levels:</span> {formData.level_count}
+                  <span className="font-medium">{t('sustainability.requiredLevels')}:</span> {formData.level_count}
                   {customLevelsInput.trim() && (
                     <>
                       <span className="mx-2">•</span>
-                      <span className="font-medium">Current levels:</span> {customLevelsInput.split(';').map(l => l.trim()).filter(l => l).length}
+                      <span className="font-medium">{t('sustainability.currentLevels')}:</span> {customLevelsInput.split(';').map(l => l.trim()).filter(l => l).length}
                     </>
                   )}
                 </div>
@@ -321,7 +323,7 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
                     onClick={() => setCustomLevelsInput('')}
                     className="text-sm text-red-600 hover:text-red-700 font-medium"
                   >
-                    Clear all
+                    {t('sustainability.clearAll')}
                   </button>
                 )}
               </div>
@@ -331,7 +333,7 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
               <div className="flex items-start gap-2 p-3 bg-red-50 rounded-lg border border-red-200">
                 <AlertCircle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
                 <div>
-                  <p className="text-sm font-medium text-red-900">Invalid custom levels</p>
+                  <p className="text-sm font-medium text-red-900">{t('sustainability.invalidCustomLevels')}</p>
                   <p className="text-sm text-red-700">{errors.custom_levels}</p>
                 </div>
               </div>
@@ -339,7 +341,7 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
             
             {customLevelsInput.trim() && !errors.custom_levels && (
               <div className="bg-blue-50 rounded-lg p-3 border border-blue-200">
-                <h4 className="text-sm font-medium text-blue-900 mb-2">Preview of your custom levels:</h4>
+                <h4 className="text-sm font-medium text-blue-900 mb-2">{t('sustainability.previewLevels')}:</h4>
                 <div className="flex flex-wrap gap-2">
                   {customLevelsInput.split(';').map((level, index) => {
                     const trimmedLevel = level.trim();
@@ -349,7 +351,7 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
                         key={index}
                         className="inline-flex items-center px-3 py-1 bg-white border border-blue-300 rounded-lg text-sm font-medium text-blue-800"
                       >
-                        Level {index + 1}: {trimmedLevel}
+                        {t('sustainability.level')} {index + 1}: {trimmedLevel}
                       </span>
                     );
                   })}
@@ -358,19 +360,19 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
             )}
             
             <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-              <h4 className="text-sm font-medium text-gray-900 mb-2">Examples for different domains:</h4>
+              <h4 className="text-sm font-medium text-gray-900 mb-2">{t('sustainability.examplesForDomains')}:</h4>
               <div className="space-y-2 text-sm text-gray-700">
                 <div>
-                  <span className="font-medium text-green-700">Environmental:</span> 
-                  <span className="ml-2">Not Sustainable; Low Impact; Moderate Impact; Eco-Friendly; Carbon Neutral</span>
+                  <span className="font-medium text-green-700">{t('sustainability.environmental')}:</span> 
+                  <span className="ml-2">{t('sustainability.environmentalExample')}</span>
                 </div>
                 <div>
-                  <span className="font-medium text-blue-700">Economic:</span> 
-                  <span className="ml-2">Not Viable; Low ROI; Break-even; Profitable; Highly Profitable</span>
+                  <span className="font-medium text-blue-700">{t('sustainability.economic')}:</span> 
+                  <span className="ml-2">{t('sustainability.economicExample')}</span>
                 </div>
                 <div>
-                  <span className="font-medium text-purple-700">Social:</span> 
-                  <span className="ml-2">Harmful; Concerning; Neutral; Beneficial; Transformative</span>
+                  <span className="font-medium text-purple-700">{t('sustainability.social')}:</span> 
+                  <span className="ml-2">{t('sustainability.socialExample')}</span>
                 </div>
               </div>
             </div>
@@ -382,10 +384,9 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
               <div className="flex items-start gap-3">
                 <Key className="w-5 h-5 text-blue-600 mt-0.5" />
                 <div>
-                  <h4 className="text-sm font-medium text-blue-900 mb-1">Automatic Key Generation</h4>
+                  <h4 className="text-sm font-medium text-blue-900 mb-1">{t('sustainability.automaticKeyGeneration')}</h4>
                   <p className="text-sm text-blue-700">
-                    A unique criterion key will be automatically generated based on the selected domain (e.g., ENV_01, ECO_02, SOC_03). 
-                    This ensures consistency and prevents conflicts with existing criteria.
+                    {t('sustainability.keyGenerationDesc')}
                   </p>
                 </div>
               </div>
@@ -403,8 +404,8 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
                   className="w-4 h-4 text-amber-600 border-amber-300 rounded focus:ring-amber-500"
                 />
                 <div>
-                  <span className="font-medium text-gray-900">Mark as default criterion</span>
-                  <p className="text-sm text-gray-600">Default criteria cannot be deleted and serve as system baselines</p>
+                  <span className="font-medium text-gray-900">{t('sustainability.markDefaultCriterion')}</span>
+                  <p className="text-sm text-gray-600">{t('sustainability.defaultCriteriaDesc')}</p>
                 </div>
               </label>
             </div>
@@ -415,7 +416,7 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
             <div className="bg-gray-50 rounded-lg p-4 border border-gray-200">
               <div className="flex items-center gap-2 mb-3">
                 <Info className="w-5 h-5 text-gray-600" />
-                <h4 className="font-medium text-gray-900">Criterion Information</h4>
+                <h4 className="font-medium text-gray-900">{t('sustainability.criterionInformation')}</h4>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
                 <div className="flex items-center gap-2">
@@ -425,17 +426,17 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
                 </div>
                 <div className="flex items-center gap-2">
                   <Key className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">Key:</span>
+                  <span className="text-gray-600">{t('sustainability.key')}:</span>
                   <span className="font-medium text-gray-900">{criterion.criterion_key}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Shield className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">Default:</span>
-                  <span className="font-medium text-gray-900">{criterion.is_default ? 'Yes' : 'No'}</span>
+                  <span className="text-gray-600">{t('humanCentricity.default')}:</span>
+                  <span className="font-medium text-gray-900">{criterion.is_default ? t('common.yes') : t('common.no')}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Calendar className="w-4 h-4 text-gray-400" />
-                  <span className="text-gray-600">Created:</span>
+                  <span className="text-gray-600">{t('humanCentricity.created')}:</span>
                   <span className="font-medium text-gray-900">{new Date(criterion.created_at).toLocaleDateString()}</span>
                 </div>
               </div>
@@ -451,7 +452,7 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
               onClick={onClose}
               className="px-4 py-2 text-gray-700 bg-white border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors font-medium"
             >
-              Cancel
+              {t('manager.cancel')}
             </button>
             <button
               onClick={handleSubmit}
@@ -460,8 +461,8 @@ export function CriterionEditor({ criterion, onClose }: CriterionEditorProps) {
             >
               <Save className="w-4 h-4" />
               {(mutations.createSustainabilityCriterion.isPending || mutations.updateSustainabilityCriterion.isPending)
-                ? 'Saving...' 
-                : (isEdit ? 'Update Criterion' : 'Create Criterion')
+                ? t('manager.saving') 
+                : (isEdit ? t('sustainability.updateCriterion') : t('sustainability.createCriterion'))
               }
             </button>
           </div>

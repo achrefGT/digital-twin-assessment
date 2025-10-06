@@ -1,5 +1,6 @@
 import React from 'react';
 import { ScenarioResponse } from '@/types/admin';
+import { useLanguage } from '@/contexts/LanguageContext';
 import {
   Edit,
   Trash2,
@@ -25,12 +26,23 @@ interface ScenariosListProps {
 }
 
 // Helper to build a nice title from domain key
-const prettyDomain = (d: string) => {
-  if (!d) return 'Other';
-  return d.charAt(0).toUpperCase() + d.slice(1);
+const prettyDomain = (d: string, t: (key: string) => string) => {
+  if (!d) return t('common.other');
+  
+  const domainMap: Record<string, string> = {
+    'Robustness': 'resilience.robustness',
+    'Redundancy': 'resilience.redundancy',
+    'Adaptability': 'resilience.adaptability',
+    'Rapidity': 'resilience.rapidity',
+    'PHM': 'resilience.phm'
+  };
+  
+  return t(domainMap[d] || 'common.other');
 };
 
 export function ScenariosList({ scenarios, loading, error, onEdit, onDelete, deletingIds = [] }: ScenariosListProps) {
+  const { t } = useLanguage();
+
   // Prevent double-click issues
   const handleDeleteClick = (scenario: ScenarioResponse, e: React.MouseEvent) => {
     e.preventDefault();
@@ -124,7 +136,7 @@ export function ScenariosList({ scenarios, loading, error, onEdit, onDelete, del
               <AlertCircle className="w-6 h-6 text-red-600" />
             </div>
             <div>
-              <h3 className="font-medium text-red-900 mb-2">Failed to Load Scenarios</h3>
+              <h3 className="font-medium text-red-900 mb-2">{t('resilience.failedLoadScenarios')}</h3>
               <p className="text-red-700 text-sm">{error.message}</p>
             </div>
           </div>
@@ -139,13 +151,13 @@ export function ScenariosList({ scenarios, loading, error, onEdit, onDelete, del
         <div className="w-20 h-20 bg-gray-100 rounded-xl flex items-center justify-center mb-6 mx-auto">
           <Layers className="w-8 h-8 text-gray-400" />
         </div>
-        <h3 className="text-lg font-semibold text-gray-900 mb-3">No Scenarios Found</h3>
+        <h3 className="text-lg font-semibold text-gray-900 mb-3">{t('resilience.noScenariosFound')}</h3>
         <p className="text-gray-600 mb-6 max-w-md mx-auto">
-          Get started by creating your first resilience scenario. Define assessment scenarios for your digital twin evaluations.
+          {t('resilience.getStartedScenario')}
         </p>
         <div className="inline-flex items-center gap-2 bg-blue-50 text-blue-700 px-4 py-2 rounded-lg text-sm font-medium border border-blue-200">
           <FileText className="w-4 h-4" />
-          Ready to create scenarios
+          {t('resilience.readyToCreateScenarios')}
         </div>
       </div>
     );
@@ -195,13 +207,13 @@ export function ScenariosList({ scenarios, loading, error, onEdit, onDelete, del
               <div className="flex items-center gap-2">
                 <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium border ${domainConfig.color}`}>
                   {domainConfig.icon}
-                  {scenario.domain}
+                  {prettyDomain(scenario.domain, t)}
                 </span>
 
                 {scenario.is_default && (
                   <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium bg-gray-50 text-gray-700 border border-gray-200">
                     <Shield className="w-3 h-3" />
-                    Default
+                    {t('humanCentricity.default')}
                   </span>
                 )}
               </div>
@@ -220,15 +232,15 @@ export function ScenariosList({ scenarios, loading, error, onEdit, onDelete, del
               <div className="flex items-center gap-2">
                 <Clock className="w-4 h-4 text-gray-400" />
                 <div>
-                  <p className="text-xs text-gray-500">Length</p>
-                  <p className="text-sm font-medium text-gray-700">{scenario.scenario_text.length} chars</p>
+                  <p className="text-xs text-gray-500">{t('humanCentricity.length')}</p>
+                  <p className="text-sm font-medium text-gray-700">{scenario.scenario_text.length} {t('humanCentricity.chars')}</p>
                 </div>
               </div>
 
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-gray-400" />
                 <div>
-                  <p className="text-xs text-gray-500">Created</p>
+                  <p className="text-xs text-gray-500">{t('humanCentricity.created')}</p>
                   <p className="text-sm font-medium text-gray-700">{new Date(scenario.created_at).toLocaleDateString()}</p>
                 </div>
               </div>
@@ -236,7 +248,7 @@ export function ScenariosList({ scenarios, loading, error, onEdit, onDelete, del
               <div className="flex items-center gap-2">
                 <Calendar className="w-4 h-4 text-gray-400" />
                 <div>
-                  <p className="text-xs text-gray-500">Updated</p>
+                  <p className="text-xs text-gray-500">{t('humanCentricity.updated')}</p>
                   <p className="text-sm font-medium text-gray-700">{new Date(scenario.updated_at).toLocaleDateString()}</p>
                 </div>
               </div>
@@ -251,7 +263,7 @@ export function ScenariosList({ scenarios, loading, error, onEdit, onDelete, del
               className="flex items-center gap-2 px-3 py-2 bg-blue-50 hover:bg-blue-100 text-blue-700 border border-blue-200 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <Edit className="w-4 h-4" />
-              Edit
+              {t('manager.edit')}
             </button>
 
             <button
@@ -260,7 +272,7 @@ export function ScenariosList({ scenarios, loading, error, onEdit, onDelete, del
               className="flex items-center gap-2 px-3 py-2 bg-red-50 hover:bg-red-100 text-red-700 border border-red-200 rounded-lg transition-colors text-sm font-medium disabled:opacity-50 disabled:cursor-not-allowed"
             >
               {isDeleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-              {isDeleting ? 'Deleting...' : 'Delete'}
+              {isDeleting ? t('manager.deleting') : t('manager.delete')}
             </button>
           </div>
         </div>
@@ -278,14 +290,16 @@ export function ScenariosList({ scenarios, loading, error, onEdit, onDelete, del
               <Shield className="w-4 h-4 text-blue-600" />
             </div>
             <div>
-              <h3 className="text-lg font-semibold text-gray-900">Resilience Scenarios</h3>
-              <p className="text-sm text-gray-600">{scenarios.length} scenarios configured</p>
+              <h3 className="text-lg font-semibold text-gray-900">{t('resilience.scenarios')}</h3>
+              <p className="text-sm text-gray-600">
+                {t('resilience.scenariosConfigured').replace('{count}', scenarios.length.toString())}
+              </p>
             </div>
           </div>
 
           <div className="flex items-center gap-2 bg-white px-3 py-1 rounded-lg border border-gray-200">
             <CheckCircle className="w-4 h-4 text-green-600" />
-            <span className="text-sm font-medium text-gray-700">Active</span>
+            <span className="text-sm font-medium text-gray-700">{t('profile.active')}</span>
           </div>
         </div>
       </div>
@@ -303,11 +317,11 @@ export function ScenariosList({ scenarios, loading, error, onEdit, onDelete, del
                 <div className="flex items-center gap-3">
                   <div className={`inline-flex items-center gap-2 px-3 py-1 rounded-lg text-sm font-medium border ${cfg.color}`}>
                     {cfg.icon}
-                    <span>{prettyDomain(domainKey)}</span>
+                    <span>{prettyDomain(domainKey, t)}</span>
                     <span className="ml-2 text-xs text-gray-500">{items.length}</span>
                   </div>
 
-                  <p className="text-sm text-gray-500">Grouped view</p>
+                  <p className="text-sm text-gray-500">{t('humanCentricity.groupedView')}</p>
                 </div>
 
                 <div className="flex items-center gap-2">
@@ -317,7 +331,7 @@ export function ScenariosList({ scenarios, loading, error, onEdit, onDelete, del
                     aria-expanded={!isCollapsed}
                   >
                     {isCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                    <span className="text-xs">{isCollapsed ? 'Show' : 'Hide'}</span>
+                    <span className="text-xs">{isCollapsed ? t('humanCentricity.show') : t('humanCentricity.hide')}</span>
                   </button>
                 </div>
               </div>
@@ -329,7 +343,9 @@ export function ScenariosList({ scenarios, loading, error, onEdit, onDelete, del
               )}
 
               {isCollapsed && (
-                <div className="px-4 py-3 text-xs text-gray-500">{items.length} scenarios hidden</div>
+                <div className="px-4 py-3 text-xs text-gray-500">
+                  {t('humanCentricity.statementsHidden').replace('{count}', items.length.toString()).replace('statements', 'scenarios')}
+                </div>
               )}
             </div>
           );

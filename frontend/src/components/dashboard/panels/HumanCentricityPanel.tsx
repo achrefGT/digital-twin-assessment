@@ -3,6 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Progress } from '@/components/ui/progress'
 import { Badge } from '@/components/ui/badge'
 import { Brain, Users, Eye, Heart, Target, Sparkles } from 'lucide-react'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 interface HumanCentricityPanelProps {
   data?: {
@@ -82,6 +83,8 @@ interface HumanCentricityPanelProps {
 }
 
 export const HumanCentricityPanel: React.FC<HumanCentricityPanelProps> = ({ data }) => {
+  const { t } = useLanguage()
+
   if (!data?.scores) {
     return (
       <Card className="border-0 shadow-sm">
@@ -94,8 +97,8 @@ export const HumanCentricityPanel: React.FC<HumanCentricityPanelProps> = ({ data
               <div className="absolute -top-1 -right-1 w-6 h-6 rounded-full bg-gradient-to-br from-blue-900 to-blue-400 opacity-20 animate-pulse" />
             </div>
             <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">Awaiting human centricity assessment</p>
-              <p className="text-xs text-muted-foreground/70">User experience evaluation</p>
+              <p className="text-sm text-muted-foreground">{t('humanCentricity.awaiting')}</p>
+              <p className="text-xs text-muted-foreground/70">{t('humanCentricity.userExperienceEval')}</p>
             </div>
           </div>
         </CardContent>
@@ -211,7 +214,7 @@ export const HumanCentricityPanel: React.FC<HumanCentricityPanelProps> = ({ data
         {keyInsights.length > 0 && (
           <div className="pt-4 border-t border-slate-100">
             <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
-              Key Insights
+              {t('dashboard.keyInsights')}
             </div>
             <div className="grid grid-cols-2 gap-3">
               {keyInsights.map((insight, index) => (

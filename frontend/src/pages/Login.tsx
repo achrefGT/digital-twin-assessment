@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate, useLocation, Link } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/auth/useAuth';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -15,17 +15,20 @@ import {
   AlertCircle, 
   Shield,
   ArrowLeft,
-  Sparkles,
   Mail,
   UserPlus,
-  CheckCircle
+  CheckCircle,
+  Eye,
+  EyeOff
 } from 'lucide-react';
 import { RegisterData } from '@/auth/auth.types';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 const Login: React.FC = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { login, register, isAuthenticated, isLoading } = useAuth();
+  const { t } = useLanguage();
   
   const [activeTab, setActiveTab] = useState<'login' | 'register'>('login');
   const [showPassword, setShowPassword] = useState(false);
@@ -82,19 +85,19 @@ const Login: React.FC = () => {
 
     // Validation
     if (registerData.password.length < 8) {
-      setError('Password must be at least 8 characters long');
+      setError(t('auth.passwordTooShort'));
       setIsSubmitting(false);
       return;
     }
     
     if (registerData.password !== registerData.confirmPassword) {
-      setError('Passwords do not match');
+      setError(t('auth.passwordsDoNotMatch'));
       setIsSubmitting(false);
       return;
     }
     
     if (!/^[a-zA-Z0-9_-]+$/.test(registerData.username)) {
-      setError('Username can only contain letters, numbers, hyphens, and underscores');
+      setError(t('auth.invalidUsername'));
       setIsSubmitting(false);
       return;
     }
@@ -102,7 +105,7 @@ const Login: React.FC = () => {
     try {
       const { confirmPassword, ...registrationData } = registerData;
       await register(registrationData);
-      setSuccess('Registration successful! Please sign in with your new account.');
+      setSuccess(t('auth.registrationSuccessful'));
       setActiveTab('login');
       // Reset form
       setRegisterData({
@@ -138,8 +141,8 @@ const Login: React.FC = () => {
           <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mx-auto mb-6 flex items-center justify-center">
             <Loader2 className="w-8 h-8 text-white animate-spin" />
           </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">Checking Authentication</h3>
-          <p className="text-gray-600">Please wait...</p>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">{t('auth.checkingAuth')}</h3>
+          <p className="text-gray-600">{t('dashboard.pleaseWait')}</p>
         </div>
       </div>
     );
@@ -164,7 +167,7 @@ const Login: React.FC = () => {
                 <div className="w-8 h-8 bg-gradient-to-br from-green-600 to-blue-600 rounded-lg flex items-center justify-center">
                   <Shield className="w-5 h-5 text-white" />
                 </div>
-                <span className="text-xl font-bold text-gray-900">Authentication</span>
+                <span className="text-xl font-bold text-gray-900">{t('auth.authentication')}</span>
               </div>
             </div>
           </div>
@@ -187,18 +190,18 @@ const Login: React.FC = () => {
                 <Shield className="w-8 h-8 text-white" />
               </div>
               <CardTitle className="text-2xl font-bold text-gray-900">
-                Welcome
+                {t('auth.welcome')}
               </CardTitle>
               <CardDescription className="text-gray-600">
-                Access your Digital Twin Assessment Platform
+                {t('auth.accessPlatform')}
               </CardDescription>
             </CardHeader>
 
             <CardContent className="p-6">
               <Tabs value={activeTab} onValueChange={(value) => setActiveTab(value as 'login' | 'register')}>
                 <TabsList className="grid w-full grid-cols-2">
-                  <TabsTrigger value="login">Sign In</TabsTrigger>
-                  <TabsTrigger value="register">Sign Up</TabsTrigger>
+                  <TabsTrigger value="login">{t('auth.signIn')}</TabsTrigger>
+                  <TabsTrigger value="register">{t('auth.signUp')}</TabsTrigger>
                 </TabsList>
 
                 <TabsContent value="login" className="mt-6">
@@ -211,13 +214,13 @@ const Login: React.FC = () => {
                     )}
                     
                     <div className="space-y-2">
-                      <Label htmlFor="username">Username or Email</Label>
+                      <Label htmlFor="username">{t('auth.usernameOrEmail')}</Label>
                       <div className="relative">
                         <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                         <Input
                           id="username"
                           type="text"
-                          placeholder="Enter username or email"
+                          placeholder={t('auth.enterUsername')}
                           value={loginData.username}
                           onChange={(e) => handleInputChange('username', e.target.value)}
                           className="pl-10"
@@ -228,13 +231,13 @@ const Login: React.FC = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="password">Password</Label>
+                      <Label htmlFor="password">{t('auth.password')}</Label>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                         <Input
                           id="password"
                           type={showPassword ? 'text' : 'password'}
-                          placeholder="Enter password"
+                          placeholder={t('auth.enterPassword')}
                           value={loginData.password}
                           onChange={(e) => handleInputChange('password', e.target.value)}
                           className="pl-10 pr-10"
@@ -247,6 +250,7 @@ const Login: React.FC = () => {
                           className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                           disabled={isSubmitting}
                         >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                       </div>
                     </div>
@@ -259,12 +263,12 @@ const Login: React.FC = () => {
                       {isSubmitting ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Signing in...
+                          {t('auth.signingIn')}
                         </>
                       ) : (
                         <>
                           <LogIn className="mr-2 h-4 w-4" />
-                          Sign In
+                          {t('auth.signIn')}
                         </>
                       )}
                     </Button>
@@ -282,22 +286,22 @@ const Login: React.FC = () => {
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="firstName">First Name</Label>
+                        <Label htmlFor="firstName">{t('auth.firstName')}</Label>
                         <Input
                           id="firstName"
                           type="text"
-                          placeholder="First name"
+                          placeholder={t('auth.firstName')}
                           value={registerData.first_name}
                           onChange={(e) => handleRegisterInputChange('first_name', e.target.value)}
                           disabled={isSubmitting}
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="lastName">Last Name</Label>
+                        <Label htmlFor="lastName">{t('auth.lastName')}</Label>
                         <Input
                           id="lastName"
                           type="text"
-                          placeholder="Last name"
+                          placeholder={t('auth.lastName')}
                           value={registerData.last_name}
                           onChange={(e) => handleRegisterInputChange('last_name', e.target.value)}
                           disabled={isSubmitting}
@@ -306,13 +310,13 @@ const Login: React.FC = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="email">Email *</Label>
+                      <Label htmlFor="email">{t('auth.email')} *</Label>
                       <div className="relative">
                         <Mail className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                         <Input
                           id="email"
                           type="email"
-                          placeholder="Enter email address"
+                          placeholder={t('auth.enterEmail')}
                           value={registerData.email}
                           onChange={(e) => handleRegisterInputChange('email', e.target.value)}
                           className="pl-10"
@@ -323,13 +327,13 @@ const Login: React.FC = () => {
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="regUsername">Username *</Label>
+                      <Label htmlFor="regUsername">{t('auth.username')} *</Label>
                       <div className="relative">
                         <User className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                         <Input
                           id="regUsername"
                           type="text"
-                          placeholder="Choose username"
+                          placeholder={t('auth.chooseUsername')}
                           value={registerData.username}
                           onChange={(e) => handleRegisterInputChange('username', e.target.value)}
                           className="pl-10"
@@ -338,18 +342,18 @@ const Login: React.FC = () => {
                         />
                       </div>
                       <p className="text-xs text-gray-500">
-                        Only letters, numbers, hyphens, and underscores allowed
+                        {t('auth.usernameRule')}
                       </p>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="regPassword">Password *</Label>
+                      <Label htmlFor="regPassword">{t('auth.password')} *</Label>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                         <Input
                           id="regPassword"
                           type={showPassword ? 'text' : 'password'}
-                          placeholder="Enter password"
+                          placeholder={t('auth.enterPassword')}
                           value={registerData.password}
                           onChange={(e) => handleRegisterInputChange('password', e.target.value)}
                           className="pl-10 pr-10"
@@ -363,21 +367,22 @@ const Login: React.FC = () => {
                           className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
                           disabled={isSubmitting}
                         >
+                          {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                         </button>
                       </div>
                       <p className="text-xs text-gray-500">
-                        Minimum 8 characters
+                        {t('auth.passwordMinLength')}
                       </p>
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="confirmPassword">Confirm Password *</Label>
+                      <Label htmlFor="confirmPassword">{t('auth.confirmPasswordLabel')} *</Label>
                       <div className="relative">
                         <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-4 w-4" />
                         <Input
                           id="confirmPassword"
                           type={showPassword ? 'text' : 'password'}
-                          placeholder="Confirm password"
+                          placeholder={t('auth.confirmPasswordPlaceholder')}
                           value={registerData.confirmPassword}
                           onChange={(e) => handleRegisterInputChange('confirmPassword', e.target.value)}
                           className="pl-10"
@@ -395,12 +400,12 @@ const Login: React.FC = () => {
                       {isSubmitting ? (
                         <>
                           <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                          Creating account...
+                          {t('auth.creatingAccount')}
                         </>
                       ) : (
                         <>
                           <UserPlus className="mr-2 h-4 w-4" />
-                          Create Account
+                          {t('auth.createAccountButton')}
                         </>
                       )}
                     </Button>
@@ -410,7 +415,7 @@ const Login: React.FC = () => {
 
               <div className="mt-6 text-center">
                 <p className="text-sm text-gray-500">
-                  By continuing, you agree to our Terms of Service and Privacy Policy
+                  {t('auth.agreeToTerms')}
                 </p>
               </div>
             </CardContent>

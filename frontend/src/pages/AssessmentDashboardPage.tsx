@@ -7,6 +7,7 @@ import { AssessmentDashboard } from '@/components/dashboard/AssessmentDashboard'
 import { useAssessment } from '@/hooks/useAssessment'
 import { useAuth } from '@/auth'
 import { assessmentKeys } from '@/services/assessmentApi'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 // Types matching the backend response
 interface DomainScoresResponse {
@@ -36,6 +37,7 @@ export default function AssessmentDashboardPage() {
   const { assessmentId } = useParams<{ assessmentId: string }>()
   const { currentAssessment, isLoading: assessmentLoading, clearAssessment, switchToAssessment } = useAssessment()
   const { token, isAuthenticated } = useAuth()
+  const { t } = useLanguage()
   
   const [isSwitching, setIsSwitching] = useState(false)
 
@@ -141,8 +143,8 @@ export default function AssessmentDashboardPage() {
           <div className="w-16 h-16 bg-gradient-to-br from-blue-500 to-purple-600 rounded-2xl mx-auto mb-6 flex items-center justify-center">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-white"></div>
           </div>
-          <h3 className="text-xl font-semibold text-gray-900 mb-2">Loading Dashboard</h3>
-          <p className="text-gray-600">Fetching assessment data...</p>
+          <h3 className="text-xl font-semibold text-gray-900 mb-2">{t('dashboard.loadingDashboard')}</h3>
+          <p className="text-gray-600">{t('dashboard.fetchingData')}</p>
         </div>
       </div>
     )
@@ -169,7 +171,7 @@ export default function AssessmentDashboardPage() {
                   <div className="w-8 h-8 bg-gradient-to-br from-red-600 to-orange-600 rounded-lg flex items-center justify-center">
                     <BarChart3 className="w-5 h-5 text-white" />
                   </div>
-                  <span className="text-xl font-bold text-gray-900">Dashboard</span>
+                  <span className="text-xl font-bold text-gray-900">{t('dashboard.title')}</span>
                 </div>
               </div>
             </div>
@@ -181,12 +183,12 @@ export default function AssessmentDashboardPage() {
           <div className="relative container mx-auto px-6 py-16">
             <div className="max-w-2xl mx-auto text-center">
               <h1 className="text-4xl font-bold text-gray-900 mb-6">
-                Assessment Not Found
+                {t('dashboard.assessmentNotFound')}
               </h1>
               <p className="text-xl text-gray-600 mb-12 leading-relaxed">
                 {assessmentId 
-                  ? `Assessment ${assessmentId.slice(0, 8)} could not be loaded or doesn't exist.`
-                  : 'No assessment is currently selected for dashboard view.'
+                  ? `${t('assessment.create')} ${assessmentId.slice(0, 8)} ${t('dashboard.couldNotLoad')}`
+                  : t('dashboard.noAssessmentSelected')
                 }
               </p>
               
@@ -196,14 +198,14 @@ export default function AssessmentDashboardPage() {
                   variant="outline"
                 >
                   <RefreshCw className="w-4 h-4 mr-2" />
-                  Try Again
+                  {t('dashboard.tryAgain')}
                 </Button>
                 <Button 
                   onClick={() => navigate('/assessments')}
                   className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700"
                 >
                   <List className="w-4 h-4 mr-2" />
-                  View All Assessments
+                  {t('dashboard.viewAllAssessments')}
                 </Button>
                 <Button 
                   variant="outline"
@@ -213,7 +215,7 @@ export default function AssessmentDashboardPage() {
                   }}
                 >
                   <Plus className="w-4 h-4 mr-2" />
-                  Create New Assessment
+                  {t('dashboard.createNewAssessment')}
                 </Button>
               </div>
             </div>
@@ -245,10 +247,10 @@ export default function AssessmentDashboardPage() {
                   <BarChart3 className="w-5 h-5 text-white" />
                 </div>
                 <div className="flex flex-col">
-                  <span className="text-xl font-bold text-gray-900">Dashboard</span>
+                  <span className="text-xl font-bold text-gray-900">{t('dashboard.title')}</span>
                   <span className="text-xs text-gray-500">
-                    Assessment: {assessmentId?.slice(0, 8)}...
-                    {isCurrentAssessment && <span className="ml-2 text-blue-600 font-medium">(Active)</span>}
+                    {t('assessment.create')}: {assessmentId?.slice(0, 8)}...
+                    {isCurrentAssessment && <span className="ml-2 text-blue-600 font-medium">({t('dashboard.active')})</span>}
                   </span>
                 </div>
               </div>
@@ -262,7 +264,7 @@ export default function AssessmentDashboardPage() {
                   onClick={handleMakeActive}
                   disabled={isSwitching}
                 >
-                  {isSwitching ? 'Switching...' : 'Make Active'}
+                  {isSwitching ? t('dashboard.switching') : t('dashboard.makeActive')}
                 </Button>
               )}
               <Button
@@ -271,7 +273,7 @@ export default function AssessmentDashboardPage() {
                 onClick={() => navigate('/assessments')}
               >
                 <List className="w-4 h-4 mr-2" />
-                All Assessments
+                {t('assessments.allAssessments')}
               </Button>
               <Button
                 variant="outline" 
@@ -282,7 +284,7 @@ export default function AssessmentDashboardPage() {
                 }}
               >
                 <Plus className="w-4 h-4 mr-2" />
-                New Assessment
+                {t('dashboard.newAssessment')}
               </Button>
             </div>
           </div>

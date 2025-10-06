@@ -11,6 +11,7 @@ import {
 } from 'lucide-react';
 import { AdminAPI } from '@/services/adminApi';
 import { useAuth } from '@/auth/useAuth';
+import { useLanguage } from '@/contexts/LanguageContext'
 
 interface UserType {
   user_id: string;
@@ -42,6 +43,7 @@ interface Pagination {
 }
 
 export function UserManager() {
+  const { t } = useLanguage()
   const { token, user: currentUser } = useAuth();
   const [users, setUsers] = useState<UserType[]>([]);
   const [stats, setStats] = useState<UserStats | null>(null);
@@ -179,16 +181,16 @@ export function UserManager() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent mb-2">
-          User Management
+          {t('admin.users')}
         </h1>
-        <p className="text-gray-600">Manage user roles and permissions</p>
+        <p className="text-gray-600">{t('admin.manageUserRoles')}</p>
       </div>
 
       {error && (
         <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
           <div>
-            <p className="text-sm font-medium text-red-800">Error</p>
+            <p className="text-sm font-medium text-red-800">{t('common.error')}</p>
             <p className="text-sm text-red-700">{error}</p>
           </div>
         </div>
@@ -199,7 +201,7 @@ export function UserManager() {
           <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Total Users</p>
+                <p className="text-sm text-gray-600 mb-1">{t('admin.totalUsers')}</p>
                 <p className="text-2xl font-bold text-gray-900">{stats.total_users}</p>
               </div>
               <Users className="w-8 h-8 text-blue-600" />
@@ -209,7 +211,7 @@ export function UserManager() {
           <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Active Users</p>
+                <p className="text-sm text-gray-600 mb-1">{t('admin.activeUsers')}</p>
                 <p className="text-2xl font-bold text-green-700">{stats.active_users}</p>
               </div>
               <CheckCircle className="w-8 h-8 text-green-600" />
@@ -219,7 +221,7 @@ export function UserManager() {
           <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">Admins</p>
+                <p className="text-sm text-gray-600 mb-1">{t('admin.admins')}</p>
                 <p className="text-2xl font-bold text-yellow-700">
                   {(stats.roles.admin || 0) + (stats.roles.super_admin || 0)}
                 </p>
@@ -231,7 +233,7 @@ export function UserManager() {
           <div className="bg-white rounded-xl p-6 border border-gray-200 shadow-sm">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm text-gray-600 mb-1">7-Day Active Users</p>
+                <p className="text-sm text-gray-600 mb-1">{t('admin.sevenDayActive')}</p>
                 <p className="text-2xl font-bold text-purple-700">{stats.recently_active}</p>
               </div>
               <Clock className="w-8 h-8 text-purple-600" />
@@ -246,7 +248,7 @@ export function UserManager() {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 w-4 h-4 text-gray-400" />
             <input
               type="text"
-              placeholder="Search users..."
+              placeholder={t('admin.searchUsers')}
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
               className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -258,10 +260,10 @@ export function UserManager() {
             onChange={(e) => setRoleFilter(e.target.value)}
             className="px-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           >
-            <option value="">All Roles</option>
-            <option value="super_admin">Super Admin</option>
-            <option value="admin">Admin</option>
-            <option value="user">User</option>
+            <option value="">{t('admin.allRoles')}</option>
+            <option value="super_admin">{t('admin.superAdmin')}</option>
+            <option value="admin">{t('common.admin')}</option>
+            <option value="user">{t('admin.user')}</option>
           </select>
         </div>
       </div>
@@ -270,7 +272,7 @@ export function UserManager() {
         {loading ? (
           <div className="p-12 text-center">
             <div className="inline-block animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
-            <p className="mt-4 text-gray-600">Loading users...</p>
+            <p className="mt-4 text-gray-600">{t('admin.loadingUsers')}</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
@@ -278,19 +280,19 @@ export function UserManager() {
               <thead className="bg-gray-50 border-b border-gray-200">
                 <tr>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    User
+                    {t('admin.user')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Role
+                    {t('admin.role')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Status
+                    {t('common.status')}
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Last Login
+                    {t('admin.lastLogin')}
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">
-                    Actions
+                    {t('common.actions')}
                   </th>
                 </tr>
               </thead>
@@ -330,12 +332,12 @@ export function UserManager() {
                         {user.is_active ? (
                           <>
                             <CheckCircle className="w-4 h-4 text-green-600" />
-                            <span className="text-sm text-green-700">Active</span>
+                            <span className="text-sm text-green-700">{t('admin.active')}</span>
                           </>
                         ) : (
                           <>
                             <AlertTriangle className="w-4 h-4 text-red-600" />
-                            <span className="text-sm text-red-700">Inactive</span>
+                            <span className="text-sm text-red-700">{t('admin.inactive')}</span>
                           </>
                         )}
                       </div>
@@ -343,7 +345,7 @@ export function UserManager() {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
                       {user.last_login 
                         ? new Date(user.last_login).toLocaleDateString()
-                        : 'Never'}
+                        : t('admin.never')}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                       <div className="flex items-center justify-end gap-2">
@@ -352,10 +354,10 @@ export function UserManager() {
                             onClick={() => updateUserRole(user.user_id, 'admin')}
                             disabled={processingUser === user.user_id}
                             className="px-3 py-1.5 text-sm font-medium text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg hover:bg-yellow-100 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-                            title="Promote to Admin"
+                            title={t('admin.promoteToAdmin')}
                           >
                             <Crown className="w-3.5 h-3.5" />
-                            Promote
+                            {t('admin.promote')}
                           </button>
                         )}
                         {user.role === 'admin' && isSuperAdmin && (
@@ -363,10 +365,10 @@ export function UserManager() {
                             onClick={() => updateUserRole(user.user_id, 'user')}
                             disabled={processingUser === user.user_id}
                             className="px-3 py-1.5 text-sm font-medium text-gray-700 bg-gray-50 border border-gray-200 rounded-lg hover:bg-gray-100 transition-colors duration-200 disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-1.5"
-                            title="Demote to User"
+                            title={t('admin.demoteToUser')}
                           >
                             <User className="w-3.5 h-3.5" />
-                            Demote
+                            {t('admin.demote')}
                           </button>
                         )}
                       </div>
@@ -379,7 +381,7 @@ export function UserManager() {
             {filteredUsers.length === 0 && !loading && (
               <div className="p-12 text-center">
                 <Users className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                <p className="text-gray-600">No users found matching your criteria</p>
+                <p className="text-gray-600">{t('admin.noUsersFound')}</p>
               </div>
             )}
           </div>
@@ -393,11 +395,11 @@ export function UserManager() {
             disabled={pagination.page === 1}
             className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Previous
+            {t('common.previous')}
           </button>
           
           <span className="px-4 py-2 text-sm text-gray-600">
-            Page {pagination.page} of {pagination.pages}
+            {t('common.page')} {pagination.page} {t('common.of')} {pagination.pages}
           </span>
           
           <button
@@ -405,7 +407,7 @@ export function UserManager() {
             disabled={pagination.page === pagination.pages}
             className="px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            Next
+            {t('common.next')}
           </button>
         </div>
       )}

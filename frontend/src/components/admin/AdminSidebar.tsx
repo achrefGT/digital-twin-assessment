@@ -2,6 +2,7 @@ import React from 'react';
 import { NavLink, useLocation, useNavigate } from 'react-router-dom';
 import { AdminSection } from '@/types/admin';
 import { Sparkles, ArrowLeft, Settings, Activity, Leaf, Shield, Users, Grid3x3, UserCog, Heart } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 interface AdminSidebarProps {
   currentSection?: AdminSection;
@@ -11,35 +12,36 @@ interface AdminSidebarProps {
 export function AdminSidebar({ currentSection, user }: AdminSidebarProps) {
   const location = useLocation();
   const navigate = useNavigate();
+  const { t } = useLanguage()
 
   const navigationItems = [
     {
       key: 'dashboard' as AdminSection,
-      label: 'Dashboard',
+      label: t('admin.dashboard'),
       href: '/admin',
       icon: <Grid3x3 className="w-5 h-5" />
     },
     {
       key: 'users' as AdminSection,
-      label: 'User Management',
+      label: t('admin.users'),
       href: '/admin/users',
       icon: <UserCog className="w-5 h-5" />
     },
     {
       key: 'sustainability' as AdminSection,
-      label: 'Sustainability',
+      label: t('domain.sustainability.title'),
       href: '/admin/sustainability',
       icon: <Leaf className="w-5 h-5" />
     },
     {
       key: 'resilience' as AdminSection,
-      label: 'Resilience',
+      label: t('domain.resilience.title'),
       href: '/admin/resilience',
       icon: <Shield className="w-5 h-5" />
     },
     {
       key: 'human-centricity' as AdminSection,
-      label: 'Human Centricity',
+      label: t('domain.humanCentricity.title'),
       href: '/admin/human-centricity',
       icon: <Heart className="w-5 h-5" />
     }
@@ -61,7 +63,7 @@ export function AdminSidebar({ currentSection, user }: AdminSidebarProps) {
           className="flex items-center gap-2 px-3 py-2 text-sm text-gray-600 hover:text-gray-900 hover:bg-white/50 rounded-lg transition-all duration-200"
         >
           <ArrowLeft className="w-4 h-4" />
-          Back to Site
+          {t('admin.backToSite')}
         </button>
       </div>
 
@@ -73,7 +75,7 @@ export function AdminSidebar({ currentSection, user }: AdminSidebarProps) {
           </div>
           <div>
             <h2 className="text-lg font-bold bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent">
-              Admin Panel
+              {t('admin.panel')}
             </h2>
           </div>
         </div>
@@ -123,7 +125,7 @@ export function AdminSidebar({ currentSection, user }: AdminSidebarProps) {
               {user.first_name || user.username}
             </p>
             <p className="text-xs text-gray-500">
-              Admin Access
+              {t('admin.adminAccess')}
             </p>
           </div>
         </div>

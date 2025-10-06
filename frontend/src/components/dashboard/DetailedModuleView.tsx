@@ -6,6 +6,7 @@ import { X, Brain, Shield, Leaf, CheckCircle, Clock, Sparkles } from 'lucide-rea
 import { HumanCentricityPanel } from './panels/HumanCentricityPanel'
 import { ResiliencePanel } from './panels/ResiliencePanel'
 import { SustainabilityPanel } from './panels/SustainabilityPanel'
+import { useLanguage } from '@/contexts/LanguageContext'
 
 interface DetailedModuleViewProps {
   module: string
@@ -28,6 +29,8 @@ export const DetailedModuleView: React.FC<DetailedModuleViewProps> = ({
   assessmentData,
   onClose
 }) => {
+  const { t } = useLanguage()
+
   const getModuleIcon = (moduleKey: string) => {
     switch (moduleKey) {
       case 'human_centricity': return Brain
@@ -96,7 +99,7 @@ export const DetailedModuleView: React.FC<DetailedModuleViewProps> = ({
       default:
         return (
           <div className="text-center text-muted-foreground py-8">
-            No detailed view available for this module
+            {t('dashboard.noDetailedView')}
           </div>
         )
     }
@@ -110,23 +113,23 @@ export const DetailedModuleView: React.FC<DetailedModuleViewProps> = ({
           <div className="flex items-center gap-4">
             <ModuleIcon className="h-8 w-8 text-primary" />
             <div>
-              <h2 className="text-2xl font-bold">{moduleData.name} - Detailed View</h2>
+              <h2 className="text-2xl font-bold">{t(moduleData.name)} - {t('dashboard.detailedView')}</h2>
               <div className="flex items-center gap-4 mt-2">
                 <Badge variant="outline">
-                  {status.completed}/{status.total} domains complete
+                  {status.completed}/{status.total} {t('assessments.domains').toLowerCase()} {t('module.complete').toLowerCase()}
                 </Badge>
                 {moduleScore && (
                   <Badge 
                     variant="secondary"
                     className={getScoreColor(moduleScore)}>
-                    Score: {moduleScore.toFixed(1)}
+                    {t('module.score')}: {moduleScore.toFixed(1)}
                   </Badge>
                 )}
                 <Badge 
                   variant="secondary"
                   className={status.percentage === 100 ? "text-green-600" : ""}
                 >
-                  {status.percentage.toFixed(0)}% Complete
+                  {status.percentage.toFixed(0)}% {t('module.complete')}
                 </Badge>
               </div>
             </div>
@@ -149,7 +152,7 @@ export const DetailedModuleView: React.FC<DetailedModuleViewProps> = ({
               <CardHeader>
                 <CardTitle className="flex items-center gap-2">
                   <CheckCircle className="h-5 w-5" />
-                  Domain Status Overview
+                  {t('dashboard.domainStatusOverview')}
                 </CardTitle>
               </CardHeader>
               <CardContent>
@@ -185,7 +188,7 @@ export const DetailedModuleView: React.FC<DetailedModuleViewProps> = ({
                             <span className={`text-lg font-bold ${getScoreColor(domainScore)}`}>
                               {domainScore.toFixed(1)}
                             </span>
-                            <span className="text-xs text-muted-foreground ml-1">score</span>
+                            <span className="text-xs text-muted-foreground ml-1">{t('module.score').toLowerCase()}</span>
                           </div>
                         )}
                         
@@ -193,12 +196,12 @@ export const DetailedModuleView: React.FC<DetailedModuleViewProps> = ({
                           variant="outline"
                           className={`text-xs mb-2 ${isCompleted ? 'text-green-600' : ''}`}
                         >
-                          {isCompleted ? 'Complete' : 'Pending'}
+                          {isCompleted ? t('module.complete') : t('dashboard.pending')}
                         </Badge>
                         
                         {processingTime && (
                           <div className="text-xs text-muted-foreground">
-                            Processed in {processingTime.toFixed(2)}ms
+                            {t('dashboard.processedIn')} {processingTime.toFixed(2)}ms
                           </div>
                         )}
                       </div>
@@ -221,7 +224,7 @@ export const DetailedModuleView: React.FC<DetailedModuleViewProps> = ({
                 <CardHeader>
                   <CardTitle className="text-success flex items-center gap-2">
                     <CheckCircle className="h-5 w-5" />
-                    {moduleData.name} Assessment Complete
+                    {t(moduleData.name)} {t('dashboard.assessmentComplete')}
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
@@ -230,20 +233,20 @@ export const DetailedModuleView: React.FC<DetailedModuleViewProps> = ({
                       <div className={`text-3xl font-bold ${getScoreColor(moduleScore)}`}>
                         {moduleScore.toFixed(1)}
                       </div>
-                      <div className="text-sm text-muted-foreground">Overall Score</div>
+                      <div className="text-sm text-muted-foreground">{t('dashboard.overallScore')}</div>
                     </div>
                     <div className="text-center">
                       <div className="text-3xl font-bold text-primary">{status.total}</div>
-                      <div className="text-sm text-muted-foreground">Domains Assessed</div>
+                      <div className="text-sm text-muted-foreground">{t('dashboard.domainsAssessed')}</div>
                     </div>
                     <div className="text-center">
                       <div className="text-3xl font-bold text-success">100%</div>
-                      <div className="text-sm text-muted-foreground">Complete</div>
+                      <div className="text-sm text-muted-foreground">{t('module.complete')}</div>
                     </div>
                   </div>
                   
                   <div className="mt-4 p-4 bg-muted/30 rounded-lg">
-                    <div className="text-sm text-muted-foreground mb-2">Domain Breakdown:</div>
+                    <div className="text-sm text-muted-foreground mb-2">{t('dashboard.domainBreakdown')}</div>
                     <div className="flex flex-wrap gap-2">
                       {moduleData.domains.map(domain => {
                         const score = assessmentData.domain_scores?.[domain]

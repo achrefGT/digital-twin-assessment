@@ -4,9 +4,11 @@ import { useAdminApi } from '@/hooks/useAdminApi';
 import { ServiceHealthMonitor } from './ServiceHealthMonitor';
 import { AdminDashboard as AdminDashboardType, ServicesHealthResponse } from '@/types/admin';
 import { ArrowRight, CheckCircle, Leaf, Shield, Users } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext'
 
 export function AdminDashboard() {
   const { dashboard, servicesHealth } = useAdminApi();
+  const { t } = useLanguage()
 
   if (dashboard.isLoading) {
     return (
@@ -30,8 +32,8 @@ export function AdminDashboard() {
 
   const serviceCards = [
     {
-      title: 'Sustainability',
-      description: 'Environmental, economic, and social sustainability assessments',
+      title: t('domain.sustainability.title'),
+      description: t('admin.sustainabilityDesc'),
       href: '/admin/sustainability',
       icon: <Leaf className="w-6 h-6" />,
       color: 'green',
@@ -39,8 +41,8 @@ export function AdminDashboard() {
       serviceKey: 'sustainability'
     },
     {
-      title: 'Resilience',
-      description: 'Risk assessment and system adaptability frameworks',
+      title: t('domain.resilience.title'),
+      description: t('admin.resilienceDesc'),
       href: '/admin/resilience',
       icon: <Shield className="w-6 h-6" />,
       color: 'purple',
@@ -48,8 +50,8 @@ export function AdminDashboard() {
       serviceKey: 'resilience'
     },
     {
-      title: 'Human Centricity',
-      description: 'User experience and human-centered design evaluation',
+      title: t('domain.humanCentricity.title'),
+      description: t('admin.humanCentricityDesc'),
       href: '/admin/human-centricity',
       icon: <Users className="w-6 h-6" />,
       color: 'blue',
@@ -104,17 +106,17 @@ export function AdminDashboard() {
       {/* Header */}
       <div>
         <h1 className="text-3xl font-bold text-gray-900 mb-2">
-          Admin Dashboard
+          {t('admin.dashboard')}
         </h1>
         <p className="text-gray-600">
-          Manage your digital twin assessment platform
+          {t('admin.managePlatform')}
         </p>
       </div>
 
 
       {/* Service Cards */}
       <div>
-        <h2 className="text-xl font-semibold text-gray-900 mb-6">Management Modules</h2>
+        <h2 className="text-xl font-semibold text-gray-900 mb-6">{t('admin.managementModules')}</h2>
 
         {/* NOTE: added auto-rows-fr so each grid cell gets equal height */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-6 auto-rows-fr">
@@ -159,7 +161,7 @@ export function AdminDashboard() {
                       </span>
                     )}
                     <div className="flex items-center text-sm font-medium text-gray-700 group-hover:text-gray-900 ml-auto">
-                      Manage
+                      {t('admin.manage')}
                       <ArrowRight className="ml-1 h-4 w-4 group-hover:translate-x-1 transition-transform" />
                     </div>
                   </div>
@@ -175,7 +177,7 @@ export function AdminDashboard() {
         <div className="bg-white rounded-xl border border-gray-200 p-6">
           <h2 className="text-xl font-semibold text-gray-900 mb-6 flex items-center gap-2">
             <CheckCircle className="w-5 h-5 text-green-600" />
-            Available Actions
+            {t('admin.availableActions')}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {Object.entries(dashboardData.available_actions)

@@ -2,9 +2,11 @@ import React from 'react';
 import { useAdminApi } from '@/hooks/useAdminApi';
 import { ServicesHealthResponse, ServiceHealth } from '@/types/admin';
 import { CheckCircle, AlertCircle, Clock, RefreshCw, Activity } from 'lucide-react';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export function ServiceHealthMonitor() {
   const { servicesHealth } = useAdminApi();
+  const { t } = useLanguage();
 
   if (servicesHealth.isLoading) {
     return (
@@ -13,7 +15,7 @@ export function ServiceHealthMonitor() {
           <div className="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center animate-pulse">
             <Activity className="w-4 h-4 text-blue-600" />
           </div>
-          <h2 className="text-xl font-semibold text-gray-900">Service Health</h2>
+          <h2 className="text-xl font-semibold text-gray-900">{t('admin.serviceHealth')}</h2>
         </div>
         <div className="space-y-4">
           {[1, 2, 3].map((i) => (
@@ -37,9 +39,9 @@ export function ServiceHealthMonitor() {
           <div className="flex items-start gap-3">
             <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
             <div>
-              <h3 className="font-medium text-red-900 mb-1">Failed to Load Service Health</h3>
+              <h3 className="font-medium text-red-900 mb-1">{t('admin.failedLoadHealth')}</h3>
               <p className="text-sm text-red-700">
-                Unable to retrieve service health status. Please check your connection and try again.
+                {t('admin.unableRetrieveHealth')}
               </p>
             </div>
           </div>
@@ -122,7 +124,7 @@ export function ServiceHealthMonitor() {
             onClick={() => servicesHealth.refetch()}
             disabled={servicesHealth.isFetching}
             className="p-2 bg-gray-100 hover:bg-gray-200 text-gray-600 rounded-lg transition-colors disabled:opacity-50"
-            title="Refresh health status"
+            title={t('admin.refreshHealth')}
           >
             <RefreshCw className={`w-4 h-4 ${servicesHealth.isFetching ? 'animate-spin' : ''}`} />
           </button>
@@ -151,7 +153,7 @@ export function ServiceHealthMonitor() {
               </div>
               
               <div className="text-xs text-gray-600">
-                Last check: {new Date(service.timestamp).toLocaleTimeString()}
+                {t('admin.lastCheck')}: {new Date(service.timestamp).toLocaleTimeString()}
               </div>
               
               {service.error && (
@@ -168,7 +170,7 @@ export function ServiceHealthMonitor() {
         <div className="mt-6 pt-4 border-t border-gray-100">
           <div className="flex items-center justify-center text-sm text-gray-500">
             <Clock className="w-4 h-4 mr-2" />
-            Last checked by {data.checked_by} at {new Date(data.checked_at).toLocaleString()}
+            {t('admin.lastCheckedBy')} {data.checked_by} {t('admin.at')} {new Date(data.checked_at).toLocaleString()}
           </div>
         </div>
       )}
