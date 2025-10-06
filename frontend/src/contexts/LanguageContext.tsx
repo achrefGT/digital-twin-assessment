@@ -52,6 +52,9 @@ const translations = {
     'domain.sustainability.environmental': 'Environmental',
     'domain.sustainability.economic': 'Economic',
     'domain.sustainability.social': 'Social',
+    'domain.sustainability.environmental.desc': 'Assess the environmental impact of the system and promote eco-friendly practices.',
+    'domain.sustainability.economic.desc': 'Assess economic viability and resource optimization.',
+    'domain.sustainability.social.desc': 'Assess social impact and user inclusion.',
     'domain.sustainability.assessmentTypes': 'Assessment Types:',
     
     'domain.humanCentricity.title': 'Human Centricity',
@@ -61,6 +64,20 @@ const translations = {
     'domain.humanCentricity.workload': 'Workload analysis',
     'domain.humanCentricity.performance': 'Performance tracking',
     'domain.humanCentricity.keyFeatures': 'Key Features:',
+    'domain.humanCentricity.coreUsability': 'Basic Usability',
+    'domain.humanCentricity.trustTransparency': 'Trust and Transparency',
+    'domain.humanCentricity.workloadComfort': 'Workload and Comfort',
+    'domain.humanCentricity.cybersickness': 'Cybersickness',
+    'domain.humanCentricity.emotionalResponse': 'Emotional Response',
+
+    // Human Centricity Domain Descriptions
+    'domain.humanCentricity.coreUsability.desc': 'Evaluate the basic usability and system integration',
+    'domain.humanCentricity.trustTransparency.desc': 'Assess trust in the system’s results and transparency',
+    'domain.humanCentricity.workloadComfort.desc': 'Evaluate mental workload and physical comfort',
+    'domain.humanCentricity.cybersickness.desc': 'Assess physical discomfort or symptoms of cybersickness',
+    'domain.humanCentricity.emotionalResponse.desc': 'Capture your emotional state while using the system',
+    'domain.humanCentricity.performance.desc': 'Record measured performance indicators',
+
     
     'domain.resilience.title': 'Resilience',
     'domain.resilience.tagline': 'System Robustness & Risk Management',
@@ -233,6 +250,9 @@ const translations = {
     'assessment.comprehensiveAssessment': 'Complete this comprehensive assessment',
     'assessment.evaluateSystem': 'Evaluate your digital twin system across',
     'assessment.parameters': 'parameters with detailed analysis and recommendations.',
+    'assessment.criteriaCompleted': 'Criteria Completed',
+    'assessment.nextStep': 'Next Step',
+    'assessment.completeAssessment': 'Complete Assessment',
     
     
     // Forms
@@ -243,6 +263,7 @@ const translations = {
     'form.validation.required': 'This field is required',
     'form.validation.min': 'Minimum value is',
     'form.validation.max': 'Maximum value is',
+    'form.selectLevel': 'Select a level',
     
     // Authentication
     'auth.login': 'Login',
@@ -712,7 +733,7 @@ const translations = {
     'humanCentricity.widgetConfiguration': 'Widget Configuration',
     'humanCentricity.textInput': 'Text',
     'humanCentricity.custom': 'Custom',
-    'humanCentricity.likertRange': '1-7 Likert (Strongly Disagree to Strongly Agree)',
+    'humanCentricity.likertRange': '1-7 Likert',
     'humanCentricity.sliderRange': '0-100 Slider (Very Low to Very High)',
     'humanCentricity.severityRange': '1-5 Severity (None to Very Severe)',
     'humanCentricity.samRange': '1-5 SAM (Valence & Arousal)',
@@ -729,7 +750,30 @@ const translations = {
     'resilience.medium': 'Medium',
     'resilience.high': 'High',
     'resilience.critical': 'Critical',
-    'resilience.allStatements': 'Actif scenarios',
+    'resilience.allStatements': 'Active scenarios',
+    
+    // Resilience Form Steps
+    'resilience.likelihood': 'Likelihood',
+    'resilience.impact': 'Impact',
+    'resilience.selectLikelihood': 'Select likelihood',
+    'resilience.rare': 'Rare',
+    'resilience.unlikely': 'Unlikely',
+    'resilience.possible': 'Possible',
+    'resilience.likely': 'Likely',
+    'resilience.almostCertain': 'Almost Certain',
+    'resilience.selectImpact': 'Select impact',
+    'resilience.negligible': 'Negligible',
+    'resilience.minor': 'Minor',
+    'resilience.moderate': 'Moderate',
+    'resilience.major': 'Major',
+    'resilience.catastrophic': 'Catastrophic',
+    'resilience.scenariosCompleted': 'scenarios completed',
+    'resilience.failedLoadScenarios': 'Failed to load scenarios for',
+    'resilience.noScenariosConfigured': 'No scenarios are configured for',
+    'resilience.noScenariosAvailable': 'No scenarios available',
+    'error.tryRefresh': 'Please try refreshing the page.',
+    'error.contactAdmin': 'Please contact your administrator.',
+    'assessment.cannotContinue': 'Cannot Continue',
 
     // Resilience Management
     'resilience.editScenario': 'Edit Scenario',
@@ -758,7 +802,6 @@ const translations = {
     'resilience.domainScenarios': '{domain} Scenarios',
     'resilience.scenariosDefined': 'scenarios defined',
     'resilience.loadingScenarios': 'Loading scenarios...',
-    'resilience.failedLoadScenarios': 'Failed to Load Scenarios',
     'resilience.noScenariosFound': 'No Scenarios Found',
     'resilience.getStartedScenario': 'Get started by creating your first resilience scenario. Define assessment scenarios for your digital twin evaluations.',
     'resilience.readyToCreateScenarios': 'Ready to create scenarios',
@@ -846,7 +889,6 @@ const translations = {
     'sustainability.economic': 'Economic',
     'sustainability.social': 'Social',
 
-    
 
     // Common for all managers
     'manager.saving': 'Saving...',
@@ -911,6 +953,9 @@ const translations = {
     'domain.sustainability.environmental': 'Environnemental',
     'domain.sustainability.economic': 'Économique',
     'domain.sustainability.social': 'Social',
+    'domain.sustainability.environmental.desc': 'Évaluer l\'impact environnemental du système et promouvoir des pratiques écologiques.',
+    'domain.sustainability.economic.desc': 'Évaluer la viabilité économique et l\'optimisation des ressources.',
+    'domain.sustainability.social.desc': 'Évaluer les effets sociaux et l\'inclusion des utilisateurs.',
     'domain.sustainability.assessmentTypes': 'Types d\'évaluation :',
     
     'domain.humanCentricity.title': 'Centrage humain',
@@ -920,6 +965,20 @@ const translations = {
     'domain.humanCentricity.workload': 'Analyse de charge de travail',
     'domain.humanCentricity.performance': 'Suivi des performances',
     'domain.humanCentricity.keyFeatures': 'Caractéristiques clés :',
+    // Human Centricity Domain Names
+    'domain.humanCentricity.coreUsability': 'Utilisabilité de base',
+    'domain.humanCentricity.trustTransparency': 'Confiance et transparence',
+    'domain.humanCentricity.workloadComfort': 'Charge de travail et confort',
+    'domain.humanCentricity.cybersickness': 'Cybermalaise',
+    'domain.humanCentricity.emotionalResponse': 'Réponse émotionnelle',
+
+    // Human Centricity Domain Descriptions
+    'domain.humanCentricity.coreUsability.desc': 'Évaluer l\'utilisabilité de base et l\'intégration du système',
+    'domain.humanCentricity.trustTransparency.desc': 'Évaluer la confiance dans les résultats du système et la transparence',
+    'domain.humanCentricity.workloadComfort.desc': 'Évaluer la charge de travail mentale et le confort physique',
+    'domain.humanCentricity.cybersickness.desc': 'Évaluer l\'inconfort physique ou les symptômes de cybermalaise',
+    'domain.humanCentricity.emotionalResponse.desc': 'Capturer votre état émotionnel lors de l\'utilisation du système',
+    'domain.humanCentricity.performance.desc': 'Enregistrer les indicateurs de performance mesurés',
     
     'domain.resilience.title': 'Résilience',
     'domain.resilience.tagline': 'Robustesse du système et gestion des risques',
@@ -1092,6 +1151,10 @@ const translations = {
     'assessment.comprehensiveAssessment': 'Complétez cette évaluation complète',
     'assessment.evaluateSystem': 'Évaluez votre système de jumeau numérique à travers',
     'assessment.parameters': 'paramètres avec une analyse détaillée et des recommandations.',
+    'assessment.criteriaCompleted': 'Critères complétés',
+    'assessment.nextStep': 'Étape suivante',
+    'assessment.completeAssessment': 'Compléter l\'évaluation',
+
     
     // Forms
     'form.required': 'Requis',
@@ -1101,6 +1164,7 @@ const translations = {
     'form.validation.required': 'Ce champ est requis',
     'form.validation.min': 'La valeur minimale est',
     'form.validation.max': 'La valeur maximale est',
+    'form.selectLevel': 'Sélectionner un niveau',
     
     // Authentication
     'auth.login': 'Connexion',
@@ -1572,7 +1636,7 @@ const translations = {
     'humanCentricity.widgetConfiguration': 'Configuration du widget',
     'humanCentricity.textInput': 'Texte',
     'humanCentricity.custom': 'Personnalisé',
-    'humanCentricity.likertRange': '1-7 Likert (Fortement en désaccord à Fortement d\'accord)',
+    'humanCentricity.likertRange': '1-7 Likert',
     'humanCentricity.sliderRange': '0-100 Curseur (Très faible à Très élevé)',
     'humanCentricity.severityRange': '1-5 Gravité (Aucune à Très grave)',
     'humanCentricity.samRange': '1-5 SAM (Valence et Éveil)',
@@ -1598,6 +1662,29 @@ const translations = {
     'resilience.phmFull': 'PHM (Pronostic et gestion de la santé)',
     'resilience.allDomains': 'Tous les domaines',
     'resilience.allStatements': 'Scénarios actifs',
+
+    // Resilience Form Steps
+    'resilience.likelihood': 'Probabilité',
+    'resilience.impact': 'Impact',
+    'resilience.selectLikelihood': 'Sélectionner la probabilité',
+    'resilience.rare': 'Rare',
+    'resilience.unlikely': 'Peu probable',
+    'resilience.possible': 'Possible',
+    'resilience.likely': 'Probable',
+    'resilience.almostCertain': 'Presque certain',
+    'resilience.selectImpact': 'Sélectionner l\'impact',
+    'resilience.negligible': 'Négligeable',
+    'resilience.minor': 'Mineur',
+    'resilience.moderate': 'Modéré',
+    'resilience.major': 'Majeur',
+    'resilience.catastrophic': 'Catastrophique',
+    'resilience.scenariosCompleted': 'scénarios complétés',
+    'resilience.failedLoadScenarios': 'Échec du chargement des scénarios pour',
+    'resilience.noScenariosConfigured': 'Aucun scénario n\'est configuré pour',
+    'resilience.noScenariosAvailable': 'Aucun scénario disponible',
+    'error.tryRefresh': 'Veuillez actualiser la page.',
+    'error.contactAdmin': 'Veuillez contacter votre administrateur.',
+    'assessment.cannotContinue': 'Impossible de continuer',
 
     // Resilience Management
     'resilience.editScenario': 'Modifier le scénario',
@@ -1626,7 +1713,6 @@ const translations = {
     'resilience.domainScenarios': 'Scénarios {domain}',
     'resilience.scenariosDefined': 'scénarios définis',
     'resilience.loadingScenarios': 'Chargement des scénarios...',
-    'resilience.failedLoadScenarios': 'Échec du chargement des scénarios',
     'resilience.noScenariosFound': 'Aucun scénario trouvé',
     'resilience.getStartedScenario': 'Commencez par créer votre premier scénario de résilience. Définissez des scénarios d\'évaluation pour vos évaluations de jumeaux numériques.',
     'resilience.readyToCreateScenarios': 'Prêt à créer des scénarios',
@@ -1706,6 +1792,8 @@ const translations = {
     'sustainability.environmental': 'Environnemental',
     'sustainability.economic': 'Économique',
     'sustainability.social': 'Social',
+
+    
 
     // Common for all managers
     'manager.saving': 'Enregistrement...',

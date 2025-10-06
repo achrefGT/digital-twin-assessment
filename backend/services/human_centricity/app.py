@@ -13,7 +13,7 @@ from shared.models.exceptions import AssessmentNotFoundException
 from .models import (
     HumanCentricityStructure, HumanCentricityDomain, StatementCreate, StatementUpdate, 
     StatementResponse, ASSESSMENT_STRUCTURE, PERFORMANCE_CONSTANTS,
-    FIXED_DOMAINS, DEFAULT_STATEMENTS
+    FIXED_DOMAINS_FR, DEFAULT_STATEMENTS_FR
 )
 from .database import DatabaseManager, make_json_serializable
 from .kafka_handler import HumanCentricityKafkaHandler
@@ -496,7 +496,7 @@ async def get_assessment_constants():
             "performance_scoring": "Lower values (time, errors, help) result in higher scores"
         },
         "validation_rules": ASSESSMENT_STRUCTURE.get('validation_rules', {}),
-        "fixed_domains": {domain.value: config for domain, config in FIXED_DOMAINS.items()}
+        "fixed_domains": {domain.value: config for domain, config in FIXED_DOMAINS_FR.items()}
     }
 
 

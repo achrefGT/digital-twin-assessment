@@ -25,7 +25,7 @@ interface CriteriaListProps {
   deletingIds?: string[];
 }
 
-// Helper to build a nice title from domain key
+// Helper to build a nice title from domain key with translation support
 const prettyDomain = (d: string, t: (key: string) => string) => {
   if (!d) return t('common.other');
   const domainKey = `sustainability.${d}` as const;
@@ -191,7 +191,7 @@ export function CriteriaList({ criteria, loading, error, onEdit, onDelete, delet
               <div className="flex items-center gap-2">
                 <span className={`inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium border ${domainConfig.color}`}>
                   {domainConfig.icon}
-                  {t(`sustainability.${criterion.domain}`)}
+                  {prettyDomain(criterion.domain, t)}
                 </span>
 
                 {criterion.is_default && (

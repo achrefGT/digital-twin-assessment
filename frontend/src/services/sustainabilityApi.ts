@@ -427,3 +427,17 @@ export const sustainabilityMutations = {
     mutationFn: (assessments: Record<string, any>) => SustainabilityAPI.validateAssessmentCriteria(assessments),
   }),
 }
+
+export const getSustainabilityDomainTranslationKey = (domainKey: string): string => {
+  const keyMap: Record<string, string> = {
+    'environmental': 'sustainability.environmental',
+    'economic': 'sustainability.economic',
+    'social': 'sustainability.social',
+  };
+  
+  return keyMap[domainKey] || domainKey.replace('_', ' ');
+};
+
+export const getSustainabilityDomainDescriptionKey = (domainKey: string): string => {
+  return `${getSustainabilityDomainTranslationKey(domainKey)}.desc`;
+};

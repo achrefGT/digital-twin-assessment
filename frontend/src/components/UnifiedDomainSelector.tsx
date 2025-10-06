@@ -10,6 +10,9 @@ import { useScenarios } from "@/hooks/useScenarios"
 import { useSustainability } from "@/hooks/useSustainability"
 import { useHumanCentricity } from "@/hooks/useHumanCentricity"
 import { useLanguage } from "@/contexts/LanguageContext"
+import { getHumanCentricityDomainTranslationKey } from '@/services/humanCentricityApi'
+import { getSustainabilityDomainTranslationKey } from '@/services/sustainabilityApi'
+import { getResilienceDomainTranslationKey } from '@/services/ResilienceAPI'
 
 // Step getter function map
 const stepGetters = {
@@ -420,6 +423,16 @@ export default function UnifiedDomainSelector({
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {domainTitles.map(title => {
               const isSelected = selectedDomains.has(title)
+              // Translate domain title if it's a human centricity assessment
+              let displayTitle = title
+              if (assessmentType === 'human_centricity') {
+                displayTitle = t(getHumanCentricityDomainTranslationKey(title.replace('_', ' ')))
+              } else if (assessmentType === 'sustainability') {
+                displayTitle = t(getSustainabilityDomainTranslationKey(title.toLowerCase()))
+              } else if (assessmentType === 'resilience') {
+                displayTitle = t(getResilienceDomainTranslationKey(title))
+              }
+
               return (
                 <div
                   key={title}
@@ -431,7 +444,9 @@ export default function UnifiedDomainSelector({
                   }`}
                 >
                   <div className="flex items-center justify-between">
-                    <span className="font-medium text-sm leading-relaxed pr-2">{title}</span>
+                    <span className="font-medium text-sm leading-relaxed pr-2">
+                      {displayTitle}
+                    </span>
                     <div className={`flex-shrink-0 w-5 h-5 rounded-full border-2 flex items-center justify-center ${
                       isSelected 
                         ? 'bg-white border-white' 

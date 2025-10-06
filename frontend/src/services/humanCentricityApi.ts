@@ -728,3 +728,20 @@ export const humanCentricityMutations = {
     mutationFn: (statementId: string) => HumanCentricityAPI.deleteStatement(statementId),
   }),
 }
+
+export const getHumanCentricityDomainTranslationKey = (domainKey: string): string => {
+  const keyMap: Record<string, string> = {
+    'Core Usability': 'domain.humanCentricity.coreUsability',
+    'Trust Transparency': 'domain.humanCentricity.trustTransparency',
+    'Workload Comfort': 'domain.humanCentricity.workloadComfort',
+    'Cybersickness': 'domain.humanCentricity.cybersickness',
+    'Emotional Response': 'domain.humanCentricity.emotionalResponse',
+    'Performance': 'domain.humanCentricity.performance',
+  };
+  
+  return keyMap[domainKey] || domainKey.replace('_', ' ');
+};
+
+export const getHumanCentricityDomainDescriptionKey = (domainKey: string): string => {
+  return `${getHumanCentricityDomainTranslationKey(domainKey)}.desc`;
+};

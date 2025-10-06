@@ -1,7 +1,7 @@
 from typing import List, Optional, Dict, Any
 import logging
 from .database import DatabaseManager, ResilienceScenario
-from .models import ScenarioCreate, ScenarioUpdate, ScenarioResponse, ResilienceDomain, RESILIENCE_SCENARIOS, DEFAULT_RESILIENCE_SCENARIOS
+from .models import ScenarioCreate, ScenarioUpdate, ScenarioResponse, ResilienceDomain, RESILIENCE_SCENARIOS, DEFAULT_RESILIENCE_SCENARIOS_FR
 
 logger = logging.getLogger(__name__)
 
@@ -85,7 +85,7 @@ class ScenarioManager:
                 if domain not in scenarios_by_domain:
                     scenarios_by_domain[domain] = []
                     # Get description from defaults or use the one from DB
-                    default_data = DEFAULT_RESILIENCE_SCENARIOS.get(domain, {})
+                    default_data = DEFAULT_RESILIENCE_SCENARIOS_FR.get(domain, {})
                     domain_descriptions[domain] = scenario.description or default_data.get('description', '')
                 
                 scenarios_by_domain[domain].append(scenario.scenario_text)
@@ -107,7 +107,7 @@ class ScenarioManager:
         try:
             if domain:
                 # Reset specific domain
-                if domain not in DEFAULT_RESILIENCE_SCENARIOS:
+                if domain not in DEFAULT_RESILIENCE_SCENARIOS_FR:
                     logger.error(f"Domain {domain} not found in defaults")
                     return False
                 
@@ -117,7 +117,7 @@ class ScenarioManager:
                     self.db_manager.delete_scenario(scenario.id)
                 
                 # Add default scenarios
-                domain_data = DEFAULT_RESILIENCE_SCENARIOS[domain]
+                domain_data = DEFAULT_RESILIENCE_SCENARIOS_FR[domain]
                 for scenario_text in domain_data['scenarios']:
                     scenario_data = {
                         'domain': domain,

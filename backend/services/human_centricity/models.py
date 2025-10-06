@@ -551,11 +551,401 @@ SCALES = {
     }
 }
 
+# Échelles par domaine (version française)
+DOMAIN_SCALES_FR = {
+    HumanCentricityDomain.CORE_USABILITY: {
+        'type': 'likert',
+        'min': 1,
+        'max': 7,
+        'labels': {
+            1: 'Tout à fait en désaccord',
+            2: 'En désaccord',
+            3: 'Plutôt en désaccord',
+            4: 'Neutre',
+            5: 'Plutôt d\'accord',
+            6: 'D\'accord',
+            7: 'Tout à fait d\'accord'
+        }
+    },
+    HumanCentricityDomain.TRUST_TRANSPARENCY: {
+        'type': 'likert',
+        'min': 1,
+        'max': 7,
+        'labels': {
+            1: 'Tout à fait en désaccord',
+            2: 'En désaccord',
+            3: 'Plutôt en désaccord',
+            4: 'Neutre',
+            5: 'Plutôt d\'accord',
+            6: 'D\'accord',
+            7: 'Tout à fait d\'accord'
+        }
+    },
+    HumanCentricityDomain.WORKLOAD_COMFORT: {
+        'type': 'slider',
+        'min': 0,
+        'max': 100,
+        'step': 1,
+        'labels': {
+            0: 'Très faible',
+            25: 'Faible',
+            50: 'Modéré',
+            75: 'Élevé',
+            100: 'Très élevé'
+        }
+    },
+    HumanCentricityDomain.CYBERSICKNESS: {
+        'type': 'likert',
+        'min': 1,
+        'max': 5,
+        'labels': {
+            1: 'Aucun',
+            2: 'Léger',
+            3: 'Modéré',
+            4: 'Sévère',
+            5: 'Très sévère'
+        }
+    },
+    HumanCentricityDomain.EMOTIONAL_RESPONSE: {
+        'type': 'sam',
+        'min': 1,
+        'max': 5,
+        'dimensions': {
+            'valence': {
+                'labels': {
+                    1: 'Très malheureux',
+                    2: 'Malheureux',
+                    3: 'Neutre',
+                    4: 'Heureux',
+                    5: 'Très heureux'
+                }
+            },
+            'arousal': {
+                'labels': {
+                    1: 'Très calme',
+                    2: 'Calme',
+                    3: 'Neutre',
+                    4: 'Excité',
+                    5: 'Très excité'
+                }
+            }
+        }
+    },
+    HumanCentricityDomain.PERFORMANCE: {
+        'type': 'numeric',
+        'metrics': {
+            'time': {
+                'unit': 'minutes',
+                'min': 0,
+                'max': PERFORMANCE_CONSTANTS['MAX_TIME'],
+                'normalization': 'inverse',  # Plus bas est meilleur
+                'description': "Temps d'accomplissement de la tâche"
+            },
+            'errors': {
+                'unit': 'count',
+                'min': 0,
+                'max': PERFORMANCE_CONSTANTS['MAX_ERRORS'],
+                'normalization': 'inverse',  # Plus bas est meilleur
+                'description': "Nombre d'erreurs"
+            },
+            'help': {
+                'unit': 'count',
+                'min': 0,
+                'max': PERFORMANCE_CONSTANTS['MAX_HELP'],
+                'normalization': 'inverse',  # Plus bas est meilleur
+                'description': "Demandes d'aide"
+            }
+        },
+        'custom_statement_requirements': {
+            'widget_config_required_fields': ['min', 'max', 'normalization'],
+            'supported_normalizations': ['inverse', 'direct'],
+            'description': "Les métriques de performance personnalisées doivent préciser min, max et le type de normalisation"
+        }
+    }
+}
+
+
+# Domaines fixes (version française)
+FIXED_DOMAINS_FR = {
+    HumanCentricityDomain.CORE_USABILITY: {
+        'title': 'Utilisabilité fondamentale et expérience utilisateur',
+        'description': 'Évaluer les aspects fondamentaux d\'utilisabilité et l\'expérience utilisateur du système',
+        'statement_type': StatementType.SCALE,
+        'default_widget': 'likert',
+        'display_order': 1,
+        'is_composite': False,
+        'icon': 'user-check',
+        'color': '#3B82F6'
+    },
+    HumanCentricityDomain.TRUST_TRANSPARENCY: {
+        'title': 'Confiance & Transparence',
+        'description': 'Évaluer le niveau de confiance et la transparence du système dans la prise de décision',
+        'statement_type': StatementType.SCALE,
+        'default_widget': 'likert',
+        'display_order': 2,
+        'is_composite': False,
+        'icon': 'shield-check',
+        'color': '#10B981'
+    },
+    HumanCentricityDomain.WORKLOAD_COMFORT: {
+        'title': 'Charge de travail & Confort',
+        'description': 'Évaluer la charge mentale et le confort physique lors de l\'utilisation du système',
+        'statement_type': StatementType.COMPOSITE,
+        'default_widget': 'slider',
+        'display_order': 3,
+        'is_composite': True,
+        'icon': 'brain',
+        'color': '#F59E0B'
+    },
+    HumanCentricityDomain.CYBERSICKNESS: {
+        'title': 'Cybersickness / Confort',
+        'description': 'Évaluer l\'inconfort physique ou les symptômes de cybersickness lors de l\'utilisation du système',
+        'statement_type': StatementType.SCALE,
+        'default_widget': 'likert',
+        'display_order': 4,
+        'is_composite': False,
+        'icon': 'heart-pulse',
+        'color': '#EF4444'
+    },
+    HumanCentricityDomain.EMOTIONAL_RESPONSE: {
+        'title': 'Réponse émotionnelle (SAM)',
+        'description': 'Capturer votre état émotionnel pendant l\'utilisation du système',
+        'statement_type': StatementType.SCALE,
+        'default_widget': 'sam',
+        'display_order': 5,
+        'is_composite': True,
+        'icon': 'smile',
+        'color': '#8B5CF6'
+    },
+    HumanCentricityDomain.PERFORMANCE: {
+        'title': 'Indicateurs de performance objectifs',
+        'description': 'Enregistrer les indicateurs de performance mesurés',
+        'statement_type': StatementType.PERFORMANCE,
+        'default_widget': 'numeric',
+        'display_order': 6,
+        'is_composite': True,
+        'icon': 'bar-chart',
+        'color': '#06B6D4'
+    }
+}
+
+
+# Énoncés par défaut pour chaque domaine (version française)
+DEFAULT_STATEMENTS_FR = {
+    HumanCentricityDomain.CORE_USABILITY: [
+        {
+            'text': "J'ai trouvé le jumeau numérique intuitif et facile à utiliser.",
+            'display_order': 1,
+            'scale_key': 'likert_7_point',
+            'is_default': True
+        },
+        {
+            'text': "Les fonctions du système semblent bien intégrées et cohérentes.",
+            'display_order': 2,
+            'scale_key': 'likert_7_point',
+            'is_default': True
+        },
+        {
+            'text': "J'utiliserais fréquemment ce jumeau numérique dans mon travail.",
+            'display_order': 3,
+            'scale_key': 'likert_7_point',
+            'is_default': True
+        },
+        {
+            'text': "L'apprentissage pour utiliser le système a été rapide et simple.",
+            'display_order': 4,
+            'scale_key': 'likert_7_point',
+            'is_default': True
+        },
+        {
+            'text': "Je me sens confiant et maître de la situation lorsque j'utilise le jumeau.",
+            'display_order': 5,
+            'scale_key': 'likert_7_point',
+            'is_default': True
+        },
+        {
+            'text': "La terminologie et les flux de travail correspondent à mon expertise métier.",
+            'display_order': 6,
+            'scale_key': 'likert_7_point',
+            'is_default': True
+        },
+        {
+            'text': "Je peux facilement adapter les vues, tableaux de bord et alertes à mes besoins.",
+            'display_order': 7,
+            'scale_key': 'likert_7_point',
+            'is_default': True
+        },
+        {
+            'text': "Je suis à l'aise avec la façon dont le système collecte, utilise et affiche mes données.",
+            'display_order': 8,
+            'scale_key': 'likert_7_point',
+            'is_default': True
+        }
+    ],
+    HumanCentricityDomain.TRUST_TRANSPARENCY: [
+        {
+            'text': "Je comprends l'origine et la fraîcheur des données affichées.",
+            'display_order': 1,
+            'scale_key': 'likert_7_point',
+            'is_default': True
+        },
+        {
+            'text': "Le système explique comment il a généré ses analyses ou recommandations.",
+            'display_order': 2,
+            'scale_key': 'likert_7_point',
+            'is_default': True
+        },
+        {
+            'text': "Je fais confiance à l'exactitude et à la fiabilité des sorties du jumeau numérique.",
+            'display_order': 3,
+            'scale_key': 'likert_7_point',
+            'is_default': True
+        },
+        {
+            'text': "Je me sens confiant pour prendre des décisions opérationnelles basées sur les analyses du jumeau.",
+            'display_order': 4,
+            'scale_key': 'likert_7_point',
+            'is_default': True
+        }
+    ],
+    HumanCentricityDomain.WORKLOAD_COMFORT: [
+        {
+            'text': "Exigence mentale",
+            'display_order': 1,
+            'is_default': True,
+            'scale_key': 'workload_slider',
+            'widget': 'slider'
+        },
+        {
+            'text': "Effort requis",
+            'display_order': 2,
+            'is_default': True,
+            'scale_key': 'workload_slider',
+            'widget': 'slider'
+        },
+        {
+            'text': "Niveau de frustration",
+            'display_order': 3,
+            'is_default': True,
+            'scale_key': 'workload_slider',
+            'widget': 'slider'
+        }
+    ],
+    HumanCentricityDomain.CYBERSICKNESS: [
+        {
+            'text': "Nausée ou malaise",
+            'display_order': 1,
+            'scale_key': 'cybersickness_5_point',
+            'is_default': True
+        },
+        {
+            'text': "Vertiges ou sensation de déséquilibre",
+            'display_order': 2,
+            'scale_key': 'cybersickness_5_point',
+            'is_default': True
+        },
+        {
+            'text': "Fatigue oculaire ou inconfort visuel",
+            'display_order': 3,
+            'scale_key': 'cybersickness_5_point',
+            'is_default': True
+        }
+    ],
+    HumanCentricityDomain.EMOTIONAL_RESPONSE: [
+        {
+            'text': "Valence (1 = Négatif, 5 = Positif)",
+            'display_order': 1,
+            'is_default': True,
+            'scale_key': 'sam_valence',
+            'widget': 'sam'
+        },
+        {
+            'text': "Activation (1 = Calme, 5 = Excité)",
+            'display_order': 2,
+            'is_default': True,
+            'scale_key': 'sam_arousal',
+            'widget': 'sam'
+        }
+    ],
+    HumanCentricityDomain.PERFORMANCE: [
+        {
+            'text': "Temps d'accomplissement de la tâche (minutes)",
+            'display_order': 1,
+            'is_default': True,
+            'widget': 'numeric',
+            'scale_key': 'performance_metrics',
+            'widget_config': {
+                'min': 0,
+                'max': 30,
+                'step': 0.1,
+                'unit': 'minutes',
+                'normalization': 'inverse'  # Plus bas est meilleur
+            }
+        },
+        {
+            'text': "Taux d'erreur (erreurs par tâche)",
+            'display_order': 2,
+            'is_default': True,
+            'widget': 'numeric',
+            'scale_key': 'performance_metrics',
+            'widget_config': {
+                'min': 0,
+                'max': 10,
+                'step': 1,
+                'unit': 'erreurs',
+                'normalization': 'inverse'  # Plus bas est meilleur
+            }
+        },
+        {
+            'text': "Demandes d'aide (occurrences)",
+            'display_order': 3,
+            'is_default': True,
+            'widget': 'numeric',
+            'scale_key': 'performance_metrics',
+            'widget_config': {
+                'min': 0,
+                'max': 5,
+                'step': 1,
+                'unit': 'demandes',
+                'normalization': 'inverse'  # Plus bas est meilleur
+            }
+        }
+    ]
+}
+
+
+# Définitions des échelles (pour usage frontend / validation) - version française
+SCALES_FR = {
+    'likert_7_point': DOMAIN_SCALES_FR[HumanCentricityDomain.CORE_USABILITY],
+    'workload_slider': DOMAIN_SCALES_FR[HumanCentricityDomain.WORKLOAD_COMFORT],
+    'cybersickness_5_point': DOMAIN_SCALES_FR[HumanCentricityDomain.CYBERSICKNESS],
+    'sam_valence': {
+        'type': 'sam',
+        'min': 1,
+        'max': 5,
+        'labels': DOMAIN_SCALES_FR[HumanCentricityDomain.EMOTIONAL_RESPONSE]['dimensions']['valence']['labels'],
+        'description': 'Échelle valence du Self-Assessment Manikin (SAM)'
+    },
+    'sam_arousal': {
+        'type': 'sam',
+        'min': 1,
+        'max': 5,
+        'labels': DOMAIN_SCALES_FR[HumanCentricityDomain.EMOTIONAL_RESPONSE]['dimensions']['arousal']['labels'],
+        'description': 'Échelle d\'activation du Self-Assessment Manikin (SAM)'
+    },
+    'performance_metrics': {
+        'type': 'performance',
+        'min': 0,
+        'max': 999,
+        'description': "Métriques objectives de performance"
+    }
+}
+
 
 class StatementManager:
     """Helper class for statement management within fixed domains"""
 
-    scales = SCALES
+    scales = SCALES_FR
 
     @staticmethod
     def _get_compatible_scales(domain: HumanCentricityDomain) -> List[str]:
@@ -573,27 +963,27 @@ class StatementManager:
     @staticmethod
     def get_domain_info(domain: HumanCentricityDomain) -> Dict[str, Any]:
         """Get information about a fixed domain"""
-        return FIXED_DOMAINS.get(domain, {})
+        return FIXED_DOMAINS_FR.get(domain, {})
     
     @staticmethod
     def get_domain_scale(domain: HumanCentricityDomain) -> Dict[str, Any]:
         """Get the fixed scale configuration for a domain"""
-        return DOMAIN_SCALES.get(domain, {})
+        return DOMAIN_SCALES_FR.get(domain, {})
     
     @staticmethod
     def get_all_domains() -> Dict[HumanCentricityDomain, Dict[str, Any]]:
         """Get all fixed domains"""
-        return FIXED_DOMAINS
+        return FIXED_DOMAINS_FR
     
     @staticmethod
     def get_default_statements_for_domain(domain: HumanCentricityDomain) -> List[Dict[str, Any]]:
         """Get default statements for a domain"""
-        return DEFAULT_STATEMENTS.get(domain, [])
+        return DEFAULT_STATEMENTS_FR.get(domain, [])
     
     @staticmethod
     def validate_statement_for_domain(domain: HumanCentricityDomain, statement_data: Dict[str, Any]) -> Dict[str, Any]:
         """Validate a statement against domain constraints"""
-        domain_info = FIXED_DOMAINS.get(domain)
+        domain_info = FIXED_DOMAINS_FR.get(domain)
         if not domain_info:
             return {'valid': False, 'errors': ['Invalid domain']}
         
@@ -624,7 +1014,7 @@ class StatementManager:
     @staticmethod
     def get_statement_template(domain: HumanCentricityDomain) -> Dict[str, Any]:
         """Get a template for creating new statements in a domain"""
-        domain_info = FIXED_DOMAINS.get(domain, {})
+        domain_info = FIXED_DOMAINS_FR.get(domain, {})
         return {
             'domain_key': domain,
             'statement_text': '',
@@ -703,7 +1093,7 @@ ASSESSMENT_STRUCTURE = {
     'scoring_method': 'weighted_domain_average',
     'validation_rules': {
         'min_domains': 1,
-        'max_domains': 6,  # Fixed to the 6 predefined domains
+        'max_domains': 6,  
         'min_statements_per_domain': 1,
         'max_statements_per_domain': 20,
         'max_total_statements': 100

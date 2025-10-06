@@ -7,7 +7,7 @@ from shared.models.exceptions import ScoringException
 from .models import (
     LikertResponse, WorkloadMetrics, CybersicknessResponse, 
     EmotionalResponse, PerformanceMetrics, HumanCentricityDomain,
-    FIXED_DOMAINS, DEFAULT_STATEMENTS, PERFORMANCE_CONSTANTS, HumanCentricityInput
+    FIXED_DOMAINS_FR, DEFAULT_STATEMENTS_FR, PERFORMANCE_CONSTANTS, HumanCentricityInput
 )
 
 logger = logging.getLogger(__name__)
@@ -138,7 +138,7 @@ class HumanCentricityScorer:
         mean_rating = np.mean(all_ratings)
         score = (mean_rating - 1) / 6 * 100
         
-        expected_count = len(DEFAULT_STATEMENTS.get(HumanCentricityDomain.CORE_USABILITY, []))
+        expected_count = len(DEFAULT_STATEMENTS_FR.get(HumanCentricityDomain.CORE_USABILITY, []))
         
         return score, {
             'mean_rating': round(mean_rating, 2),
@@ -152,7 +152,7 @@ class HumanCentricityScorer:
                 'ratings': all_ratings
             },
             'response_breakdown': response_details,
-            'default_statements': DEFAULT_STATEMENTS.get(HumanCentricityDomain.CORE_USABILITY, [])
+            'default_statements': DEFAULT_STATEMENTS_FR.get(HumanCentricityDomain.CORE_USABILITY, [])
         }
     
     def _score_trust_transparency(self, responses: Optional[List[LikertResponse]], 
@@ -186,7 +186,7 @@ class HumanCentricityScorer:
         mean_rating = np.mean(all_ratings)
         score = (mean_rating - 1) / 6 * 100
         
-        expected_count = len(DEFAULT_STATEMENTS.get(HumanCentricityDomain.TRUST_TRANSPARENCY, []))
+        expected_count = len(DEFAULT_STATEMENTS_FR.get(HumanCentricityDomain.TRUST_TRANSPARENCY, []))
         
         return score, {
             'mean_rating': round(mean_rating, 2),
@@ -200,7 +200,7 @@ class HumanCentricityScorer:
                 'ratings': all_ratings
             },
             'response_breakdown': response_details,
-            'default_statements': DEFAULT_STATEMENTS.get(HumanCentricityDomain.TRUST_TRANSPARENCY, [])
+            'default_statements': DEFAULT_STATEMENTS_FR.get(HumanCentricityDomain.TRUST_TRANSPARENCY, [])
         }
     
     def _score_workload_comfort(self, workload_metrics: Optional[WorkloadMetrics], 
@@ -237,7 +237,7 @@ class HumanCentricityScorer:
                 'score': round(workload_score, 1)
             },
             'custom_responses': custom_response_details,
-            'default_statements': DEFAULT_STATEMENTS.get(HumanCentricityDomain.WORKLOAD_COMFORT, [])
+            'default_statements': DEFAULT_STATEMENTS_FR.get(HumanCentricityDomain.WORKLOAD_COMFORT, [])
         }
     
     def _score_cybersickness(self, cybersickness_responses: Optional[List[CybersicknessResponse]], 
@@ -276,7 +276,7 @@ class HumanCentricityScorer:
         normalized_severity = (mean_severity - 1) / (5 - 1)
         score = (1 - normalized_severity) * 100
         
-        expected_count = len(DEFAULT_STATEMENTS.get(HumanCentricityDomain.CYBERSICKNESS, []))
+        expected_count = len(DEFAULT_STATEMENTS_FR.get(HumanCentricityDomain.CYBERSICKNESS, []))
         
         return score, {
             'mean_severity': round(mean_severity, 2),
@@ -291,7 +291,7 @@ class HumanCentricityScorer:
             },
             'response_breakdown': response_details,
             'symptoms': {r.symptom: r.severity for r in cybersickness_responses} if cybersickness_responses else {},
-            'default_statements': DEFAULT_STATEMENTS.get(HumanCentricityDomain.CYBERSICKNESS, [])
+            'default_statements': DEFAULT_STATEMENTS_FR.get(HumanCentricityDomain.CYBERSICKNESS, [])
         }
     
     def _score_emotional_response(self, emotional_response: Optional[EmotionalResponse], 
@@ -325,7 +325,7 @@ class HumanCentricityScorer:
                 'quadrant': self._get_emotion_quadrant(valence_norm, arousal_norm)
             },
             'custom_responses': custom_response_details,
-            'default_statements': DEFAULT_STATEMENTS.get(HumanCentricityDomain.EMOTIONAL_RESPONSE, [])
+            'default_statements': DEFAULT_STATEMENTS_FR.get(HumanCentricityDomain.EMOTIONAL_RESPONSE, [])
         }
     
     def _score_performance(self, performance_metrics: Optional[PerformanceMetrics], 
@@ -383,7 +383,7 @@ class HumanCentricityScorer:
                 'max_help': max_help
             },
             'custom_responses': custom_response_details,
-            'default_statements': DEFAULT_STATEMENTS.get(HumanCentricityDomain.PERFORMANCE, [])
+            'default_statements': DEFAULT_STATEMENTS_FR.get(HumanCentricityDomain.PERFORMANCE, [])
         }
     
     def _calculate_weighted_overall_score(self, domain_scores: Dict[str, float]) -> float:
@@ -418,13 +418,13 @@ class HumanCentricityScorer:
             ]
             
             if min_score < 50:
-                domain_titles = [FIXED_DOMAINS.get(HumanCentricityDomain(d), {}).get('title', d) for d in weakest_domains if d in [e.value for e in HumanCentricityDomain]]
+                domain_titles = [FIXED_DOMAINS_FR.get(HumanCentricityDomain(d), {}).get('title', d) for d in weakest_domains if d in [e.value for e in HumanCentricityDomain]]
                 recommendations.append(
                     f"Critical attention needed for {', '.join(domain_titles)} "
                     f"(score: {min_score})"
                 )
             elif min_score < 70:
-                domain_titles = [FIXED_DOMAINS.get(HumanCentricityDomain(d), {}).get('title', d) for d in weakest_domains if d in [e.value for e in HumanCentricityDomain]]
+                domain_titles = [FIXED_DOMAINS_FR.get(HumanCentricityDomain(d), {}).get('title', d) for d in weakest_domains if d in [e.value for e in HumanCentricityDomain]]
                 recommendations.append(
                     f"Improvement recommended for {', '.join(domain_titles)} "
                     f"(score: {min_score})"
@@ -433,7 +433,7 @@ class HumanCentricityScorer:
             # Specific domain recommendations
             for domain_key, score in domain_scores.items():
                 if score < 60:
-                    domain_title = FIXED_DOMAINS.get(HumanCentricityDomain(domain_key), {}).get('title', domain_key)
+                    domain_title = FIXED_DOMAINS_FR.get(HumanCentricityDomain(domain_key), {}).get('title', domain_key)
                     
                     if domain_key == HumanCentricityDomain.CORE_USABILITY.value:
                         recommendations.append(f"Consider improving system intuitiveness and user interface design")

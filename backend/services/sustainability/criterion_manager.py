@@ -5,7 +5,7 @@ import re
 from .database import DatabaseManager, SustainabilityCriterion
 from .models import (
     CriterionCreate, CriterionUpdate, CriterionResponse,
-    SustainabilityDomain, SUSTAINABILITY_SCENARIOS, DEFAULT_SUSTAINABILITY_SCENARIOS
+    SustainabilityDomain, SUSTAINABILITY_SCENARIOS, DEFAULT_SUSTAINABILITY_SCENARIOS_FR
 )
 
 logger = logging.getLogger(__name__)
@@ -177,7 +177,7 @@ class CriterionManager:
             for criterion in criteria:
                 if criterion.domain not in scenarios:
                     # Get description from defaults or use empty string
-                    default_desc = DEFAULT_SUSTAINABILITY_SCENARIOS.get(
+                    default_desc = DEFAULT_SUSTAINABILITY_SCENARIOS_FR.get(
                         criterion.domain, {}
                     ).get('description', '')
                     scenarios[criterion.domain] = {
@@ -201,7 +201,7 @@ class CriterionManager:
         try:
             if domain:
                 domain_str = self._normalize_domain(domain)
-                if domain_str not in DEFAULT_SUSTAINABILITY_SCENARIOS:
+                if domain_str not in DEFAULT_SUSTAINABILITY_SCENARIOS_FR:
                     logger.error("Domain %s not found in defaults", domain_str)
                     return False
 
@@ -210,7 +210,7 @@ class CriterionManager:
                 for c in criteria:
                     self.db_manager.delete_criterion(c.id)
 
-                domain_data = DEFAULT_SUSTAINABILITY_SCENARIOS[domain_str]
+                domain_data = DEFAULT_SUSTAINABILITY_SCENARIOS_FR[domain_str]
                 for criterion_key, criterion_data in domain_data.get("criteria", {}).items():
                     cdata = {
                         "criterion_key": criterion_key,
@@ -235,7 +235,7 @@ class CriterionManager:
                     self.db_manager._initialize_default_criteria()
                 else:
                     # fallback: create from DEFAULT_SUSTAINABILITY_SCENARIOS
-                    for domain_key, domain_data in DEFAULT_SUSTAINABILITY_SCENARIOS.items():
+                    for domain_key, domain_data in DEFAULT_SUSTAINABILITY_SCENARIOS_FR.items():
                         for criterion_key, criterion_data in domain_data.get("criteria", {}).items():
                             cdata = {
                                 "criterion_key": criterion_key,

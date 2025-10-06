@@ -321,11 +321,6 @@ export function StatementsList({ statements, loading, error, onEdit, onDelete, d
                 {widgetConfig.label}
               </span>
 
-              <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium bg-purple-50 text-purple-700 border border-purple-200">
-                <BarChart3 className="w-3 h-3" />
-                {domainConfig.scaleInfo}
-              </span>
-
               {statement.is_default && (
                 <span className="inline-flex items-center gap-1.5 px-2 py-1 rounded-lg text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
                   <Shield className="w-3 h-3" />

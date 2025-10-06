@@ -288,7 +288,170 @@ DEFAULT_SUSTAINABILITY_SCENARIOS = {
     }
 }
 
-SUSTAINABILITY_SCENARIOS = DEFAULT_SUSTAINABILITY_SCENARIOS.copy()
+DEFAULT_SUSTAINABILITY_SCENARIOS_FR = {
+    'environmental': {
+        'description': "Évaluation de l'impact environnemental et de la gestion des ressources",
+        'criteria': {
+            'ENV_01': {
+                'name': 'Réalité du jumeau numérique',
+                'description': "Degré de précision du modèle numérique et de sa connexion au monde réel",
+                'levels': [
+                    "Plan statique, sans lien avec la réalité",
+                    "Formes 3D simples",
+                    "Modèle avec mouvements basiques",
+                    "Simulation représentative : processus simulés de façon réaliste",
+                    "Modèle haute fidélité : modèle physique détaillé, très proche de la réalité",
+                    "Connexion en temps réel : réplique numérique complète, synchronisée en temps réel"
+                ]
+            },
+            'ENV_02': {
+                'name': 'Suivi des flux',
+                'description': "Capacités de surveillance des flux de matières et d'énergie",
+                'levels': [
+                    "Rien n'est suivi",
+                    "Un seul flux mesuré (ex. : électricité)",
+                    "Plusieurs flux mesurés séparément (ex. : eau + énergie)",
+                    "Bilans globaux des flux principaux (entrées/sorties totales)",
+                    "Traçabilité détaillée poste par poste, à l'intérieur de l'usine",
+                    "Suivi complet incluant la chaîne d'approvisionnement (amont/aval)"
+                ]
+            },
+            'ENV_03': {
+                'name': "Visibilité énergétique",
+                'description': "Niveau de surveillance et de visibilité de la consommation d'énergie",
+                'levels': [
+                    "Pas de données",
+                    "Factures annuelles",
+                    "Relevés mensuels",
+                    "Surveillance continue des équipements majeurs",
+                    "Surveillance en temps réel de la plupart des systèmes",
+                    "Mesurage précis au niveau des sous-systèmes et équipements"
+                ]
+            },
+            'ENV_04': {
+                'name': "Périmètre environnemental",
+                'description': "Étendue des indicateurs environnementaux suivis",
+                'levels': [
+                    "Aucun indicateur suivi",
+                    "Énergie uniquement",
+                    "Énergie + émissions de carbone",
+                    "Ajout de l'eau (consommation, rejets)",
+                    "Multi-indicateurs : énergie, carbone, eau, déchets, matériaux",
+                    "Analyse complète du cycle de vie (production → usage → fin de vie)"
+                ]
+            },
+            'ENV_05': {
+                'name': "Simulation et prédiction",
+                'description': "Capacités prédictives et d'optimisation",
+                'levels': [
+                    "Observation uniquement",
+                    "Rapports simples et alertes",
+                    "Tests de changement basiques (ex. : cadence, plannings)",
+                    "Scénarios prédictifs avec comparaisons",
+                    "Optimisation assistée : le système propose plusieurs solutions optimales",
+                    "Optimisation autonome : le jumeau ajuste automatiquement les paramètres"
+                ]
+            }
+        }
+    },
+    'economic': {
+        'description': "Évaluation de la viabilité économique et de l'impact financier",
+        'criteria': {
+            'ECO_01': {
+                'name': "Budget de numérisation",
+                'description': "Niveau d'investissement dans la transformation numérique",
+                'levels': [
+                    "Aucun budget alloué à la numérisation du système",
+                    "Budget minimal - Modélisation basique du système physique",
+                    "Budget correct - Reproduction fidèle des équipements principaux",
+                    "Gros budget - Copie numérique complète du système",
+                    "Très gros budget - Jumeau ultra-précis avec capteurs avancés",
+                    "Budget maximal - Réplique parfaite connectée en temps réel"
+                ]
+            },
+            'ECO_02': {
+                'name': "Économies réalisées",
+                'description': "Économies de coûts réelles obtenues",
+                'levels': [
+                    "Aucune économie",
+                    "Petites économies",
+                    "Économies correctes",
+                    "Bonnes économies",
+                    "Très bonnes économies",
+                    "Économies exceptionnelles"
+                ]
+            },
+            'ECO_03': {
+                'name': "Amélioration des performances",
+                'description': "Gains de performance opérationnelle",
+                'levels': [
+                    "Aucune amélioration",
+                    "Légère amélioration",
+                    "Amélioration correcte",
+                    "Bonne amélioration",
+                    "Très bonne amélioration",
+                    "Amélioration exceptionnelle"
+                ]
+            },
+            'ECO_04': {
+                'name': "Délai de retour sur investissement",
+                'description': "Horizon temporel du retour sur investissement",
+                'levels': [
+                    "Non calculé ou plus de 5 ans",
+                    "Rentable entre 3 et 5 ans",
+                    "Rentable entre 2 et 3 ans",
+                    "Rentable entre 18 et 24 mois",
+                    "Rentable entre 12 et 18 mois",
+                    "Rentable en moins de 12 mois"
+                ]
+            }
+        }
+    },
+    'social': {
+        'description': "Évaluation de l'impact social et des bénéfices pour les parties prenantes",
+        'criteria': {
+            'SOC_01': {
+                'name': "Impact sur les employés",
+                'description': "Effets sur la main-d'œuvre et l'emploi",
+                'levels': [
+                    "Suppressions d'emplois (plus de 10% de la main-d'œuvre concernée)",
+                    "Quelques suppressions d'emplois (5–10% de la main-d'œuvre)",
+                    "Main-d'œuvre stable, quelques formations",
+                    "Même nombre d'emplois + formations pour tous les concernés",
+                    "Création de nouveaux postes (5–10% d'emplois en plus)",
+                    "Forte création d'emplois qualifiés (augmentation de plus de 10%)"
+                ]
+            },
+            'SOC_02': {
+                'name': "Sécurité au travail",
+                'description': "Impact sur la sécurité des travailleurs et réduction des risques",
+                'levels': [
+                    "Aucun changement des risques",
+                    "Légère réduction des incidents (<10%)",
+                    "Réduction modérée des risques (10–25%)",
+                    "Bonne amélioration de la sécurité (25–50%)",
+                    "Forte réduction des accidents (50–75%)",
+                    "Quasi-élimination des risques (>75% de réduction)"
+                ]
+            },
+            'SOC_03': {
+                'name': "Bénéfices régionaux",
+                'description': "Bénéfices économiques et sociaux locaux",
+                'levels': [
+                    "Aucun impact local : aucun achat/partenariat local identifié",
+                    "Quelques achats locaux supplémentaires",
+                    "Partenariat avec 1–2 entreprises locales",
+                    "Collaboration institutionnelle : collaboration active avec des universités/écoles locales",
+                    "Création locale notable : nouveaux emplois locaux liés au projet",
+                    "Impact majeur : nouveaux emplois locaux ou bénéfices financiers significatifs"
+                ]
+            }
+        }
+    }
+}
+
+
+SUSTAINABILITY_SCENARIOS = DEFAULT_SUSTAINABILITY_SCENARIOS_FR.copy()
 
 class DomainSelectionHelper:
     """Helper class for managing domain selection and configuration"""

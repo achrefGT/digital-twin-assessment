@@ -218,36 +218,7 @@ export function ScenarioEditor({ scenario, onClose }: ScenarioEditorProps) {
             </div>
           </div>
 
-          {/* Additional Description */}
-          <div>
-            <label className="block text-sm font-medium text-gray-900 mb-2">
-              {t('resilience.additionalContext')} <span className="text-gray-500 font-normal">({t('form.optional')})</span>
-            </label>
-            <textarea
-              value={formData.description}
-              onChange={(e) => setFormData(prev => ({ ...prev, description: e.target.value }))}
-              rows={3}
-              className={`
-                w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 transition-colors resize-none
-                ${errors.description ? 'border-red-300 focus:ring-red-500' : 'border-gray-300'}
-              `}
-              placeholder={t('resilience.additionalInstructions')}
-            />
-            {errors.description && (
-              <div className="flex items-center gap-2 mt-1 text-red-600">
-                <AlertCircle className="w-4 h-4" />
-                <span className="text-sm">{errors.description}</span>
-              </div>
-            )}
-            <div className="flex justify-between items-center mt-1">
-              <p className="text-sm text-gray-600">
-                {t('resilience.additionalForAssessors')}
-              </p>
-              <span className={`text-xs ${(formData.description || '').length > 450 ? 'text-red-500' : 'text-gray-500'}`}>
-                {(formData.description || '').length}/500
-              </span>
-            </div>
-          </div>
+        
 
           {/* Default checkbox (only for new scenarios) */}
           {!isEdit && (

@@ -10,7 +10,7 @@ import logging
 from shared.database import get_database_url
 from shared.models.exceptions import DatabaseConnectionException, AssessmentNotFoundException
 from .config import settings
-from .models import DEFAULT_SUSTAINABILITY_SCENARIOS, SUSTAINABILITY_SCENARIOS
+from .models import DEFAULT_SUSTAINABILITY_SCENARIOS_FR, SUSTAINABILITY_SCENARIOS
 
 logger = logging.getLogger(__name__)
 Base = declarative_base()
@@ -134,7 +134,7 @@ class DatabaseManager:
             if existing_count == 0:
                 logger.info("Initializing default sustainability criteria...")
                 
-                for domain, domain_data in DEFAULT_SUSTAINABILITY_SCENARIOS.items():
+                for domain, domain_data in DEFAULT_SUSTAINABILITY_SCENARIOS_FR.items():
                     for criterion_key, criterion_data in domain_data['criteria'].items():
                         criterion = SustainabilityCriterion(
                             criterion_key=criterion_key,
@@ -361,7 +361,7 @@ class DatabaseManager:
             for criterion in criteria:
                 if criterion.domain not in new_scenarios:
                     new_scenarios[criterion.domain] = {
-                        'description': DEFAULT_SUSTAINABILITY_SCENARIOS.get(criterion.domain, {}).get('description', ''),
+                        'description': DEFAULT_SUSTAINABILITY_SCENARIOS_FR.get(criterion.domain, {}).get('description', ''),
                         'criteria': {}
                     }
                 

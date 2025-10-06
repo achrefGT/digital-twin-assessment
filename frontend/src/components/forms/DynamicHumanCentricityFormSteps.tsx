@@ -8,6 +8,8 @@ import { Skeleton } from "@/components/ui/skeleton"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { CheckCircle2, User, Shield, Activity, Brain, Heart, Zap, AlertCircle } from "lucide-react"
 import { useHumanCentricity } from "@/hooks/useHumanCentricity"
+import { useLanguage } from "@/contexts/LanguageContext"
+import { getHumanCentricityDomainTranslationKey, getHumanCentricityDomainDescriptionKey } from '@/services/humanCentricityApi'
 
 // Color mapping for domains
 const DOMAIN_COLORS: Record<string, { bg: string; ring: string; text: string; accent: string }> = {
@@ -47,6 +49,7 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
   domain 
 }) => {
   const { structure, scales, isLoading, error } = useHumanCentricity()
+  const { t } = useLanguage()
   
   // Get domain data
   const domainData = structure?.domains?.[domain]
@@ -214,7 +217,7 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
             <Label className="text-sm font-semibold leading-relaxed text-gray-800">{statement.statement_text}</Label>
             <Alert>
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>Scale configuration not found for {statement.scale_key}</AlertDescription>
+              <AlertDescription>{t('error.notFound')} {statement.scale_key}</AlertDescription>
             </Alert>
           </div>
         </CardContent>
@@ -233,13 +236,13 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
               type="number"
               step={statement.widget_config?.step || 1}
               min={statement.widget_config?.min || scaleConfig.min}
-              placeholder={statement.widget_config?.placeholder || "Enter value"}
+              placeholder={statement.widget_config?.placeholder || t('form.selectValue')}
               value={response}
               onChange={(e) => handleResponseChange(statement.id, e.target.value)}
               className="transition-all duration-200 focus:scale-105 focus:shadow-lg"
             />
             {statement.widget_config?.unit && (
-              <p className="text-xs text-gray-500">Unit: {statement.widget_config.unit}</p>
+              <p className="text-xs text-gray-500">{t('common.unit')}: {statement.widget_config.unit}</p>
             )}
           </div>
         </CardContent>
@@ -247,7 +250,7 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
     )
   }
 
-  // Handle ACTUAL slider widget (range input) - THIS IS THE FIX
+  // Handle ACTUAL slider widget (range input)
   if (statement.widget === 'slider') {
     const labels = scaleConfig.labels || {}
     const currentValue = response !== null && response !== undefined ? response : scaleConfig.min
@@ -291,7 +294,7 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
     )
   }
 
-  // Default: likert/radio/sam style (unchanged)
+  // Default: likert/radio/sam style
   const options = []
   for (let i = scaleConfig.min; i <= scaleConfig.max; i++) {
     options.push(i)
@@ -386,12 +389,12 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
         <Alert variant="destructive">
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            Failed to load statements for {domain}. Please try refreshing the page.
-            Error: {error.message}
+            {t('humanCentricity.failedLoadStatements')} {domain}. {t('error.tryAgainLater')}
+            {t('common.error')}: {error.message}
           </AlertDescription>
         </Alert>
         <Button onClick={handleSubmit} disabled className="w-full">
-          Cannot Continue - Statements Not Available
+          {t('assessment.invalidDomain')}
         </Button>
       </div>
     )
@@ -404,11 +407,11 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
         <Alert>
           <AlertCircle className="h-4 w-4" />
           <AlertDescription>
-            No statements are currently configured for {domain}. Please contact your administrator.
+            {t('humanCentricity.noStatementsFound')} {domain}. {t('unifiedDomain.noDomainsCurrently')}
           </AlertDescription>
         </Alert>
         <Button onClick={handleSubmit} disabled className="w-full">
-          No Statements Available
+          {t('humanCentricity.noStatementsFound')}
         </Button>
       </div>
     )
@@ -422,8 +425,12 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
           <DomainIcon className="w-5 h-5 text-white" />
         </div>
         <div>
-          <h3 className="text-lg font-semibold text-gray-900">{domainData?.title || domain}</h3>
-          <p className="text-sm text-gray-600">{domainData?.description || `Assess ${domain} criteria`}</p>
+          <h3 className="text-lg font-semibold text-gray-900">
+            {t(getHumanCentricityDomainTranslationKey(domain.replace('_', ' ')))}
+          </h3>
+          <p className="text-sm text-gray-600">
+            {domainData?.description || t(getHumanCentricityDomainDescriptionKey(domain.replace('_', ' ')))}
+          </p>
         </div>
       </div>
 
@@ -444,10 +451,10 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
         {isComplete() ? (
           <>
             <CheckCircle2 className="w-4 h-4 mr-2" />
-            Complete {domain.replace('_', ' ')} Assessment
+            {t('assessment.complete')} {t(getHumanCentricityDomainTranslationKey(domain))}
           </>
         ) : (
-          `Complete All Questions (${Math.round(getProgress())}%)`
+          `${t('assessment.progress')} (${Math.round(getProgress())}%)`
         )}
       </Button>
     </div>
@@ -483,17 +490,17 @@ const PerformanceStep: React.FC<StepProps> = (props) => (
 export const getHumanCentricitySteps = (): StepDefinition[] => {
   return [
     {
-      title: "Core Usability",
+      title: "Core_Usability", // Keep as domain key - will be translated in selector
       description: "Evaluate basic usability and system integration",
       component: CoreUsabilityStep 
     },
     {
-      title: "Trust & Transparency",
+      title: "Trust_Transparency",
       description: "Assess trust in system outputs and transparency",
       component: TrustTransparencyStep
     },
     {
-      title: "Workload & Comfort",
+      title: "Workload_Comfort",
       description: "Evaluate mental workload and physical comfort",
       component: WorkloadComfortStep
     },
@@ -503,7 +510,7 @@ export const getHumanCentricitySteps = (): StepDefinition[] => {
       component: CybersicknessStep
     },
     {
-      title: "Emotional Response",
+      title: "Emotional_Response",
       description: "Capture your emotional state while using the system",
       component: EmotionalResponseStep
     },
@@ -512,13 +519,13 @@ export const getHumanCentricitySteps = (): StepDefinition[] => {
       description: "Record measured performance indicators",
       component: PerformanceStep
     }
-  ]
-}
+  ];
+};
 
-// Dynamic step generation based on available domains (use this for fully dynamic steps)
+// Dynamic step generation based on available domains
 export const getDynamicHumanCentricitySteps = (availableDomains: Array<{domain: string, description: string}>): StepDefinition[] => {
   return availableDomains.map((domainInfo) => ({
-    title: domainInfo.domain.replace('_', ' '), // Convert underscore to space
+    title: domainInfo.domain.replace('_', ' '),
     description: domainInfo.description,
     component: (props: StepProps) => (
       <DomainStep 

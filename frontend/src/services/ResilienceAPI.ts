@@ -294,3 +294,19 @@ export const scenarioMutations = {
     mutationFn: (assessments: Record<string, any>) => ScenariosAPI.validateAssessmentScenarios(assessments),
   }),
 }
+
+export const getResilienceDomainTranslationKey = (domainKey: string): string => {
+  const keyMap: Record<string, string> = {
+    'Robustness': 'resilience.robustness',
+    'Redundancy': 'resilience.redundancy',
+    'Adaptability': 'resilience.adaptability',
+    'Rapidity': 'resilience.rapidity',
+    'PHM': 'resilience.phm',
+  };
+  
+  return keyMap[domainKey] || domainKey.replace('_', ' ');
+};
+
+export const getResilienceDomainDescriptionKey  = (domainKey: string): string => {
+  return `${getResilienceDomainTranslationKey(domainKey)}.desc`;
+};

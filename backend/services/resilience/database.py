@@ -10,7 +10,7 @@ import logging
 from shared.database import get_database_url
 from shared.models.exceptions import DatabaseConnectionException, AssessmentNotFoundException
 from .config import settings
-from .models import DEFAULT_RESILIENCE_SCENARIOS, RESILIENCE_SCENARIOS
+from .models import DEFAULT_RESILIENCE_SCENARIOS_FR, RESILIENCE_SCENARIOS
 
 logger = logging.getLogger(__name__)
 Base = declarative_base()
@@ -127,7 +127,7 @@ class DatabaseManager:
             if existing_count == 0:
                 logger.info("Initializing default resilience scenarios...")
                 
-                for domain, domain_data in DEFAULT_RESILIENCE_SCENARIOS.items():
+                for domain, domain_data in DEFAULT_RESILIENCE_SCENARIOS_FR.items():
                     for scenario_text in domain_data['scenarios']:
                         scenario = ResilienceScenario(
                             domain=domain,
@@ -348,7 +348,7 @@ class DatabaseManager:
             for scenario in scenarios:
                 if scenario.domain not in new_scenarios:
                     new_scenarios[scenario.domain] = {
-                        'description': scenario.description or DEFAULT_RESILIENCE_SCENARIOS.get(scenario.domain, {}).get('description', ''),
+                        'description': scenario.description or DEFAULT_RESILIENCE_SCENARIOS_FR.get(scenario.domain, {}).get('description', ''),
                         'scenarios': []
                     }
                 
