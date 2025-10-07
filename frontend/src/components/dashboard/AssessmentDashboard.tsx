@@ -571,44 +571,6 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-background to-muted/20">
       <div className="container mx-auto px-6 py-8 space-y-8">
 
-        {/* Show indicator if this is not the active assessment */}
-        {!isActiveAssessment && (
-          <Card className="border-amber-200 bg-amber-50/50 backdrop-blur-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3 text-amber-800">
-                <AlertCircle className="w-5 h-5" />
-                <span className="font-medium">
-                  {t('dashboard.historicalAssessment')}
-                </span>
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
-        {/* Connection status indicator */}
-        {isActiveAssessment && (
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-3">
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <div className={`w-2 h-2 rounded-full ${
-                    connectionStatus.isConnected ? 'bg-green-500 animate-pulse' : 'bg-gray-400'
-                  }`} />
-                  <span className="text-sm text-muted-foreground">
-                    {connectionStatus.isConnected ? t('dashboard.liveUpdatesActive') : t('dashboard.disconnected')}
-                  </span>
-                </div>
-                {pendingUpdates.size > 0 && (
-                  <Badge variant="secondary" className="gap-1">
-                    <Clock className="w-3 h-3" />
-                    {pendingUpdates.size} {t('dashboard.pending')}
-                  </Badge>
-                )}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {/* Enhanced Radar Chart with Overall Score */}
         <RadarScoreChart 
           domainScores={assessmentData.domain_scores}
