@@ -149,6 +149,9 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
         rating: responses[statement.id] || 4
       }))
       finalData[`${domainKey}_responses`] = responseArray
+      finalData.assessments = {
+        [domainKey]: responseArray
+      }
       
     } else if (domain === 'Workload_Comfort') {
       // Workload metrics object
@@ -162,32 +165,71 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
         workloadMetrics[key] = responses[statement.id] || 3
       })
       finalData.workload_metrics = workloadMetrics
+      finalData.assessments = {
+        [domainKey]: workloadMetrics
+      }
       
     } else if (domain === 'Emotional_Response') {
       // Emotional response object
       const emotionalResponse: any = {}
       domainStatements.forEach(statement => {
-        if (statement.statement_text.toLowerCase().includes('valence')) {
+        const text = statement.statement_text.toLowerCase()
+        // More flexible matching for valence and arousal
+        if (text.includes('valence') || text.includes('plaisir') || text.includes('pleasure')) {
           emotionalResponse.valence = responses[statement.id] || 3
-        } else if (statement.statement_text.toLowerCase().includes('arousal')) {
+        }
+        if (text.includes('arousal') || text.includes('activation') || text.includes('éveil')) {
           emotionalResponse.arousal = responses[statement.id] || 3
         }
       })
       finalData.emotional_response = emotionalResponse
+      finalData.assessments = {
+        [domainKey]: emotionalResponse
+      }
       
     } else if (domain === 'Performance') {
       // Performance metrics object
       const performanceMetrics: any = {}
       domainStatements.forEach(statement => {
-        if (statement.statement_text.toLowerCase().includes('time')) {
-          performanceMetrics.task_completion_time_min = parseFloat(responses[statement.id]) || 0
-        } else if (statement.statement_text.toLowerCase().includes('error')) {
-          performanceMetrics.error_rate = parseInt(responses[statement.id]) || 0
-        } else if (statement.statement_text.toLowerCase().includes('help')) {
-          performanceMetrics.help_requests = parseInt(responses[statement.id]) || 0
+        const text = statement.statement_text.toLowerCase()
+        const value = responses[statement.id]
+        
+        // More flexible matching for performance metrics
+        if (text.includes('time') || text.includes('temps') || text.includes('durée')) {
+          performanceMetrics.task_completion_time_min = value ? parseFloat(value) : 0
+        }
+        if (text.includes('error') || text.includes('erreur') || text.includes('faute')) {
+          performanceMetrics.error_rate = value ? parseInt(value) : 0
+        }
+        if (text.includes('help') || text.includes('aide') || text.includes('assistance')) {
+          performanceMetrics.help_requests = value ? parseInt(value) : 0
+        }
+        
+        // If none of the above matched, add a generic key
+        if (!text.includes('time') && !text.includes('temps') && !text.includes('durée') &&
+            !text.includes('error') && !text.includes('erreur') && !text.includes('faute') &&
+            !text.includes('help') && !text.includes('aide') && !text.includes('assistance')) {
+          const key = text.replace(/[^a-z0-9\s]/g, '').replace(/\s+/g, '_').replace(/_+/g, '_').trim()
+          performanceMetrics[key] = value
         }
       })
       finalData.performance_metrics = performanceMetrics
+      // Also add to assessments for proper accumulation
+      finalData.assessments = {
+        [domainKey]: performanceMetrics
+      }
+      
+    } else if (domain === 'Cybersickness') {
+      // Cybersickness responses
+      const cybersicknessResponses = domainStatements.map(statement => ({
+        symptom: statement.statement_text,
+        severity: responses[statement.id] || 0
+      }))
+      finalData[`${domainKey}_responses`] = cybersicknessResponses
+      finalData.assessments = {
+        [domainKey]: cybersicknessResponses
+      }
+      
     } else {
       // Generic custom responses
       const customResponses: any = {}
@@ -200,6 +242,9 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
         }
       })
       finalData.custom_responses = { [domain]: Object.values(customResponses) }
+      finalData.assessments = {
+        [domainKey]: Object.values(customResponses)
+      }
     }
     
     onSubmit(finalData)
@@ -242,7 +287,7 @@ const DomainStep: React.FC<StepProps & { domain: string }> = ({
               className="transition-all duration-200 focus:scale-105 focus:shadow-lg"
             />
             {statement.widget_config?.unit && (
-              <p className="text-xs text-gray-500">{t('common.unit')}: {statement.widget_config.unit}</p>
+              <p className="text-xs text-gray-500">{statement.widget_config.unit}</p>
             )}
           </div>
         </CardContent>

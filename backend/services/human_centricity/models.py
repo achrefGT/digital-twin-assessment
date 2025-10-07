@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any, List, Set
 from uuid import uuid4
 from enum import Enum
 
-from pydantic import BaseModel, ValidationError, Field, validator
+from pydantic import BaseModel, ConfigDict, ValidationError, Field, validator
 
 
 class HumanCentricityDomain(str, Enum):
@@ -36,9 +36,12 @@ class CybersicknessResponse(BaseModel):
 
 
 class WorkloadMetrics(BaseModel):
-    mental_demand: int = Field(..., ge=0, le=100, description="Mental demand (0-100)")
-    effort_required: int = Field(..., ge=0, le=100, description="Effort required (0-100)")
-    frustration_level: int = Field(..., ge=0, le=100, description="Frustration level (0-100)")
+    mental_demand: int = Field(..., ge=0, le=100, description="Mental demand (0-100)", alias='exigence_mentale')
+    effort_required: int = Field(..., ge=0, le=100, description="Effort required (0-100)", alias='effort_requis')
+    frustration_level: int = Field(..., ge=0, le=100, description="Frustration level (0-100)", alias='niveau_de_frustration')
+
+    # allow population by field name (so both english keys and aliases are accepted)
+    model_config = ConfigDict(populate_by_name=True)
 
 
 class EmotionalResponse(BaseModel):

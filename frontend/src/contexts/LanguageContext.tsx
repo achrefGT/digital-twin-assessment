@@ -278,6 +278,7 @@ const translations = {
     'auth.signUp': 'Sign up',
     'auth.signIn': 'Sign in',
     'auth.welcome': 'Welcome',
+    'notification.auth.loginDesc': 'Connected successfully',
     'auth.pleaseSignIn': 'Please sign in to your account',
     'auth.createAccount': 'Create your account',
     'auth.checkingAuth': 'Checking Authentication',
@@ -1114,6 +1115,7 @@ const translations = {
     'module.assessmentProgress': 'Progression de l\'évaluation',
     'module.complete': 'Terminé',
     'module.moduleScores': 'Scores des modules',
+    'module.startAssessment': 'Start Assessment',
 
     // Assessment creation
     'assessment.create': 'Créer une évaluation',

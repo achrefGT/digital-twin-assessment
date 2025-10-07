@@ -11,11 +11,12 @@ from fastapi.responses import JSONResponse
 from .config import settings
 from .database import DatabaseManager
 from .kafka_service import KafkaService
+from .outbox_relayer import OutboxRelayer 
 from .routers import assessments, health, websockets, admin
 from .auth.router import router as auth_router
 from .exceptions import create_http_exception
 from shared.models.exceptions import DigitalTwinAssessmentException
-from .dependencies import get_db_manager, get_kafka_service
+from .dependencies import get_db_manager, get_kafka_service, get_outbox_relayer  
 from .websocket_service import connection_manager
 from .weighting_service import WeightingService
 
@@ -65,7 +66,6 @@ async def ensure_admin_user():
         
         if result and result['success']:
             logger.info(f"🔐 Admin user: {result['message']}")
-            logger.info(f"   Login: {admin_username} / {admin_password}")
             
             # Verify the password works
             user_check = await conn.fetchrow(
@@ -89,10 +89,10 @@ async def ensure_admin_user():
         if "function create_admin_with_hash does not exist" in str(e).lower():
             logger.warning("Admin function not found, this might be a timing issue with database initialization")
 
-# Your lifespan function remains the same
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager with WebSocket support and admin user creation"""
+    """Application lifespan manager with WebSocket support, Outbox Relayer, and admin user creation"""
     # Startup
     logger.info("Starting API Gateway with real-time capabilities...")
     
@@ -100,6 +100,7 @@ async def lifespan(app: FastAPI):
         # Get instances
         db_manager = get_db_manager()
         kafka_service = get_kafka_service()
+        outbox_relayer = get_outbox_relayer() 
         
         # Create database tables
         db_manager.create_tables()
@@ -120,6 +121,10 @@ async def lifespan(app: FastAPI):
         await kafka_service.start()
         logger.info("Kafka service started")
         
+        # Start Outbox Relayer 
+        await outbox_relayer.start()
+        logger.info("Outbox Relayer started")
+        
         # Start consumer in background
         consumer_task = asyncio.create_task(kafka_service.consume_score_updates())
         logger.info("Kafka consumer started")
@@ -127,10 +132,11 @@ async def lifespan(app: FastAPI):
         # Initialize WebSocket connection manager
         app.state.connection_manager = connection_manager
         
-        logger.info("API Gateway started successfully with real-time features and admin user")
+        logger.info("✅ API Gateway started successfully with real-time features, outbox pattern, and admin user")
         
-        # Store task for cleanup
+        # Store tasks for cleanup
         app.state.consumer_task = consumer_task
+        app.state.outbox_relayer = outbox_relayer 
         
         yield
         
@@ -139,7 +145,7 @@ async def lifespan(app: FastAPI):
         raise
     
     finally:
-        # Shutdown (your existing shutdown code remains the same)
+        # Shutdown
         logger.info("Shutting down API Gateway...")
         try:
             # Cancel consumer task with timeout
@@ -150,6 +156,12 @@ async def lifespan(app: FastAPI):
                 except (asyncio.CancelledError, asyncio.TimeoutError):
                     logger.warning("Consumer task cancelled/timed out during shutdown")
             
+            # Stop Outbox Relayer
+            if hasattr(app.state, 'outbox_relayer'):
+                logger.info("Stopping Outbox Relayer...")
+                await app.state.outbox_relayer.stop()
+                logger.info("✅ Outbox Relayer stopped")
+            
             # Close WebSocket connections gracefully
             if hasattr(app.state, 'connection_manager'):
                 await close_websocket_connections(app.state.connection_manager)
@@ -158,7 +170,7 @@ async def lifespan(app: FastAPI):
             kafka_service = get_kafka_service()
             await kafka_service.stop()
             
-            logger.info("API Gateway shutdown complete")
+            logger.info("✅ API Gateway shutdown complete")
         except Exception as e:
             logger.error(f"Error during shutdown: {e}")
             

@@ -244,7 +244,7 @@ class KafkaService:
                 limit=self.max_assessments_for_weights
             )
             
-            # FIX: Use weighting_service's min_assessments instead of self
+            # Use weighting_service's min_assessments instead of self
             min_assessments_needed = self.weighting_service.min_assessments_for_objective
             
             if len(db_assessments) < min_assessments_needed:
@@ -552,8 +552,14 @@ class KafkaService:
             raise KafkaConnectionException(f"Failed to publish message after {retry_count + 1} attempts: {e}")
     
     async def publish_form_submission(self, submission: FormSubmissionRequest):
-        """Publish form submission using shared event model"""
-        # Get the appropriate topic for this domain
+        '''
+        Publish form submission to scoring service (DIRECT - not transactional)
+        
+        This is intentionally direct (not using outbox) because:
+        1. Scoring services are designed to be idempotent
+        2. User can resubmit if it fails
+        3. Not a critical business state change
+        '''
         topic = self.submission_topic_mapping.get(submission.domain.lower())
         if not topic:
             raise ValueError(f"Unknown domain: {submission.domain}. Valid domains: {list(self.submission_topic_mapping.keys())}")
@@ -563,10 +569,28 @@ class KafkaService:
         
         await self._publish_event(topic, event, key=submission.assessment_id)
     
-    async def publish_assessment_status_update(self, progress: AssessmentProgress, previous_status: Optional[str] = None):
-        """Publish assessment status updates using shared event model"""
+    async def publish_assessment_status_update(
+        self, 
+        progress: AssessmentProgress, 
+        previous_status: Optional[str] = None
+    ):
+        '''
+        Publish assessment status updates (DIRECT - not transactional)
+        
+        ⚠️  WARNING: This method publishes directly to Kafka without the outbox pattern.
+        For transactional guarantees, use db_manager.update_assessment_with_outbox() instead.
+        
+        This method should only be used for:
+        - Legacy compatibility
+        - Non-critical notifications
+        - Cases where outbox pattern is not needed
+        '''
         event = EventFactory.create_status_update_event(progress, previous_status)
-        await self._publish_event(settings.assessment_status_topic, event, key=progress.assessment_id)
+        await self._publish_event(
+            settings.assessment_status_topic, 
+            event, 
+            key=progress.assessment_id
+        )
     
     async def _publish_error_event(self, assessment_id: str, error_type: str, error_message: str,
                                  error_details: Dict[str, Any] = None, user_id: Optional[str] = None,
@@ -769,20 +793,19 @@ class KafkaService:
             elif progress.status != AssessmentStatus.PROCESSING:
                 progress.status = AssessmentStatus.PROCESSING
             
-            # Update database using shared model
-            self.db_manager.update_assessment_from_progress(progress)
+            # Save to database WITH outbox events (transactional)
+            self.db_manager.update_assessment_with_outbox(
+                progress=progress,
+                domain=domain,
+                score_value=score_value
+            )
             
             # Send WebSocket updates
             await self._send_websocket_updates(
                 assessment_id, domain, score_value, message_data, 
                 overall_score, progress, is_complete
             )
-            
-            # Publish events
-            await self._publish_domain_events(
-                assessment_id, domain, score_value, message_data, 
-                progress, previous_status, overall_score, is_complete
-            )
+
             
             logger.info(
                 f"Updated {domain} score ({score_value}) for assessment {assessment_id}. "
@@ -908,44 +931,6 @@ class KafkaService:
         except Exception as e:
             logger.error(f"Failed to send error WebSocket notification: {e}")
 
-    async def _publish_domain_events(self, assessment_id: str, domain: str, score_value: float,
-                                   message_data: Dict, progress: AssessmentProgress,
-                                   previous_status: str, overall_score: Optional[float],
-                                   is_complete: bool):
-        """Publish domain scoring and completion events"""
-        try:
-            # Publish domain scored event
-            domain_scored_event = EventFactory.create_domain_scored_event(
-                assessment_id=assessment_id,
-                domain=domain,
-                scores=message_data.get('scores', {}),
-                score_value=score_value,
-                user_id=progress.user_id,
-                processing_time_ms=message_data.get('processing_time_ms')
-            )
-            await self._publish_event(settings.assessment_status_topic, domain_scored_event, key=assessment_id)
-            
-            # Publish status update if status changed
-            if previous_status != progress.status.value:
-                await self.publish_assessment_status_update(progress, previous_status)
-            
-            # If assessment is complete, publish completion event
-            if is_complete:
-                completed_event = EventFactory.create_assessment_completed_event(
-                    progress=progress,
-                    overall_score=overall_score,
-                    domain_scores=progress.domain_scores,
-                    final_results={
-                        "weighted_score": overall_score, 
-                        "weights": self.weighting_service.weights,
-                        "weights_type": self.weighting_service.weights_type,
-                        "alpha": self.weighting_service.alpha
-                    }
-                )
-                await self._publish_event(settings.assessment_status_topic, completed_event, key=assessment_id)
-                
-        except Exception as e:
-            logger.error(f"Error publishing domain events: {e}")
     
     # API methods for manual weight management
     async def update_weighting_alpha(self, alpha: float) -> bool:

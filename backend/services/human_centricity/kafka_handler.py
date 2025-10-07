@@ -19,6 +19,7 @@ from .models import (
 )
 from .score import calculate_human_centricity_score_with_domains
 from .database import DatabaseManager
+from .statement_manager import StatementManager
 from .config import settings
 
 logger = logging.getLogger(__name__)
@@ -27,6 +28,7 @@ logger = logging.getLogger(__name__)
 class HumanCentricityKafkaHandler:
     def __init__(self, db_manager: DatabaseManager):
         self.db_manager = db_manager
+        self.statement_manager = StatementManager(db_manager)
         self.consumer = None
         self.producer = None
         self.running = False
@@ -142,8 +144,8 @@ class HumanCentricityKafkaHandler:
             
             start_time = datetime.utcnow()
             
-            # Parse human centricity input
-            logger.debug("Parsing human centricity input")
+            # Parse human centricity input with dynamic statement support
+            logger.debug("Parsing human centricity input with dynamic statements")
             print(f"DEBUG: About to parse human centricity input for assessment {assessment_id}")
             human_centricity_input = self._parse_human_centricity_input(form_submission)
             
@@ -232,7 +234,7 @@ class HumanCentricityKafkaHandler:
             await self._publish_error_event(assessment_id, "processing_error", str(e))
     
     def _parse_human_centricity_input(self, form_submission) -> HumanCentricityInput:
-        """Parse form submission into human centricity input model with domain selection support"""
+        """Parse form submission into human centricity input model with dynamic statement support"""
         try:
             logger.debug(f"Parsing form submission: {form_submission}")
             print(f"DEBUG: _parse_human_centricity_input called with type: {type(form_submission)}")
@@ -244,7 +246,7 @@ class HumanCentricityKafkaHandler:
             print(f"DEBUG: form_data type: {type(form_data)}")
             print(f"DEBUG: form_data keys: {list(form_data.keys()) if isinstance(form_data, dict) else 'Not a dict'}")
             
-            # Parse selected domains (new feature)
+            # Parse selected domains
             selected_domains = set()
             if 'selected_domains' in form_data:
                 domain_list = form_data['selected_domains']
@@ -265,16 +267,14 @@ class HumanCentricityKafkaHandler:
                 print(f"DEBUG: Auto-detected legacy domains: {[d.value for d in selected_domains]}")
             
             # Validate that form data contains required fields for selected domains
-            if selected_domains:
-                missing_fields = DomainSelectionHelper.validate_domain_data(selected_domains, form_data)
-                if missing_fields:
-                    logger.error(f"Missing required fields for selected domains: {missing_fields}")
-                    print(f"DEBUG: ❌ Missing fields: {missing_fields}")
-                    raise InvalidFormDataException(f"Missing required fields for selected domains: {missing_fields}")
-            else:
+            if not selected_domains:
                 raise InvalidFormDataException("No domains selected or detected for assessment")
             
-            # Parse domain-specific data
+            # Get current statement structure from database for validation
+            statement_structure = self._get_statement_structure_for_domains(selected_domains)
+            print(f"DEBUG: Retrieved statement structure for {len(selected_domains)} domains")
+            
+            # Parse domain-specific data with dynamic statement support
             parsed_data = {
                 'assessmentId': form_submission.assessment_id,
                 'userId': form_submission.user_id,
@@ -284,45 +284,79 @@ class HumanCentricityKafkaHandler:
                 'metadata': form_submission.metadata or {}
             }
             
-            # Parse each selected domain's data
+            # Parse responses for each domain using dynamic statement structure
             for domain in selected_domains:
+                domain_statements = statement_structure.get(domain, [])
+                print(f"DEBUG: Processing domain {domain.value} with {len(domain_statements)} statements")
+                
+                # Handle different domain types
                 if domain == HumanCentricityDomain.CORE_USABILITY:
-                    if 'core_usability_responses' in form_data:
-                        responses_data = form_data['core_usability_responses']
-                        parsed_data['core_usability_responses'] = [LikertResponse(**r) for r in responses_data]
-                        print(f"DEBUG: Parsed {len(parsed_data['core_usability_responses'])} core usability responses")
+                    parsed_data['core_usability_responses'] = self._parse_domain_responses(
+                        domain, form_data, domain_statements, LikertResponse
+                    )
                 
                 elif domain == HumanCentricityDomain.TRUST_TRANSPARENCY:
-                    if 'trust_transparency_responses' in form_data:
-                        responses_data = form_data['trust_transparency_responses']
-                        parsed_data['trust_transparency_responses'] = [LikertResponse(**r) for r in responses_data]
-                        print(f"DEBUG: Parsed {len(parsed_data['trust_transparency_responses'])} trust transparency responses")
+                    parsed_data['trust_transparency_responses'] = self._parse_domain_responses(
+                        domain, form_data, domain_statements, LikertResponse
+                    )
                 
                 elif domain == HumanCentricityDomain.WORKLOAD_COMFORT:
+                    # Workload can use either structured metrics or dynamic responses
                     if 'workload_metrics' in form_data:
                         parsed_data['workload_metrics'] = WorkloadMetrics(**form_data['workload_metrics'])
-                        print(f"DEBUG: Parsed workload metrics")
+                        print(f"DEBUG: Parsed structured workload metrics")
+                    else:
+                        # Parse as dynamic responses
+                        workload_responses = self._parse_domain_responses(
+                            domain, form_data, domain_statements, dict
+                        )
+                        # Convert to WorkloadMetrics if possible
+                        if workload_responses:
+                            parsed_data['workload_metrics'] = self._convert_to_workload_metrics(workload_responses)
+                            print(f"DEBUG: Converted dynamic workload responses to metrics")
                 
                 elif domain == HumanCentricityDomain.CYBERSICKNESS:
-                    if 'cybersickness_responses' in form_data:
-                        responses_data = form_data['cybersickness_responses']
-                        parsed_data['cybersickness_responses'] = [CybersicknessResponse(**r) for r in responses_data]
-                        print(f"DEBUG: Parsed {len(parsed_data['cybersickness_responses'])} cybersickness responses")
+                    parsed_data['cybersickness_responses'] = self._parse_domain_responses(
+                        domain, form_data, domain_statements, CybersicknessResponse
+                    )
                 
                 elif domain == HumanCentricityDomain.EMOTIONAL_RESPONSE:
+                    # Emotional response can use structured SAM or dynamic responses
                     if 'emotional_response' in form_data:
                         parsed_data['emotional_response'] = EmotionalResponse(**form_data['emotional_response'])
-                        print(f"DEBUG: Parsed emotional response")
+                        print(f"DEBUG: Parsed structured emotional response")
+                    else:
+                        # Parse as dynamic responses
+                        emotional_responses = self._parse_domain_responses(
+                            domain, form_data, domain_statements, dict
+                        )
+                        if emotional_responses:
+                            parsed_data['emotional_response'] = self._convert_to_emotional_response(emotional_responses)
+                            print(f"DEBUG: Converted dynamic emotional responses")
                 
                 elif domain == HumanCentricityDomain.PERFORMANCE:
+                    # Performance can use structured metrics or dynamic responses
                     if 'performance_metrics' in form_data:
                         parsed_data['performance_metrics'] = PerformanceMetrics(**form_data['performance_metrics'])
-                        print(f"DEBUG: Parsed performance metrics")
+                        print(f"DEBUG: Parsed structured performance metrics")
+                    else:
+                        # Parse as dynamic responses
+                        performance_responses = self._parse_domain_responses(
+                            domain, form_data, domain_statements, dict
+                        )
+                        if performance_responses:
+                            parsed_data['performance_metrics'] = self._convert_to_performance_metrics(performance_responses)
+                            print(f"DEBUG: Converted dynamic performance responses")
             
-            # Handle custom responses if present
+            # Handle custom responses (dynamic statements outside of standard structure)
             if 'custom_responses' in form_data:
                 parsed_data['custom_responses'] = form_data['custom_responses']
                 print(f"DEBUG: Added custom responses: {list(form_data['custom_responses'].keys()) if form_data['custom_responses'] else 'None'}")
+            
+            # Handle legacy combined UX/Trust responses
+            if 'ux_trust_responses' in form_data:
+                parsed_data['ux_trust_responses'] = [LikertResponse(**r) for r in form_data['ux_trust_responses']]
+                print(f"DEBUG: Parsed legacy ux_trust_responses")
             
             human_centricity_input = HumanCentricityInput(**parsed_data)
             
@@ -338,6 +372,143 @@ class HumanCentricityKafkaHandler:
                 print(f"DEBUG: form_submission details: {form_submission.__dict__}")
             raise InvalidFormDataException(f"Failed to parse human centricity form data: {e}")
     
+    def _get_statement_structure_for_domains(self, domains: Set[HumanCentricityDomain]) -> Dict[HumanCentricityDomain, List[Dict[str, Any]]]:
+        """Get current statement structure from database for selected domains"""
+        structure = {}
+        for domain in domains:
+            statements = self.statement_manager.get_statements_by_domain(domain)
+            structure[domain] = [stmt.dict() for stmt in statements]
+        return structure
+    
+    def _parse_domain_responses(
+        self, 
+        domain: HumanCentricityDomain, 
+        form_data: Dict[str, Any],
+        domain_statements: List[Dict[str, Any]],
+        response_model
+    ) -> Optional[List]:
+        """Parse responses for a domain using dynamic statement structure"""
+        # Check for both legacy field names and new dynamic response format
+        legacy_field_map = {
+            HumanCentricityDomain.CORE_USABILITY: 'core_usability_responses',
+            HumanCentricityDomain.TRUST_TRANSPARENCY: 'trust_transparency_responses',
+            HumanCentricityDomain.CYBERSICKNESS: 'cybersickness_responses'
+        }
+        
+        field_name = legacy_field_map.get(domain)
+        
+        # Try legacy format first
+        if field_name and field_name in form_data:
+            responses_data = form_data[field_name]
+            print(f"DEBUG: Found legacy responses for {domain.value}: {len(responses_data)} items")
+            try:
+                return [response_model(**r) for r in responses_data]
+            except Exception as e:
+                logger.warning(f"Failed to parse legacy responses for {domain.value}: {e}")
+        
+        # Try dynamic response format: responses are keyed by statement ID
+        dynamic_field = f"{domain.value.lower()}_responses"
+        if dynamic_field in form_data:
+            responses_data = form_data[dynamic_field]
+            print(f"DEBUG: Found dynamic responses for {domain.value}: {len(responses_data)} items")
+            
+            # Parse based on response type
+            parsed_responses = []
+            for response_item in responses_data:
+                try:
+                    if response_model == dict:
+                        parsed_responses.append(response_item)
+                    else:
+                        parsed_responses.append(response_model(**response_item))
+                except Exception as e:
+                    logger.warning(f"Failed to parse individual response for {domain.value}: {e}")
+                    continue
+            
+            return parsed_responses if parsed_responses else None
+        
+        # Try generic 'responses' field with domain filtering
+        if 'responses' in form_data:
+            all_responses = form_data['responses']
+            domain_responses = [r for r in all_responses if r.get('domain') == domain.value]
+            if domain_responses:
+                print(f"DEBUG: Found {len(domain_responses)} generic responses for {domain.value}")
+                parsed_responses = []
+                for response_item in domain_responses:
+                    try:
+                        if response_model == dict:
+                            parsed_responses.append(response_item)
+                        else:
+                            parsed_responses.append(response_model(**response_item))
+                    except Exception as e:
+                        logger.warning(f"Failed to parse generic response for {domain.value}: {e}")
+                        continue
+                return parsed_responses if parsed_responses else None
+        
+        print(f"DEBUG: No responses found for {domain.value}")
+        return None
+    
+    def _convert_to_workload_metrics(self, responses: List[Dict[str, Any]]) -> Optional[WorkloadMetrics]:
+        """Convert dynamic workload responses to WorkloadMetrics"""
+        try:
+            # Extract values from responses
+            metrics = {}
+            for response in responses:
+                statement = response.get('statement', '').lower()
+                value = response.get('value') or response.get('rating')
+                
+                if 'mental' in statement or 'exigence_mentale' in statement:
+                    metrics['mental_demand'] = value
+                elif 'effort' in statement or 'effort_requis' in statement:
+                    metrics['effort_required'] = value
+                elif 'frustration' in statement or 'niveau_de_frustration' in statement:
+                    metrics['frustration_level'] = value
+            
+            if len(metrics) >= 2:  # At least 2 of 3 metrics
+                return WorkloadMetrics(**metrics)
+        except Exception as e:
+            logger.warning(f"Failed to convert workload responses: {e}")
+        return None
+    
+    def _convert_to_emotional_response(self, responses: List[Dict[str, Any]]) -> Optional[EmotionalResponse]:
+        """Convert dynamic emotional responses to EmotionalResponse"""
+        try:
+            metrics = {}
+            for response in responses:
+                statement = response.get('statement', '').lower()
+                value = response.get('value') or response.get('rating')
+                
+                if 'valence' in statement:
+                    metrics['valence'] = value
+                elif 'arousal' in statement or 'activation' in statement:
+                    metrics['arousal'] = value
+            
+            if 'valence' in metrics and 'arousal' in metrics:
+                return EmotionalResponse(**metrics)
+        except Exception as e:
+            logger.warning(f"Failed to convert emotional responses: {e}")
+        return None
+    
+    def _convert_to_performance_metrics(self, responses: List[Dict[str, Any]]) -> Optional[PerformanceMetrics]:
+        """Convert dynamic performance responses to PerformanceMetrics"""
+        try:
+            metrics = {}
+            for response in responses:
+                statement = response.get('statement', '').lower()
+                value = response.get('value')
+                
+                if 'time' in statement or 'temps' in statement:
+                    metrics['task_completion_time_min'] = value
+                elif 'error' in statement or 'erreur' in statement:
+                    metrics['error_rate'] = value
+                elif 'help' in statement or 'aide' in statement:
+                    metrics['help_requests'] = value
+            
+            if len(metrics) >= 2:  # At least 2 of 3 metrics
+                return PerformanceMetrics(**metrics)
+        except Exception as e:
+            logger.warning(f"Failed to convert performance responses: {e}")
+        return None
+    
     def _detect_legacy_domains(self, form_data: Dict[str, Any]) -> Set[HumanCentricityDomain]:
         """Auto-detect domains based on available data for backward compatibility"""
         detected_domains = set()
@@ -349,11 +520,9 @@ class HumanCentricityKafkaHandler:
         if 'trust_transparency_responses' in form_data:
             detected_domains.add(HumanCentricityDomain.TRUST_TRANSPARENCY)
         
-        # Workload comfort domain (separate from cybersickness)
         if 'workload_metrics' in form_data:
             detected_domains.add(HumanCentricityDomain.WORKLOAD_COMFORT)
         
-        # Cybersickness as separate domain
         if 'cybersickness_responses' in form_data:
             detected_domains.add(HumanCentricityDomain.CYBERSICKNESS)
         

@@ -173,11 +173,21 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
     const data: Record<string, any> = {}
     Object.entries(domainResults).forEach(([domain, result]) => {
       data[domain] = {
-        scores: result.detailed_scores || {},
+        // Keep the original scores structure
+        scores: result.domain_scores || result.detailed_scores || {},
         score_value: result.overall_score,
         submitted_at: result.submitted_at,
         processed_at: result.processed_at,
-        insights: result.insights || []
+        insights: result.insights || [],
+        
+        // CRITICAL: Preserve ALL backend data including detailed_metrics
+        detailed_metrics: result.detailed_metrics,
+        domain_scores: result.domain_scores,
+        dimension_scores: result.dimension_scores,
+        overall_score: result.overall_score,
+        
+        // Keep any other fields that might be present
+        ...result
       }
     })
     return data

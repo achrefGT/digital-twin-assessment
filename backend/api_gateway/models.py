@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Dict, Any, Optional, List
-from sqlalchemy import Column, String, DateTime, JSON, Integer, Boolean, Text
+from sqlalchemy import BigInteger, Column, String, DateTime, JSON, Integer, Boolean, Text
 from sqlalchemy.ext.declarative import declarative_base
 from pydantic import BaseModel, Field, validator
 
@@ -13,7 +13,43 @@ from shared.models.assessment import (
 
 Base = declarative_base()
 
-
+class OutboxEvent(Base):
+    __tablename__ = 'outbox_events'
+    
+    id = Column(BigInteger, primary_key=True, autoincrement=True)
+    aggregate_id = Column(String(255), nullable=False, index=True)
+    aggregate_type = Column(String(100), nullable=False, default='assessment')
+    event_type = Column(String(100), nullable=False)
+    event_payload = Column(JSON, nullable=False)
+    kafka_topic = Column(String(255), nullable=False)
+    kafka_key = Column(String(255))
+    status = Column(String(20), nullable=False, default='PENDING', index=True)
+    created_at = Column(DateTime, nullable=False, default=datetime.utcnow, index=True)
+    published_at = Column(DateTime)
+    retry_count = Column(Integer, nullable=False, default=0)
+    last_error = Column(Text)
+    next_retry_at = Column(DateTime)
+    
+    def __repr__(self):
+        return f"<OutboxEvent(id={self.id}, aggregate_id={self.aggregate_id}, event_type={self.event_type}, status={self.status})>"
+    
+    def to_dict(self):
+        return {
+            'id': self.id,
+            'aggregate_id': self.aggregate_id,
+            'aggregate_type': self.aggregate_type,
+            'event_type': self.event_type,
+            'event_payload': self.event_payload,
+            'kafka_topic': self.kafka_topic,
+            'kafka_key': self.kafka_key,
+            'status': self.status,
+            'created_at': self.created_at.isoformat() if self.created_at else None,
+            'published_at': self.published_at.isoformat() if self.published_at else None,
+            'retry_count': self.retry_count,
+            'last_error': self.last_error
+        }
+    
+    
 class Assessment(Base):
     """Database model for tracking assessments"""
     __tablename__ = "assessments"

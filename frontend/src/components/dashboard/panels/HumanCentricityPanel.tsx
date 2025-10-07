@@ -6,86 +6,23 @@ import { Brain, Users, Eye, Heart, Target, Sparkles } from 'lucide-react'
 import { useLanguage } from '@/contexts/LanguageContext'
 
 interface HumanCentricityPanelProps {
-  data?: {
-    scores?: {
-      overall_score?: number
-      domain_scores?: {
-        Core_Usability?: number
-        Performance?: number
-        Workload_Comfort?: number
-        Emotional_Response?: number
-        Trust_Transparency?: number
-      }
-      detailed_metrics?: {
-        Core_Usability?: {
-          mean_rating?: number
-          score?: number
-          response_count?: number
-          rating_distribution?: {
-            min?: number
-            max?: number
-            std?: number
-          }
-        }
-        Performance?: {
-          raw_metrics?: {
-            task_completion_time_min?: number
-            error_rate?: number
-            help_requests?: number
-          }
-          combined_score?: number
-          individual_scores?: {
-            time_score?: number
-            errors_score?: number
-            help_score?: number
-          }
-        }
-        Workload_Comfort?: {
-          combined_score?: number
-          workload?: {
-            mental_demand?: number
-            effort_required?: number
-            frustration_level?: number
-            mean_workload?: number
-            score?: number
-          }
-          cybersickness?: {
-            mean_severity?: number
-            score?: number
-            symptoms?: Record<string, number>
-          }
-        }
-        Emotional_Response?: {
-          valence?: number
-          arousal?: number
-          valence_normalized?: number
-          arousal_normalized?: number
-          score?: number
-          interpretation?: {
-            valence_label?: string
-            arousal_label?: string
-            quadrant?: string
-          }
-        }
-        Trust_Transparency?: {
-          mean_rating?: number
-          score?: number
-          response_count?: number
-          rating_distribution?: {
-            min?: number
-            max?: number
-            std?: number
-          }
-        }
-      }
-    }
-  }
+  data?: any
 }
 
 export const HumanCentricityPanel: React.FC<HumanCentricityPanelProps> = ({ data }) => {
   const { t } = useLanguage()
+  console.log('🔍 HumanCentricityPanel received data:', JSON.stringify(data, null, 2))
 
-  if (!data?.scores) {
+  // Extract the actual scores and metrics from the data structure
+  // The data might come in different formats depending on the source
+  const detailed_metrics = data?.detailed_metrics || data?.scores?.detailed_metrics
+  const domain_scores = data?.domain_scores || data?.scores?.domain_scores
+  const overall_score = data?.overall_score || data?.score_value || data?.scores?.overall_score
+
+  console.log('🔍 Extracted detailed_metrics:', detailed_metrics)
+  console.log('🔍 Extracted domain_scores:', domain_scores)
+
+  if (!detailed_metrics && !domain_scores) {
     return (
       <Card className="border-0 shadow-sm">
         <CardContent className="pt-0">
@@ -105,8 +42,6 @@ export const HumanCentricityPanel: React.FC<HumanCentricityPanelProps> = ({ data
       </Card>
     )
   }
-
-  const { overall_score, domain_scores, detailed_metrics } = data.scores
   
   const categories = [
     { key: 'Core_Usability', label: 'Core Usability', icon: Users, color: '#3b82f6' },
@@ -128,12 +63,14 @@ export const HumanCentricityPanel: React.FC<HumanCentricityPanelProps> = ({ data
     return 'bg-red-500'
   }
 
-  // Extract key insights from the new detailed metrics structure
+  // Extract key insights from the detailed metrics structure
   const getKeyInsights = () => {
     const insights = []
     
+    if (!detailed_metrics) return insights
+    
     // Trust rating from Trust_Transparency
-    if (detailed_metrics?.Trust_Transparency?.mean_rating) {
+    if (detailed_metrics.Trust_Transparency?.mean_rating) {
       insights.push({
         label: 'Trust Rating',
         value: `${detailed_metrics.Trust_Transparency.mean_rating.toFixed(1)}/7`,
@@ -142,7 +79,7 @@ export const HumanCentricityPanel: React.FC<HumanCentricityPanelProps> = ({ data
     }
 
     // Mental demand from Workload_Comfort
-    if (detailed_metrics?.Workload_Comfort?.workload?.mental_demand) {
+    if (detailed_metrics.Workload_Comfort?.workload?.mental_demand) {
       insights.push({
         label: 'Mental Demand',
         value: `${detailed_metrics.Workload_Comfort.workload.mental_demand}/20`,
@@ -151,7 +88,7 @@ export const HumanCentricityPanel: React.FC<HumanCentricityPanelProps> = ({ data
     }
 
     // Task completion time from Performance
-    if (detailed_metrics?.Performance?.raw_metrics?.task_completion_time_min) {
+    if (detailed_metrics.Performance?.raw_metrics?.task_completion_time_min) {
       insights.push({
         label: 'Task Time',
         value: `${detailed_metrics.Performance.raw_metrics.task_completion_time_min}m`,
@@ -160,7 +97,7 @@ export const HumanCentricityPanel: React.FC<HumanCentricityPanelProps> = ({ data
     }
 
     // Error rate from Performance
-    if (detailed_metrics?.Performance?.raw_metrics?.error_rate !== undefined) {
+    if (detailed_metrics.Performance?.raw_metrics?.error_rate !== undefined) {
       insights.push({
         label: 'Error Rate',
         value: `${detailed_metrics.Performance.raw_metrics.error_rate}`,
@@ -168,7 +105,7 @@ export const HumanCentricityPanel: React.FC<HumanCentricityPanelProps> = ({ data
       })
     }
 
-    return insights.slice(0, 2) // Only show top 2 insights to fit the existing layout
+    return insights.slice(0, 2) // Only show top 2 insights
   }
 
   const keyInsights = getKeyInsights()
@@ -210,7 +147,7 @@ export const HumanCentricityPanel: React.FC<HumanCentricityPanelProps> = ({ data
           </div>
         )}
 
-        {/* Key Insights - Only if we have meaningful data */}
+        {/* Key Insights */}
         {keyInsights.length > 0 && (
           <div className="pt-4 border-t border-slate-100">
             <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">

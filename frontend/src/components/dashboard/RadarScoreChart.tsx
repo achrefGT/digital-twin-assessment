@@ -1,9 +1,11 @@
 import React from 'react'
+import { useNavigate } from 'react-router-dom'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Progress } from '@/components/ui/progress'
+import { Button } from '@/components/ui/button'
 import { RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, Radar, ResponsiveContainer } from 'recharts'
-import { Brain, Shield, Sparkles, Target, TrendingUp, Award, Trophy, Star, CheckCircle, Clock } from 'lucide-react'
+import { Brain, Shield, Sparkles, Target, TrendingUp, Award, Trophy, Star, CheckCircle, Clock, ArrowRight } from 'lucide-react'
 import { useLanguage } from '@/contexts/LanguageContext'
 
 interface RadarScoreChartProps {
@@ -85,6 +87,7 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
   totalDomains = 3
 }) => {
   const { t } = useLanguage()
+  const navigate = useNavigate()
 
   const radarData = React.useMemo(() => {
     const domains = [
@@ -96,6 +99,7 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
     return domains.map(domain => ({
       domain: domain.shortName,
       fullName: domain.name,
+      key: domain.key,
       score: domainScores?.[domain.key] || 0,
       fullMark: 100,
       color: domain.color,
@@ -335,7 +339,7 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
                           <IconComponent className="w-6 h-6" />
                         </div>
                         <div>
-                          <h3 className="font-semibold text-foreground text-sm">
+                          <h3 className="font-semibold text-foreground">
                             {item.fullName}
                           </h3>
                           <p className="text-xs text-muted-foreground mt-1">
@@ -391,6 +395,31 @@ export const RadarScoreChart: React.FC<RadarScoreChartProps> = ({
                         </span>
                       </div>
                     </div>
+
+                    {!item.isCompleted && (
+                      <Button
+                        onClick={() => navigate(`/assessment/${item.key}`)}
+                        className="w-full mt-2 group/btn transition-all duration-200"
+                        variant="outline"
+                        style={{
+                          borderColor: `${item.color}40`,
+                          color: item.color
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.backgroundColor = `${item.color}15`
+                          e.currentTarget.style.borderColor = item.color
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.backgroundColor = 'transparent'
+                          e.currentTarget.style.borderColor = `${item.color}40`
+                        }}
+                      >
+                        <span className="font-medium">
+                          {t('home.getStarted')}
+                        </span>
+                        <ArrowRight className="w-4 h-4 ml-2 transition-transform group-hover/btn:translate-x-1" />
+                      </Button>
+                    )}
                   </div>
                 </div>
               )

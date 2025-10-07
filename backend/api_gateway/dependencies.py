@@ -6,6 +6,7 @@ import logging
 
 from .database import DatabaseManager
 from .kafka_service import KafkaService
+from .outbox_relayer import OutboxRelayer  
 from .exceptions import create_http_exception
 from shared.models.exceptions import DigitalTwinAssessmentException
 
@@ -19,6 +20,7 @@ logger = logging.getLogger(__name__)
 _db_manager: Optional[DatabaseManager] = None
 _kafka_service: Optional[KafkaService] = None
 _auth_service: Optional[AuthService] = None
+_outbox_relayer: Optional[OutboxRelayer] = None  
 
 # Security scheme for token extraction
 security = HTTPBearer(auto_error=False)
@@ -43,6 +45,13 @@ def get_auth_service() -> AuthService:
     if _auth_service is None:
         _auth_service = AuthService(get_db_manager())
     return _auth_service
+
+def get_outbox_relayer() -> OutboxRelayer: 
+    """Get outbox relayer instance"""
+    global _outbox_relayer
+    if _outbox_relayer is None:
+        _outbox_relayer = OutboxRelayer(get_db_manager())
+    return _outbox_relayer
 
 async def get_current_user_optional(
     credentials: HTTPAuthorizationCredentials = Depends(security),
