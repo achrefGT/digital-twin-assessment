@@ -9,6 +9,8 @@ from .kafka_service import KafkaService
 from .outbox_relayer import OutboxRelayer  
 from .exceptions import create_http_exception
 from shared.models.exceptions import DigitalTwinAssessmentException
+from .redis_service import get_redis_service as _get_redis_service
+
 
 # Import auth components
 from .auth.service import AuthService
@@ -146,3 +148,7 @@ def handle_exceptions(func):
                 detail="Internal server error"
             )
     return wrapper
+
+def get_redis_service():
+    """Get Redis service instance."""
+    return _get_redis_service()

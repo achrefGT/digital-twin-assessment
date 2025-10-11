@@ -19,6 +19,8 @@ from shared.models.exceptions import DigitalTwinAssessmentException
 from .dependencies import get_db_manager, get_kafka_service, get_outbox_relayer  
 from .websocket_service import connection_manager
 from .weighting_service import WeightingService
+from .redis_service import init_redis_service
+
 
 import os
 import asyncpg
@@ -92,21 +94,27 @@ async def ensure_admin_user():
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan manager with WebSocket support, Outbox Relayer, and admin user creation"""
+    """Application lifespan manager with Redis Pub/Sub support."""
     # Startup
-    logger.info("Starting API Gateway with real-time capabilities...")
+    logger.info("Starting API Gateway with Redis Pub/Sub support...")
     
     try:
         # Get instances
         db_manager = get_db_manager()
         kafka_service = get_kafka_service()
-        outbox_relayer = get_outbox_relayer() 
+        outbox_relayer = get_outbox_relayer()
+        
+        # ===== STEP 1: Initialize Redis service =====
+        redis_service = await init_redis_service()
+        app.state.redis_service = redis_service
+        logger.info("✅ Redis service initialized with Pub/Sub support")
+        logger.info(f"   - Gateway instance: {settings.gateway_instance_id}")
+        logger.info(f"   - Pub/Sub enabled: {redis_service.enable_pubsub}")
         
         # Create database tables
         db_manager.create_tables()
         logger.info("Database tables initialized")
 
-        # Small delay to ensure database initialization is complete
         await asyncio.sleep(1)
 
         # Create admin user
@@ -129,14 +137,24 @@ async def lifespan(app: FastAPI):
         consumer_task = asyncio.create_task(kafka_service.consume_score_updates())
         logger.info("Kafka consumer started")
 
-        # Initialize WebSocket connection manager
+        # FIX: Initialize WebSocket connection manager with Redis service
+        from .websocket_service import connection_manager
+        connection_manager._redis_service = redis_service
         app.state.connection_manager = connection_manager
         
-        logger.info("✅ API Gateway started successfully with real-time features, outbox pattern, and admin user")
+        # Start message queue cleanup task
+        cleanup_task = asyncio.create_task(
+            connection_manager.cleanup_expired_queued_messages()
+        )
+        logger.info("WebSocket message cleanup task started")
         
-        # Store tasks for cleanup
+        logger.info("✅ API Gateway started successfully")
+        
+        # Store tasks and services for cleanup
         app.state.consumer_task = consumer_task
-        app.state.outbox_relayer = outbox_relayer 
+        app.state.cleanup_task = cleanup_task
+        app.state.outbox_relayer = outbox_relayer
+        app.state.redis_service = redis_service
         
         yield
         
@@ -148,6 +166,21 @@ async def lifespan(app: FastAPI):
         # Shutdown
         logger.info("Shutting down API Gateway...")
         try:
+            # Cancel cleanup task
+            if hasattr(app.state, 'cleanup_task'):
+                app.state.cleanup_task.cancel()
+                try:
+                    await asyncio.wait_for(app.state.cleanup_task, timeout=2.0)
+                except (asyncio.CancelledError, asyncio.TimeoutError):
+                    pass
+                logger.info("Cleanup task stopped")
+            
+            # ===== STEP 1: Disconnect Redis =====
+            if hasattr(app.state, 'redis_service'):
+                logger.info("Disconnecting Redis service...")
+                await app.state.redis_service.disconnect()
+                logger.info("✅ Redis service disconnected")
+            
             # Cancel consumer task with timeout
             if hasattr(app.state, 'consumer_task'):
                 app.state.consumer_task.cancel()
@@ -173,6 +206,7 @@ async def lifespan(app: FastAPI):
             logger.info("✅ API Gateway shutdown complete")
         except Exception as e:
             logger.error(f"Error during shutdown: {e}")
+
             
 
 async def close_websocket_connections(connection_manager):

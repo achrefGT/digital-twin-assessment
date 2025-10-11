@@ -1,5 +1,6 @@
 import os
 from typing import List, Union
+from uuid import uuid4
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -91,7 +92,27 @@ class Settings(BaseSettings):
         default=True,
         env="ENABLE_CACHE_STAMPEDE_PROTECTION"
     )
-    # ==================== END PHASE 2 ====================
+
+    # Redis Pub/Sub for distributed WebSocket messaging
+    enable_redis_pubsub: bool = Field(
+        default=True,
+        env="ENABLE_REDIS_PUBSUB",
+        description="Enable Redis Pub/Sub for cross-instance WebSocket broadcasting"
+    )
+    
+    pubsub_message_queue_size: int = Field(
+        default=1000,
+        env="PUBSUB_MESSAGE_QUEUE_SIZE",
+        description="Maximum Pub/Sub messages per channel"
+    )
+    
+    # Gateway instance identification (for debugging/monitoring)
+    gateway_instance_id: str = Field(
+        default_factory=lambda: os.getenv("GATEWAY_INSTANCE_ID", f"gateway-{uuid4().hex[:8]}"),
+        env="GATEWAY_INSTANCE_ID",
+        description="Unique identifier for this gateway instance"
+    )
+
     
     # ==================== END REDIS CACHE SETTINGS ====================
     

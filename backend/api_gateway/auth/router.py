@@ -3,6 +3,8 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, Dict, Any
 import logging
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from .models import (
     UserCreate, UserResponse, UserLogin, Token, 
@@ -20,6 +22,7 @@ from ..database import DatabaseManager
 router = APIRouter(prefix="/auth", tags=["authentication"])
 security = HTTPBearer()
 logger = logging.getLogger(__name__)
+limiter = Limiter(key_func=get_remote_address)
 
 def get_auth_service() -> AuthService:
     """Get authentication service instance"""
@@ -34,8 +37,10 @@ def get_request_info(request: Request) -> Dict[str, Any]:
     }
 
 @router.post("/register", response_model=UserResponse)
+@limiter.limit("3/hour")  # 3 registrations per hour per IP
 async def register(
-    user_data: UserCreate,
+    request: Request,  # Required for slowapi rate limiter
+    user_data: UserCreate = Body(...),
     auth_service: AuthService = Depends(get_auth_service)
 ):
     """Register a new user"""
@@ -49,18 +54,31 @@ async def register(
         )
 
 @router.post("/login", response_model=Token)
-async def login(user_credentials: UserLogin, request: Request, db_manager: DatabaseManager = Depends(get_db_manager), auth_service: AuthService = Depends(get_auth_service)):
-    user = auth_service.authenticate_user(user_credentials.username, user_credentials.password)
+@limiter.limit("5/minute")  # 5 attempts per minute
+async def login(
+    user_credentials: UserLogin, 
+    request: Request, 
+    db_manager: DatabaseManager = Depends(get_db_manager), 
+    auth_service: AuthService = Depends(get_auth_service)
+):
+    """Authenticate user and return tokens"""
+    user = auth_service.authenticate_user(
+        user_credentials.username, 
+        user_credentials.password
+    )
     
     if not user:
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED, 
+            detail="Incorrect username or password"
+        )
     
     request_info = get_request_info(request)
     tokens = auth_service.create_tokens(user, **request_info)
     
     user_uuid = user.user_id if hasattr(user, 'user_id') else str(user.id)
     
-    # Pre-warm dashboard
+    # Pre-warm dashboard cache for better UX
     asyncio.create_task(db_manager.warm_user_dashboard(user_uuid, limit=5))
     
     return Token(**tokens)
@@ -70,7 +88,13 @@ async def refresh_token(
     token_request: RefreshTokenRequest,
     auth_service: AuthService = Depends(get_auth_service)
 ):
-    """Refresh access token"""
+    """
+    Refresh access token using refresh token.
+    
+    NOTE: CSRF protection is not needed for JWT-based refresh tokens
+    because they are sent in the request body (not cookies) and require
+    the attacker to possess the actual refresh token value.
+    """
     try:
         tokens = auth_service.refresh_access_token(token_request.refresh_token)
         return Token(**tokens)
@@ -88,7 +112,10 @@ async def logout(
 ):
     """Logout user by revoking refresh token"""
     success = auth_service.revoke_refresh_token(token_request.refresh_token)
-    return {"message": "Successfully logged out" if success else "Token not found"}
+    return {
+        "message": "Successfully logged out" if success else "Token not found",
+        "success": success
+    }
 
 @router.get("/me", response_model=UserResponse)
 async def get_current_user_info(
@@ -115,7 +142,7 @@ async def update_profile(
     try:
         logger.info(f"Profile update request from user: {current_user.user_id}")
         
-        # Parse JSON manually
+        # Parse JSON manually for better error handling
         try:
             data = await request.json()
             logger.info(f"Raw profile data received: {data}")
@@ -151,7 +178,10 @@ async def update_profile(
         # Re-raise HTTP exceptions
         raise
     except Exception as e:
-        logger.error(f"Profile update failed for user {current_user.user_id}: {e}", exc_info=True)
+        logger.error(
+            f"Profile update failed for user {current_user.user_id}: {e}", 
+            exc_info=True
+        )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update profile"

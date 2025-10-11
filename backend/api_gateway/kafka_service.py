@@ -865,16 +865,27 @@ class KafkaService:
         except Exception as e:
             logger.error(f"Error in weight update trigger check: {e}")
     
-    async def _send_websocket_updates(self, assessment_id: str, domain: str, score_value: float,
-                                    message_data: Dict, overall_score: Optional[float],
-                                    progress: AssessmentProgress, is_complete: bool):
-        """Send WebSocket updates for score changes with enhanced debugging"""
+    async def _send_websocket_updates(
+        self,
+        assessment_id: str,
+        domain: str,
+        score_value: float,
+        message_data: Dict,
+        overall_score: Optional[float],
+        progress: AssessmentProgress,
+        is_complete: bool
+    ):
+        """
+        Send WebSocket updates with Redis Pub/Sub integration.
+        
+        Message flows to:
+        1. Local WebSocket connections (this instance)
+        2. Redis Pub/Sub (other instances)
+        """
         try:
-            # Log attempt to send WebSocket message
-            logger.info(f"[WEBSOCKET_DEBUG] Preparing to send WebSocket update for assessment {assessment_id}")
-            logger.info(f"[WEBSOCKET_DEBUG] Connection manager stats: {connection_manager.get_stats()}")
+            logger.info(f"Preparing WebSocket update for assessment {assessment_id}")
             
-            # Send score update
+            # Build message
             websocket_message = {
                 "type": "score_update",
                 "timestamp": datetime.utcnow().isoformat(),
@@ -883,23 +894,23 @@ class KafkaService:
                 "score_value": score_value,
                 "scores": message_data.get('scores', {}),
                 "overall_score": overall_score,
-                "completion_percentage": self.weighting_service.get_completion_percentage(progress.domain_scores),
+                "completion_percentage": self.weighting_service.get_completion_percentage(
+                    progress.domain_scores
+                ),
                 "status": progress.status.value,
                 "domain_scores": progress.domain_scores,
                 "weights_used": self.weighting_service.weights,
                 "weights_type": self.weighting_service.weights_type,
-                "data_source": "database"
+                "data_source": "kafka"
             }
             
-            logger.info(f"[WEBSOCKET_DEBUG] Sending score update for assessment '{assessment_id}': "
-                    f"domain='{domain}', score_value={score_value}, "
-                    f"overall_score={overall_score}, "
-                    f"completion_percentage={self.weighting_service.get_completion_percentage(progress.domain_scores):.2f}%, "
-                    f"status='{progress.status.value}', weights_type='{self.weighting_service.weights_type}'")
-
-            # Actually send the message
+            logger.info(
+                f"Sending score update: assessment={assessment_id}, "
+                f"domain={domain}, overall={overall_score}"
+            )
+            
+            # Send to all connected clients (local + Redis Pub/Sub)
             await connection_manager.send_to_assessment(assessment_id, websocket_message)
-            logger.info(f"[WEBSOCKET_DEBUG] Score update message sent successfully for assessment {assessment_id}")
             
             # If assessment is complete, send completion notification
             if is_complete:
@@ -913,16 +924,15 @@ class KafkaService:
                     "completion_percentage": 100.0,
                     "final_weights_used": self.weighting_service.weights,
                     "weights_info": self.weighting_service.get_weights_info(),
-                    "data_source": "database"
+                    "data_source": "kafka"
                 }
                 
-                logger.info(f"[WEBSOCKET_DEBUG] Sending completion message for assessment '{assessment_id}'")
+                logger.info(f"Sending completion message for assessment {assessment_id}")
                 await connection_manager.send_to_assessment(assessment_id, completion_message)
-                logger.info(f"[WEBSOCKET_DEBUG] Completion message sent successfully for assessment {assessment_id}")
                 
         except Exception as e:
-            logger.error(f"[WEBSOCKET_DEBUG] Error sending WebSocket updates for assessment {assessment_id}: {e}")
-            logger.exception("Full WebSocket error traceback:")
+            logger.error(f"Error sending WebSocket updates: {e}")
+            logger.exception("Full traceback:")
 
 
     async def _send_error_websocket_notification(self, assessment_id: str, domain: str, error_message: str):
