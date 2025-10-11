@@ -112,7 +112,8 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
     updateProgressWithSnapshot,
     rollbackToSnapshot,
     clearSnapshot,
-    currentAssessment
+    currentAssessment,
+    forceRefresh
   } = useAssessment()
   const { token, isAuthenticated } = useAuth()
   const { toast } = useToast()
@@ -154,8 +155,10 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
     },
     enabled: !!assessmentId && !!token,
     retry: 2,
-    staleTime: 30000,
-    refetchOnWindowFocus: true
+    staleTime: 0,
+    refetchOnWindowFocus: true,
+    refetchOnMount: true,
+    refetchInterval: 15000
   })
 
   // Helper functions to extract data
@@ -170,32 +173,55 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
   }
 
   const extractDomainData = (domainResults: Record<string, any>): Record<string, any> => {
+    console.log('🔍 extractDomainData - Raw domainResults:', JSON.stringify(domainResults, null, 2))
+    
     const data: Record<string, any> = {}
     Object.entries(domainResults).forEach(([domain, result]) => {
-      data[domain] = {
+      console.log(`🔍 Processing domain: ${domain}`)
+      console.log(`🔍 Raw result for ${domain}:`, JSON.stringify(result, null, 2))
+      
+      // Extract all nested data structures
+      const extractedData = {
         // Keep the original scores structure
-        scores: result.domain_scores || result.detailed_scores || {},
-        score_value: result.overall_score,
+        scores: result.scores || result.domain_scores || {},
+        score_value: result.score_value || result.overall_score,
         submitted_at: result.submitted_at,
         processed_at: result.processed_at,
         insights: result.insights || [],
         
-        // CRITICAL: Preserve ALL backend data including detailed_metrics
-        detailed_metrics: result.detailed_metrics,
-        domain_scores: result.domain_scores,
-        dimension_scores: result.dimension_scores,
-        overall_score: result.overall_score,
+        // CRITICAL: Preserve ALL backend data including nested structures
+        // First check if data is nested under 'scores'
+        overall_score: result.overall_score ?? result.scores?.overall_score,
+        dimension_scores: result.dimension_scores ?? result.scores?.dimension_scores,
+        domain_scores: result.domain_scores ?? result.scores?.domain_scores,
+        
+        // Sustainability-specific metrics
+        sustainability_metrics: result.sustainability_metrics ?? result.scores?.sustainability_metrics,
+        
+        // Risk-specific metrics
+        risk_metrics: result.risk_metrics ?? result.scores?.risk_metrics,
+        
+        // Human-centricity metrics
+        detailed_metrics: result.detailed_metrics ?? result.scores?.detailed_metrics,
         
         // Keep any other fields that might be present
         ...result
       }
+      
+      data[domain] = extractedData
+      
+      console.log(`🔍 Extracted data for ${domain}:`, JSON.stringify(data[domain], null, 2))
     })
+    
+    console.log('🔍 Final extracted domain_data:', JSON.stringify(data, null, 2))
     return data
   }
 
   // Convert domain scores response to assessment data
   useEffect(() => {
     if (domainScoresData) {
+      console.log('🔍 Received domainScoresData from backend:', JSON.stringify(domainScoresData, null, 2))
+      
       const assessmentData: AssessmentData = {
         assessment_id: assessmentId,
         overall_score: domainScoresData.overall_assessment.overall_score,
@@ -206,6 +232,10 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
         completion_percentage: domainScoresData.overall_assessment.completion_percentage,
         summary_statistics: domainScoresData.summary_statistics
       }
+      
+      console.log('🔍 Constructed assessmentData:', JSON.stringify(assessmentData, null, 2))
+      console.log('🔍 Specifically domain_data:', JSON.stringify(assessmentData.domain_data, null, 2))
+      
       setLocalAssessmentData(assessmentData)
     }
   }, [domainScoresData, assessmentId])
@@ -219,6 +249,13 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
 
   // Check if this is the currently active assessment
   const isActiveAssessment = currentAssessment?.assessment_id === assessmentId
+
+  // Refetch when active assessment changes
+  useEffect(() => {
+    if (isActiveAssessment) {
+      refetch()
+    }
+  }, [isActiveAssessment, refetch])
 
   // WebSocket event subscription - only for active assessment
   useEffect(() => {
@@ -317,9 +354,14 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
     }
 
     if (latestMessage.type === 'score_update') {
+      console.log('🔍 WebSocket score_update received:', JSON.stringify(latestMessage, null, 2))
+      
       const progressUpdate: any = {}
       
       if (latestMessage.domain) {
+        console.log(`🔍 Processing domain update for: ${latestMessage.domain}`)
+        console.log('🔍 latestMessage.scores:', JSON.stringify(latestMessage.scores, null, 2))
+        
         // Mark this domain as processing
         setProcessingDomains(prev => new Set(prev).add(latestMessage.domain!))
         
@@ -336,15 +378,35 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
         const currentCompleted = assessmentData.completed_domains || []
         progressUpdate.completed_domains = [...new Set([...currentCompleted, latestMessage.domain])]
         
+        // FIXED: Preserve ALL data from WebSocket message including detailed_metrics, sustainability_metrics, etc.
+        // Check if scores are nested under 'scores' object or flat
+        const scoresData = latestMessage.scores || {}
+        
+        const domainUpdate = {
+          ...assessmentData.domain_data[latestMessage.domain],
+          // Preserve all fields from the scores object
+          ...(scoresData as Record<string, any>),
+          // Keep backward compatibility with old fields
+          scores: scoresData,
+          score_value: latestMessage.score_value || (scoresData as Record<string, any>).score_value,
+          processing_time_ms: latestMessage.processing_time_ms,
+          // Explicitly preserve nested data structures
+          overall_score: latestMessage.overall_score || (scoresData as Record<string, any>).overall_score,
+          dimension_scores: (scoresData as Record<string, any>).dimension_scores,
+          domain_scores: (scoresData as Record<string, any>).domain_scores,
+          detailed_metrics: (scoresData as Record<string, any>).detailed_metrics,
+          sustainability_metrics: (scoresData as Record<string, any>).sustainability_metrics,
+          risk_metrics: (scoresData as Record<string, any>).risk_metrics,
+        }
+        
+        console.log(`🔍 Constructed domainUpdate for ${latestMessage.domain}:`, JSON.stringify(domainUpdate, null, 2))
+        
         progressUpdate.domain_data = {
           ...assessmentData.domain_data,
-          [latestMessage.domain]: {
-            ...assessmentData.domain_data[latestMessage.domain],
-            scores: latestMessage.scores || {},
-            score_value: latestMessage.score_value,
-            processing_time_ms: latestMessage.processing_time_ms
-          }
+          [latestMessage.domain]: domainUpdate
         }
+        
+        console.log('🔍 Full progressUpdate.domain_data:', JSON.stringify(progressUpdate.domain_data, null, 2))
         
         if (latestMessage.score_value !== undefined) {
           progressUpdate.domain_scores = {
@@ -376,15 +438,25 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
       // Optimistic update WITH snapshot
       updateProgressWithSnapshot(progressUpdate, true)
       
+      console.log('🔍 After updateProgressWithSnapshot, progressUpdate:', JSON.stringify(progressUpdate, null, 2))
+      
       // Update local state for immediate UI refresh
-      setLocalAssessmentData(prev => prev ? {
-        ...prev,
-        ...progressUpdate,
-        domain_data: {
-          ...prev.domain_data,
-          ...progressUpdate.domain_data
-        }
-      } : null)
+      setLocalAssessmentData(prev => {
+        const updated = prev ? {
+          ...prev,
+          ...progressUpdate,
+          domain_data: {
+            ...prev.domain_data,
+            ...progressUpdate.domain_data
+          }
+        } : null
+        
+        console.log('🔍 Updated localAssessmentData:', JSON.stringify(updated, null, 2))
+        return updated
+      })
+      
+      // Call forceRefresh to invalidate queries
+      forceRefresh()
       
       // Set timeout to clear pending status and snapshot if no error received
       if (latestMessage.domain) {
@@ -414,6 +486,9 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
           
           clearSnapshot()
           errorTimeoutRefs.current.delete(domain)
+          
+          // Refetch after successful update
+          refetch()
           
           // Show success toast
           toast({
@@ -481,6 +556,9 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
         ...completionUpdate
       } : null)
       
+      // Call forceRefresh
+      forceRefresh()
+      
       // Show completion toast
       toast({
         title: t('dashboard.assessmentComplete'),
@@ -501,6 +579,7 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
     toast, 
     pendingUpdates,
     refetch,
+    forceRefresh,
     t
   ])
 
@@ -692,13 +771,22 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
                         {/* Domain-specific content panels */}
                         <div className="pt-4 border-t border-border/30">
                           {moduleKey === 'human_centricity' && (
-                            <HumanCentricityPanel data={assessmentData.domain_data.human_centricity} />
+                            <>
+                              {console.log('🔍 Passing to HumanCentricityPanel:', JSON.stringify(assessmentData.domain_data.human_centricity, null, 2))}
+                              <HumanCentricityPanel data={assessmentData.domain_data.human_centricity} />
+                            </>
                           )}
                           {moduleKey === 'resilience' && (
-                            <ResiliencePanel data={assessmentData.domain_data.resilience} />
+                            <>
+                              {console.log('🔍 Passing to ResiliencePanel:', JSON.stringify(assessmentData.domain_data.resilience, null, 2))}
+                              <ResiliencePanel data={assessmentData.domain_data.resilience} />
+                            </>
                           )}
                           {moduleKey === 'sustainability' && (
-                            <SustainabilityPanel data={assessmentData.domain_data.sustainability} />
+                            <>
+                              {console.log('🔍 Passing to SustainabilityPanel:', JSON.stringify(assessmentData.domain_data.sustainability, null, 2))}
+                              <SustainabilityPanel data={assessmentData.domain_data.sustainability} />
+                            </>
                           )}
                         </div>
                       </div>

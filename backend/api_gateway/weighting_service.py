@@ -367,7 +367,7 @@ class WeightingService:
         # Convert back to 0-100 scale
         final_score = final_score_normalized * 100.0
         
-        return final_score
+        return float(final_score)
     
     def is_assessment_complete(self, domain_scores: Dict[str, float]) -> bool:
         """Check if all required domains have scores"""

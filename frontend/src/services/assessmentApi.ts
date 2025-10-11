@@ -283,23 +283,31 @@ export const assessmentQueries = {
   detail: (assessmentId: string, token?: string) => ({
     queryKey: assessmentKeys.detail(assessmentId),
     queryFn: () => AssessmentAPI.fetchAssessment(assessmentId, token),
-    staleTime: 30 * 1000, // 30 seconds
+    staleTime: 0, // ALWAYS consider stale - refetch on mount
+    gcTime: 2 * 60 * 1000, // 2 minutes (reduced from 5)
+    refetchOnMount: true,
+    refetchOnWindowFocus: true, // ENABLE for better UX
   }),
 
   userAssessments: (token: string, limit: number = 10) => ({
     queryKey: assessmentKeys.userAssessments(),
     queryFn: () => AssessmentAPI.fetchUserAssessments(token, limit),
-    staleTime: 30 * 1000, // 30 seconds
+    staleTime: 0, // ALWAYS refetch - this is critical for list updates
+    gcTime: 2 * 60 * 1000, // 2 minutes
     enabled: !!token,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true, // ENABLE
   }),
 
   domainScores: (assessmentId: string, token?: string) => ({
     queryKey: assessmentKeys.domainScores(assessmentId),
     queryFn: () => AssessmentAPI.fetchDomainScores(assessmentId, token),
-    staleTime: 30 * 1000, // 30 seconds
+    staleTime: 5 * 1000, // 5 seconds (scores update frequently)
+    gcTime: 2 * 60 * 1000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
   }),
 
-  // Combined query that tries domain scores first, falls back to basic assessment
   detailWithScores: (assessmentId: string, token?: string) => ({
     queryKey: assessmentKeys.detail(assessmentId),
     queryFn: async () => {
@@ -311,7 +319,10 @@ export const assessmentQueries = {
         return AssessmentAPI.fetchAssessment(assessmentId, token)
       }
     },
-    staleTime: 30 * 1000,
+    staleTime: 5 * 1000, // 5 seconds
+    gcTime: 2 * 60 * 1000,
+    refetchOnMount: true,
+    refetchOnWindowFocus: true,
     retry: (failureCount, error: any) => {
       if (error?.message?.includes('Authentication required') || 
           error?.message?.includes('not found')) {
@@ -324,7 +335,6 @@ export const assessmentQueries = {
   currentAssessmentId: () => ({
     queryKey: assessmentKeys.currentAssessmentId(),
     queryFn: () => {
-      // Return the in-memory current assessment ID
       return (window as any).__currentAssessmentId__ || null
     },
     staleTime: Infinity,
@@ -334,27 +344,60 @@ export const assessmentQueries = {
 
 // React Query mutation functions
 export const assessmentMutations = {
-  create: (token: string) => ({
+  create: (token: string, queryClient: QueryClient) => ({
     mutationFn: () => AssessmentAPI.createAssessment(token),
     onSuccess: (assessment: Assessment) => {
       // Store current assessment ID in memory
       (window as any).__currentAssessmentId__ = assessment.assessment_id
+      
+      // CRITICAL: Invalidate user assessments list IMMEDIATELY
+      queryClient.invalidateQueries({ 
+        queryKey: assessmentKeys.userAssessments() 
+      })
+      queryClient.invalidateQueries({ 
+        queryKey: assessmentKeys.all 
+      })
+      
+      console.log('✅ Invalidated assessment lists after creation')
     }
   }),
 
-  submitDomain: (token: string) => ({
+  submitDomain: (token: string, queryClient: QueryClient) => ({
     mutationFn: ({ assessmentId, domain, responses }: { 
       assessmentId: string
       domain: string 
       responses: Record<string, any> 
-    }) => AssessmentAPI.submitDomain(assessmentId, domain, responses, token)
+    }) => AssessmentAPI.submitDomain(assessmentId, domain, responses, token),
+    onSuccess: (_data: any, variables: any) => {
+      // Invalidate the specific assessment
+      queryClient.invalidateQueries({ 
+        queryKey: assessmentKeys.detail(variables.assessmentId) 
+      })
+      queryClient.invalidateQueries({ 
+        queryKey: assessmentKeys.domainScores(variables.assessmentId) 
+      })
+      
+      // Invalidate user assessment list
+      queryClient.invalidateQueries({ 
+        queryKey: assessmentKeys.userAssessments() 
+      })
+      
+      console.log('✅ Invalidated queries after domain submission')
+    }
   }),
 
-  delete: (token: string) => ({
+  delete: (token: string, queryClient: QueryClient) => ({
     mutationFn: (assessmentId: string) => AssessmentAPI.deleteAssessment(assessmentId, token),
     onSuccess: () => {
       // Clear current assessment ID
       (window as any).__currentAssessmentId__ = null
+      
+      // Invalidate all assessment queries
+      queryClient.invalidateQueries({ 
+        queryKey: assessmentKeys.all 
+      })
+      
+      console.log('✅ Invalidated all queries after deletion')
     }
   })
 }
@@ -364,11 +407,10 @@ export const createQueryClient = () => {
   return new QueryClient({
     defaultOptions: {
       queries: {
-        // Global query defaults
-        staleTime: 30 * 1000, // 30 seconds
-        gcTime: 5 * 60 * 1000, // 5 minutes
+        // Global query defaults - AGGRESSIVE refetching
+        staleTime: 0, // Consider everything stale immediately
+        gcTime: 2 * 60 * 1000, // 2 minutes (reduced from 5)
         retry: (failureCount, error: any) => {
-          // Don't retry on authentication or not found errors
           if (error?.message?.includes('401') || 
               error?.message?.includes('403') ||
               error?.message?.includes('Authentication required') ||
@@ -377,21 +419,24 @@ export const createQueryClient = () => {
           }
           return failureCount < 2
         },
-        refetchOnWindowFocus: false,
+        refetchOnWindowFocus: true, // ENABLE for better UX
         refetchOnMount: true,
         refetchOnReconnect: true,
       },
       mutations: {
-        // Global mutation defaults
         retry: 1,
         onError: (error: any) => {
           console.error('Mutation error:', error)
-          // Could add global error handling here (toast notifications, etc.)
+        },
+        // CRITICAL: Invalidate queries after EVERY mutation
+        onSuccess: () => {
+          // This will be overridden by specific mutations
         }
       }
     }
   })
 }
+
 
 // Assessment utilities for managing state
 export const AssessmentUtils = {

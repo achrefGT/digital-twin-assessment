@@ -70,9 +70,17 @@ export default function AssessmentDashboardPage() {
     },
     enabled: !!assessmentId && !!token,
     retry: 2,
-    staleTime: 30000,
-    refetchOnWindowFocus: true
+    staleTime: 0, // CHANGED: from 30000 to 0
+    refetchOnWindowFocus: true,
+    refetchOnMount: true // ADDED
   })
+
+  // ADDED: Refetch when assessmentId changes
+  useEffect(() => {
+    if (assessmentId && token) {
+      refetchDomainScores()
+    }
+  }, [assessmentId, token, refetchDomainScores])
 
   // Handle making this assessment active
   const handleMakeActive = async () => {
@@ -99,6 +107,9 @@ export default function AssessmentDashboardPage() {
       }
       
       await switchToAssessment(assessmentToSwitch)
+      
+      // ADDED: Force refetch after switching
+      await refetchDomainScores()
       
       console.log('Assessment switched successfully')
     } catch (error) {

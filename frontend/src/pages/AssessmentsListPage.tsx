@@ -1,9 +1,10 @@
 import React, { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query' // ADDED
 import { Button } from '@/components/ui/button'
 import { ArrowLeft, BarChart3, Plus } from 'lucide-react'
 import { AssessmentsList } from '@/components/dashboard/AssessmentsList'
-import { Assessment } from '@/services/assessmentApi'
+import { Assessment, assessmentKeys } from '@/services/assessmentApi' // ADDED assessmentKeys
 import { useLanguage } from '@/contexts/LanguageContext'
 import { useAssessment } from '@/hooks/useAssessment'
 
@@ -11,9 +12,15 @@ export default function AssessmentsListPage() {
   const navigate = useNavigate()
   const { t } = useLanguage()
   const { clearAssessment } = useAssessment()
+  const queryClient = useQueryClient() // ADDED
   const [isCreating, setIsCreating] = useState(false)
 
   const handleSelectAssessment = (assessment: Assessment) => {
+    // ADDED: Refetch before navigation
+    queryClient.refetchQueries({ 
+      queryKey: assessmentKeys.domainScores(assessment.assessment_id) 
+    })
+    
     // Navigate to the specific assessment dashboard
     navigate(`/dashboard/${assessment.assessment_id}`)
   }
@@ -22,6 +29,12 @@ export default function AssessmentsListPage() {
     try {
       setIsCreating(true)
       clearAssessment()
+      
+      // ADDED: Refetch after clearing
+      await queryClient.refetchQueries({ 
+        queryKey: assessmentKeys.userAssessments() 
+      })
+      
       navigate('/assessment')
     } catch (error) {
       console.error('Failed to navigate to create assessment:', error)

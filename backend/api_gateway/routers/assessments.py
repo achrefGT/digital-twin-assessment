@@ -45,15 +45,8 @@ async def create_assessment(
     current_user: TokenData = Depends(get_current_user_required)
 ):
     """
-    Create a new assessment
-    
-    NOTE: Assessment creation events are published DIRECTLY (not via outbox).
-    This is acceptable because:
-    - Creation is a lightweight operation
-    - If event fails, assessment still exists in DB
-    - Consumers can query DB if they miss the event
+    Create a new assessment with proper cache handling
     """
-    # Use authenticated user
     user_id = current_user.user_id
     
     # Create assessment using shared model logic
@@ -69,13 +62,21 @@ async def create_assessment(
     # Save to database
     assessment = db_manager.create_assessment_from_progress(progress, assessment_data.metadata)
     
+    # CRITICAL: Invalidate user's assessment list cache IMMEDIATELY
+    # This ensures the new assessment appears in the list
+    if await db_manager._ensure_redis_connected():
+        try:
+            await db_manager._invalidate_user_assessments_cache(user_id)
+            logger.info(f"Invalidated user assessment list cache after creation for {user_id}")
+        except Exception as e:
+            logger.warning(f"Failed to invalidate user list cache: {e}")
+    
     # Publish status update event (best-effort, non-critical)
     try:
         await kafka_service.publish_assessment_status_update(progress)
         logger.info(f"Published creation event for assessment {assessment.assessment_id}")
     except Exception as e:
         logger.warning(f"Failed to publish assessment creation event: {e}")
-        # Don't fail the request - assessment is already saved
     
     return AssessmentResponse.from_orm(assessment)
 
@@ -88,7 +89,7 @@ async def get_assessment(
     current_user: Optional[TokenData] = Depends(get_current_user_optional)
 ):
     """Get assessment by ID"""
-    assessment = db_manager.get_assessment(assessment_id)
+    assessment = await db_manager.get_assessment(assessment_id)
     
     # Authorization check
     if current_user:
@@ -128,7 +129,7 @@ async def submit_form(
     """
     
     # Get assessment
-    db_assessment = db_manager.get_assessment(assessment_id)
+    db_assessment = await db_manager.get_assessment(assessment_id)
     progress = db_assessment.to_progress_model()
     previous_status = progress.status.value
     
@@ -205,6 +206,7 @@ async def submit_form(
         )
 
 
+
 @router.get("/user/{user_id}", response_model=List[AssessmentResponse])
 @handle_exceptions
 async def get_user_assessments(
@@ -225,7 +227,7 @@ async def get_user_assessments(
                 detail="Access denied"
             )
     
-    assessments = db_manager.get_user_assessments(
+    assessments = await db_manager.get_user_assessments(
         user_id, 
         min(limit, 50),
         status_filter=status_filter.value if status_filter else None
@@ -244,7 +246,7 @@ async def get_my_assessments(
 ):
     """Get current user's assessments"""
     
-    assessments = db_manager.get_user_assessments(
+    assessments = await db_manager.get_user_assessments(
         current_user.user_id, 
         min(limit, 50),
         status_filter=status_filter.value if status_filter else None
@@ -262,7 +264,7 @@ async def get_assessment_progress(
 ):
     """Get detailed assessment progress"""
     
-    db_assessment = db_manager.get_assessment(assessment_id)
+    db_assessment = await db_manager.get_assessment(assessment_id)
     progress = db_assessment.to_progress_model()
     
     # Authorization check
@@ -295,7 +297,7 @@ async def update_assessment_status(
     This is a manual admin action, not a critical business event.
     """
     
-    db_assessment = db_manager.get_assessment(assessment_id)
+    db_assessment = await db_manager.get_assessment(assessment_id)
     progress = db_assessment.to_progress_model()
     previous_status = progress.status.value
     
@@ -345,13 +347,9 @@ async def delete_assessment(
 ):
     """
     Delete an assessment (hard delete)
-    
-    NOTE: Deletion events are NOT published via outbox because:
-    - Once deleted, the assessment is gone - no state to protect
-    - Consumers can handle missing assessments gracefully
     """
     
-    assessment = db_manager.get_assessment(assessment_id)
+    assessment = await db_manager.get_assessment(assessment_id)
     
     # Authorization check
     if current_user:
@@ -364,6 +362,9 @@ async def delete_assessment(
             )
     
     try:
+        # Get user_id BEFORE deletion
+        user_id = assessment.user_id
+        
         # Perform hard delete
         success = db_manager.delete_assessment(assessment_id)
         
@@ -372,6 +373,22 @@ async def delete_assessment(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Assessment not found"
             )
+        
+        # CRITICAL FIX: Invalidate ALL user assessment caches immediately
+        if user_id and await db_manager._ensure_redis_connected():
+            try:
+                await db_manager._invalidate_user_assessments_cache(user_id)
+                logger.info(f"✅ Invalidated user assessment cache after deletion for {user_id}")
+            except Exception as e:
+                logger.warning(f"Cache invalidation failed (non-critical): {e}")
+        
+        # Also invalidate the specific assessment cache
+        if await db_manager._ensure_redis_connected():
+            try:
+                await db_manager.redis_service.invalidate_assessment_cache(assessment_id)
+                logger.info(f"✅ Invalidated assessment cache for {assessment_id}")
+            except Exception as e:
+                logger.warning(f"Assessment cache invalidation failed: {e}")
         
         logger.info(f"Deleted assessment {assessment_id}")
         
@@ -405,7 +422,7 @@ async def retry_assessment(
     This is a manual user action to recover from failure.
     """
     
-    db_assessment = db_manager.get_assessment(assessment_id)
+    db_assessment = await db_manager.get_assessment(assessment_id)
     progress = db_assessment.to_progress_model()
     
     # Authorization check
@@ -459,7 +476,7 @@ async def get_assessment_domain_scores(
 ):
     """Get detailed scores for all completed domains"""
     
-    assessment = db_manager.get_assessment(assessment_id)
+    assessment = await db_manager.get_assessment(assessment_id)
     progress = assessment.to_progress_model()
     
     # Authorization check
@@ -510,8 +527,9 @@ async def get_assessment_domain_scores(
                 "domain_name": "Resilience",
                 "status": "completed",
                 "overall_score": result.get("overall_score"),
-                "domain_scores": result.get("domain_scores", {}),  # subdomain scores
-                "detailed_metrics": result.get("detailed_metrics", {}),  
+                "domain_scores": result.get("domain_scores", {}),
+                "risk_metrics": result.get("risk_metrics", {}),
+                "detailed_metrics": result.get("risk_metrics", {}),
                 "submitted_at": result.get("submitted_at"),
                 "processed_at": result.get("processed_at"),
                 "insights": _generate_resilience_insights(
@@ -527,8 +545,10 @@ async def get_assessment_domain_scores(
                 "domain_name": "Sustainability",
                 "status": "completed",
                 "overall_score": result.get("overall_score"),
-                "domain_scores": result.get("dimension_scores", {}),  # subdomain scores
-                "detailed_metrics": result.get("detailed_metrics", {}),  
+                "dimension_scores": result.get("dimension_scores", {}),
+                "domain_scores": result.get("dimension_scores", {}),
+                "sustainability_metrics": result.get("sustainability_metrics", {}),
+                "detailed_metrics": result.get("detailed_metrics", {}),
                 "submitted_at": result.get("submitted_at"),
                 "processed_at": result.get("processed_at"),
                 "insights": _generate_sustainability_insights(

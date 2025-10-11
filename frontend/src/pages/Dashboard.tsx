@@ -21,7 +21,8 @@ export default function Dashboard() {
     isLoading, 
     clearAssessment, 
     createAssessment,
-    refreshAssessmentData
+    refreshAssessmentData,
+    forceRefresh // ADDED: Import forceRefresh
   } = useAssessment()
 
   // WebSocket connection for real-time updates
@@ -47,6 +48,7 @@ export default function Dashboard() {
       case 'assessment_completed':
         console.log('Dashboard: Score update received, refreshing data')
         refreshAssessmentData()
+        forceRefresh() // ADDED: Force refresh all queries
         setLastRefreshTime(Date.now())
         
         toast({
@@ -60,12 +62,13 @@ export default function Dashboard() {
         
       case 'test_message':
         console.log('Dashboard: Test message received')
+        forceRefresh() // ADDED: Force refresh on test message
         break
         
       default:
         console.log('Dashboard: Unhandled message type:', latestMessage.type)
     }
-  }, [messages, refreshAssessmentData, toast, t])
+  }, [messages, refreshAssessmentData, forceRefresh, toast, t]) // ADDED forceRefresh to deps
 
   // Auto-refresh assessment data periodically (as backup to WebSocket)
   useEffect(() => {
@@ -77,6 +80,7 @@ export default function Dashboard() {
       if (timeSinceLastRefresh > 60000) { // 1 minute
         try {
           await refreshAssessmentData()
+          forceRefresh() // ADDED: Force refresh on auto-refresh
           console.log('Dashboard: Auto-refreshed assessment data (fallback)')
         } catch (error) {
           console.error('Dashboard: Auto-refresh failed:', error)
@@ -85,7 +89,7 @@ export default function Dashboard() {
     }, 90000) // Check every 90 seconds
 
     return () => clearInterval(interval)
-  }, [currentAssessment?.assessment_id, refreshAssessmentData, lastRefreshTime])
+  }, [currentAssessment?.assessment_id, refreshAssessmentData, forceRefresh, lastRefreshTime]) // ADDED forceRefresh to deps
 
   // Handle URL state for assessment switching
   useEffect(() => {
@@ -104,6 +108,7 @@ export default function Dashboard() {
       setCreateError(null)
       
       clearAssessment()
+      forceRefresh() // ADDED: Force refresh after clearing
       navigate('/assessment')
       
     } catch (error) {
@@ -131,6 +136,7 @@ export default function Dashboard() {
       })
 
       await refreshAssessmentData(assessment.assessment_id)
+      forceRefresh() // ADDED: Force refresh after switching
       
       toast({
         title: t('assessments.assessmentSwitched'),
@@ -163,6 +169,7 @@ export default function Dashboard() {
     
     try {
       await refreshAssessmentData()
+      forceRefresh() // ADDED: Force refresh on manual refresh
       toast({
         title: t('assessments.dataRefreshed'),
         description: t('assessments.dataUpdated'),

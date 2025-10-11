@@ -1,37 +1,28 @@
 import React from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useLanguage } from '@/contexts/LanguageContext'
-import { Shield, RefreshCw, Zap, Clock, Wrench, AlertTriangle, Sparkles} from 'lucide-react'
+import { Shield, RefreshCw, Zap, Clock, Wrench, AlertTriangle, Sparkles } from 'lucide-react'
 
 interface ResiliencePanelProps {
-  data?: {
-    scores?: {
-      overall_score?: number
-      domain_scores?: {
-        Robustness?: number
-        Redundancy?: number
-        Adaptability?: number
-        Rapidity?: number
-        PHM?: number
-      }
-      risk_metrics?: {
-        overall_mean_risk?: number
-        total_scenarios?: number
-        detailed_metrics?: any
-      }
-    }
-  }
+  data?: any
 }
 
 export const ResiliencePanel: React.FC<ResiliencePanelProps> = ({ data }) => {
   const { t } = useLanguage()
 
-  if (!data?.scores) {
+  // Extract from either nested scores object or flat structure
+  const overall_score = data?.overall_score || data?.scores?.overall_score || data?.score_value
+  const domain_scores = data?.domain_scores || data?.scores?.domain_scores || data?.scores
+  const risk_metrics = data?.risk_metrics || data?.scores?.risk_metrics
+
+  console.log('🔍 ResiliencePanel received data:', JSON.stringify(data, null, 2))
+  console.log('🔍 Extracted domain_scores:', domain_scores)
+  console.log('🔍 Extracted risk_metrics:', risk_metrics)
+
+  if (!domain_scores && !risk_metrics) {
     return (
       <Card className="border-0 shadow-sm">
-
         <CardContent className="pt-0">
           <div className="flex flex-col items-center justify-center py-12 text-center space-y-4">
             <div className="relative">
@@ -49,8 +40,6 @@ export const ResiliencePanel: React.FC<ResiliencePanelProps> = ({ data }) => {
       </Card>
     )
   }
-
-  const { overall_score, domain_scores, risk_metrics } = data.scores
   
   const categories = [
     { key: 'Robustness', label: 'Robustness', icon: Shield, color: '#3b82f6' },
@@ -155,18 +144,20 @@ export const ResiliencePanel: React.FC<ResiliencePanelProps> = ({ data }) => {
             </div>
             
             {/* Key Risk Metrics */}
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              {keyInsights.map((insight, index) => (
-                <div key={index} className={`rounded-lg p-3 text-center ${insight.bgColor || 'bg-slate-50'}`}>
-                  <div className={`text-lg font-semibold mb-1 ${insight.color || 'text-slate-900'}`}>
-                    {insight.value}
+            {keyInsights.length > 0 && (
+              <div className="grid grid-cols-2 gap-3 mb-4">
+                {keyInsights.map((insight, index) => (
+                  <div key={index} className={`rounded-lg p-3 text-center ${insight.bgColor || 'bg-slate-50'}`}>
+                    <div className={`text-lg font-semibold mb-1 ${insight.color || 'text-slate-900'}`}>
+                      {insight.value}
+                    </div>
+                    <div className="text-xs text-slate-500">
+                      {insight.label}
+                    </div>
                   </div>
-                  <div className="text-xs text-slate-500">
-                    {insight.label}
-                  </div>
-                </div>
-              ))}
-            </div>
+                ))}
+              </div>
+            )}
 
             {/* Risk Score Display */}
             {risk_metrics.overall_mean_risk !== undefined && (

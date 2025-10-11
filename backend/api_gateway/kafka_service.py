@@ -720,13 +720,12 @@ class KafkaService:
             )
 
     async def process_score_message(self, topic: str, message_data: Dict[str, Any]):
-        """Enhanced score processing with WebSocket notifications and custom weighting"""
+        """Enhanced score processing with proper progress model updates"""
         
         assessment_id = message_data.get('assessment_id')
         domain = message_data.get('domain')
 
         logger.info(f"[SCORE_DEBUG] Starting to process score for assessment {assessment_id}, domain {domain}")
-        logger.info(f"[SCORE_DEBUG] WebSocket connections available: {len(connection_manager.assessment_connections.get(assessment_id, set()))}")
         
         if not assessment_id:
             logger.warning(f"Missing assessment_id in message from {topic}")
@@ -736,7 +735,7 @@ class KafkaService:
             logger.warning(f"Missing domain in message from {topic}")
             return
         
-        # Check if already processing this assessment
+        # Check if already processing
         if assessment_id in self._processing_assessments:
             logger.debug(f"Assessment {assessment_id} already being processed, skipping")
             return
@@ -754,14 +753,22 @@ class KafkaService:
                 logger.warning(f"Invalid score value from {topic}: {score_value}")
                 return
             
-            # Get current assessment and convert to shared model
-            db_assessment = self.db_manager.get_assessment(assessment_id)
+            # FIX: Get current assessment and convert to shared model
+            db_assessment = await self.db_manager.get_assessment(assessment_id)
             if not db_assessment:
                 logger.warning(f"Assessment {assessment_id} not found in database")
                 return
             
             progress = db_assessment.to_progress_model()
             previous_status = progress.status.value
+            
+            # Mark the domain as submitted/completed
+            if domain.lower() == "resilience":
+                progress.resilience_submitted = True
+            elif domain.lower() == "sustainability":
+                progress.sustainability_submitted = True
+            elif domain.lower() == "human_centricity":
+                progress.human_centricity_submitted = True
             
             # Update domain scores using shared model
             progress.domain_scores[domain] = score_value
@@ -779,11 +786,9 @@ class KafkaService:
                 progress.status = AssessmentStatus.COMPLETED
                 progress.completed_at = datetime.utcnow()
                 
-                # NO LONGER CACHE - the database is our source of truth
                 logger.info(f"Assessment {assessment_id} completed with overall score {overall_score}")
                 
-                # Trigger weight update if we have significant new completions
-                # Check if it's time for a weight update (every N completions or time-based)
+                # Trigger weight update
                 await self._check_and_trigger_weight_update()
                 
             elif overall_score is not None:
@@ -793,12 +798,23 @@ class KafkaService:
             elif progress.status != AssessmentStatus.PROCESSING:
                 progress.status = AssessmentStatus.PROCESSING
             
-            # Save to database WITH outbox events (transactional)
-            self.db_manager.update_assessment_with_outbox(
+            # FIX: Save to database WITH outbox events (transactional)
+            # This ensures domain submission flags are persisted
+            updated_assessment = await self.db_manager.update_assessment_with_outbox(
                 progress=progress,
                 domain=domain,
                 score_value=score_value
             )
+
+            if is_complete and overall_score is not None:
+                # Warm cache for user's dashboard view
+                try:
+                    await self.db_manager.warm_assessment_cache(assessment_id)
+                    # FIX: Also warm user's assessment list
+                    if progress.user_id:
+                        await self.db_manager.warm_user_assessments_cache(progress.user_id, limit=10)
+                except Exception as e:
+                    logger.warning(f"Cache warming failed (non-critical): {e}")
             
             # Send WebSocket updates
             await self._send_websocket_updates(
@@ -806,7 +822,6 @@ class KafkaService:
                 overall_score, progress, is_complete
             )
 
-            
             logger.info(
                 f"Updated {domain} score ({score_value}) for assessment {assessment_id}. "
                 f"Overall score: {overall_score}, Complete: {is_complete}"
@@ -814,11 +829,8 @@ class KafkaService:
             
         except Exception as e:
             logger.error(f"Error processing score message from {topic}: {e}")
-            
-            # Send error notification to WebSocket
             await self._send_error_websocket_notification(assessment_id, domain, str(e))
             
-            # Publish error event
             await self._publish_error_event(
                 assessment_id=assessment_id,
                 error_type="score_processing_error", 

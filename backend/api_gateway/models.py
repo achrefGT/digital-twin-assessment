@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Dict, Any, Optional, List
-from sqlalchemy import BigInteger, Column, String, DateTime, JSON, Integer, Boolean, Text
+from sqlalchemy import BigInteger, Column, String, DateTime, JSON, Integer, Boolean, Text, Float
 from sqlalchemy.ext.declarative import declarative_base
 from pydantic import BaseModel, Field, validator
 
@@ -49,14 +49,14 @@ class OutboxEvent(Base):
             'last_error': self.last_error
         }
     
-    
+
 class Assessment(Base):
     """Database model for tracking assessments"""
     __tablename__ = "assessments"
     
     id = Column(Integer, primary_key=True, index=True)
-    assessment_id = Column(String, unique=True, index=True, nullable=False)
-    user_id = Column(String, index=True)
+    assessment_id = Column(String(36), unique=True, index=True, nullable=False)
+    user_id = Column(String(36), index=True)
     system_name = Column(String)
     
     # Progress tracking - using shared enum
@@ -67,7 +67,12 @@ class Assessment(Base):
     
     # Results (populated when available)
     domain_scores = Column(JSON, default={})
-    overall_score = Column(JSON)  # Will store final aggregated score
+    overall_score = Column(Float, nullable=True)  # FIX: Changed from JSON to Float
+    
+    # CRITICAL FIX: Store detailed domain results from microservices
+    # This contains the full response from each domain's scoring service
+    # Format: { "domain_name": { "overall_score": 45.8, "domain_scores": {...}, "detailed_metrics": {...}, ... } }
+    domain_data = Column(JSON, default={})
     
     # Metadata
     meta_data = Column(JSON, default={})
@@ -75,7 +80,7 @@ class Assessment(Base):
     # Timestamps
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
-    completed_at = Column(DateTime)
+    completed_at = Column(DateTime, nullable=True)
     
     def to_progress_model(self) -> AssessmentProgress:
         """Convert SQLAlchemy model to shared Pydantic model"""
@@ -119,7 +124,7 @@ class UserSession(Base):
     
     id = Column(Integer, primary_key=True, index=True)
     session_id = Column(String, unique=True, index=True, nullable=False)
-    user_id = Column(String, index=True)
+    user_id = Column(String(36), index=True)
     
     # Session data
     session_data = Column(JSON, default={})
@@ -240,7 +245,7 @@ class AssessmentService:
     @staticmethod
     def update_progress_status(progress: AssessmentProgress) -> AssessmentStatus:
         """Update status based on domain completion using shared logic"""
-        if progress.resilience_submitted and progress.human_centricity_submitted and progress.sustainability_submitted :
+        if progress.resilience_submitted and progress.human_centricity_submitted and progress.sustainability_submitted:
             return AssessmentStatus.ALL_COMPLETE
         elif progress.human_centricity_submitted:
             return AssessmentStatus.HUMAN_CENTRICITY_COMPLETE

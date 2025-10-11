@@ -42,6 +42,28 @@ services:
       retries: 3
       start_period: 30s
 
+  # Redis (in-memory datastore / cache)
+  redis:
+    image: redis:7-alpine
+    container_name: redis
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    environment:
+      - REDIS_PASSWORD=${REDIS_PASSWORD:-}
+    command: >
+      sh -c "if [ -n \"$REDIS_PASSWORD\" ]; then redis-server --requirepass \"$REDIS_PASSWORD\"; else redis-server; fi"
+    networks:
+      - digital-twin-network
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "sh", "-c", "if [ -n \"$REDIS_PASSWORD\" ]; then redis-cli -a \"$REDIS_PASSWORD\" ping; else redis-cli ping; fi"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+
   postgres:
     image: postgres:15-alpine
     container_name: postgres
@@ -109,6 +131,7 @@ services:
     env_file:
       - ./backend/.env
     environment:
+      - REDIS_URL=redis://redis:6379/0
       - PORT=8000
       - DATABASE_HOST=postgres
       - DATABASE_PORT=5432
@@ -116,10 +139,13 @@ services:
       - API_HOST=0.0.0.0
       - API_PORT=8000
       - LOG_LEVEL=${LOG_LEVEL:-INFO}
+
     depends_on:
       postgres:
         condition: service_healthy
       kafka:
+        condition: service_healthy
+      redis:  
         condition: service_healthy
     networks:
       - digital-twin-network
@@ -149,6 +175,7 @@ services:
       - RESILIENCE_API_HOST=0.0.0.0
       - RESILIENCE_API_PORT=8001
       - RESILIENCE_LOG_LEVEL=${LOG_LEVEL:-INFO}
+
     depends_on:
       api-gateway:
         condition: service_healthy
@@ -184,6 +211,7 @@ services:
       - SUSTAINABILITY_API_HOST=0.0.0.0
       - SUSTAINABILITY_API_PORT=8006
       - SUSTAINABILITY_LOG_LEVEL=${LOG_LEVEL:-INFO}
+
     depends_on:
       postgres:
         condition: service_healthy
@@ -217,6 +245,7 @@ services:
       - HUMAN_CENTRICITY_API_HOST=0.0.0.0
       - HUMAN_CENTRICITY_API_PORT=8002
       - HUMAN_CENTRICITY_LOG_LEVEL=${LOG_LEVEL:-INFO}
+
     depends_on:
       postgres:
         condition: service_healthy
@@ -256,7 +285,8 @@ volumes:
     driver: local
   postgres_data:
     driver: local
-
+  redis_data:
+    driver: local
 
 networks:
   digital-twin-network:

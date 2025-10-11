@@ -1,3 +1,13 @@
+"""
+Phase 2: Cache-Aside with Stampede Protection
+
+This implements:
+1. All Phase 1 features (basic cache-aside)
+2. Distributed locking to prevent cache stampede
+3. Wait-and-retry for requests that don't get the lock
+4. Automatic lock release on success/failure
+"""
+
 from datetime import datetime, timedelta
 from typing import Optional, Dict, Any, List
 from contextlib import contextmanager
@@ -6,17 +16,22 @@ from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.exc import SQLAlchemyError
 from uuid import uuid4
 import logging
+import json
+import asyncio
 
 # Import shared models
 from shared.models.assessment import AssessmentProgress, AssessmentStatus
 
 from .config import settings
 from .models import Base, Assessment, UserSession, OutboxEvent
-# Import auth models
 from .auth.models import User, RefreshToken
 from .exceptions import DatabaseConnectionException, AssessmentNotFoundException
 
+# Import Redis service
+from .redis_service import RedisService
+
 logger = logging.getLogger(__name__)
+
 
 class DatabaseManager:
     def __init__(self):
@@ -34,6 +49,33 @@ class DatabaseManager:
             expire_on_commit=False
         )
         
+        # Redis Integration
+        self.redis_service: Optional[RedisService] = None
+        self.cache_enabled = getattr(settings, 'enable_assessment_caching', True)
+        
+        if self.cache_enabled:
+            try:
+                self.redis_service = RedisService()
+                logger.info("✅ Redis service initialized for assessment caching")
+            except Exception as e:
+                logger.warning(f"⚠️ Redis initialization failed, caching disabled: {e}")
+                self.cache_enabled = False
+        else:
+            logger.info("ℹ️ Assessment caching is disabled in settings")
+        
+    async def _ensure_redis_connected(self) -> bool:
+        """Ensure Redis connection is established (lazy connection)"""
+        if not self.cache_enabled or not self.redis_service:
+            return False
+        
+        try:
+            if not self.redis_service.connected:
+                await self.redis_service.connect()
+            return True
+        except Exception as e:
+            logger.warning(f"Redis connection failed: {e}")
+            return False
+    
     def create_tables(self):
         """Create database tables including auth tables"""
         try:
@@ -71,6 +113,171 @@ class DatabaseManager:
             _ = obj.__dict__
             session.expunge(obj)
         return objects
+    
+    def _assessment_to_cache_dict(self, assessment: Assessment) -> Dict[str, Any]:
+        """Convert Assessment ORM object to cacheable dictionary"""
+        return {
+            'assessment_id': assessment.assessment_id,
+            'user_id': assessment.user_id,
+            'system_name': assessment.system_name,
+            'status': assessment.status,
+            'resilience_submitted': assessment.resilience_submitted,
+            'sustainability_submitted': assessment.sustainability_submitted,
+            'human_centricity_submitted': assessment.human_centricity_submitted,
+            'domain_scores': assessment.domain_scores,
+            'overall_score': assessment.overall_score,
+            'meta_data': assessment.meta_data,
+            'created_at': assessment.created_at.isoformat() if assessment.created_at else None,
+            'updated_at': assessment.updated_at.isoformat() if assessment.updated_at else None,
+            'completed_at': assessment.completed_at.isoformat() if assessment.completed_at else None
+        }
+    
+    def _cache_dict_to_assessment(self, cache_data: Dict[str, Any]) -> Assessment:
+        """Convert cached dictionary back to Assessment ORM object"""
+        assessment = Assessment(
+            assessment_id=cache_data['assessment_id'],
+            user_id=cache_data['user_id'],
+            system_name=cache_data['system_name'],
+            status=cache_data['status'],
+            resilience_submitted=cache_data['resilience_submitted'],
+            sustainability_submitted=cache_data['sustainability_submitted'],
+            human_centricity_submitted=cache_data['human_centricity_submitted'],
+            domain_scores=cache_data['domain_scores'],
+            overall_score=cache_data['overall_score'],
+            meta_data=cache_data['meta_data']
+        )
+        
+        # Parse ISO datetime strings
+        if cache_data.get('created_at'):
+            assessment.created_at = datetime.fromisoformat(cache_data['created_at'])
+        if cache_data.get('updated_at'):
+            assessment.updated_at = datetime.fromisoformat(cache_data['updated_at'])
+        if cache_data.get('completed_at'):
+            assessment.completed_at = datetime.fromisoformat(cache_data['completed_at'])
+        
+        return assessment
+    
+    # ==================== PHASE 2: Cache-Aside with Stampede Protection ====================
+    async def get_assessment(
+        self, 
+        assessment_id: str, 
+        bypass_cache: bool = False
+    ) -> Assessment:
+        """
+        Get assessment by ID with cache-aside pattern and stampede protection.
+        
+        PHASE 2 FLOW:
+        1. Check cache (fast path)
+        2. On cache miss:
+           a. Try to acquire lock
+           b. If lock acquired: fetch from DB, populate cache, release lock
+           c. If lock NOT acquired: wait for lock holder to populate cache, then read cache
+        3. Return assessment
+        
+        Args:
+            assessment_id: Assessment identifier
+            bypass_cache: If True, skip cache and query database directly
+            
+        Returns:
+            Assessment object
+            
+        Raises:
+            AssessmentNotFoundException: If assessment not found
+        """
+        # Step 1: Try cache first (unless bypassed)
+        if not bypass_cache and await self._ensure_redis_connected():
+            try:
+                cached_data = await self.redis_service.get_cached_assessment(assessment_id)
+                
+                if cached_data:
+                    logger.debug(f"✅ Cache HIT for assessment {assessment_id}")
+                    assessment = self._cache_dict_to_assessment(cached_data)
+                    return assessment
+                else:
+                    logger.debug(f"❌ Cache MISS for assessment {assessment_id}")
+                    
+            except Exception as e:
+                logger.warning(f"Cache read failed for {assessment_id}, falling back to DB: {e}")
+        
+        # Step 2: Cache miss - need to fetch from DB with stampede protection
+        if not bypass_cache and await self._ensure_redis_connected():
+            try:
+                # Try to acquire lock
+                lock_token = await self.redis_service.acquire_cache_lock(assessment_id)
+                
+                if lock_token:
+                    # WE GOT THE LOCK - fetch from DB and populate cache
+                    logger.debug(f"🔒 Acquired lock for {assessment_id}, fetching from DB")
+                    
+                    try:
+                        # Fetch from database
+                        assessment = await self._fetch_assessment_from_db(assessment_id)
+                        
+                        # Populate cache
+                        cache_data = self._assessment_to_cache_dict(assessment)
+                        await self.redis_service.cache_assessment(
+                            assessment_id, 
+                            cache_data,
+                            ttl=getattr(settings, 'cache_ttl_seconds', 300)
+                        )
+                        logger.debug(f"📦 Cached assessment {assessment_id} from database")
+                        
+                        return assessment
+                        
+                    finally:
+                        # Always release lock
+                        await self.redis_service.release_cache_lock(assessment_id, lock_token)
+                        logger.debug(f"🔓 Released lock for {assessment_id}")
+                
+                else:
+                    # SOMEONE ELSE HAS THE LOCK - wait for them to populate cache
+                    logger.debug(f"⏳ Waiting for cache population of {assessment_id}")
+                    
+                    # Wait for lock to be released
+                    lock_released = await self.redis_service.wait_for_cache_lock(assessment_id)
+                    
+                    if lock_released:
+                        # Lock released - try reading from cache again
+                        cached_data = await self.redis_service.get_cached_assessment(assessment_id)
+                        
+                        if cached_data:
+                            logger.debug(f"✅ Got cached data after waiting for {assessment_id}")
+                            assessment = self._cache_dict_to_assessment(cached_data)
+                            return assessment
+                        else:
+                            logger.warning(f"⚠️ No cache data after lock release for {assessment_id}, fetching from DB")
+                    else:
+                        logger.warning(f"⏱️ Lock wait timeout for {assessment_id}, fetching from DB")
+                    
+                    # Fallback: fetch directly from DB
+                    return await self._fetch_assessment_from_db(assessment_id)
+                    
+            except Exception as e:
+                logger.error(f"Stampede protection error for {assessment_id}: {e}")
+                # Fallback to direct DB fetch
+                return await self._fetch_assessment_from_db(assessment_id)
+        
+        # Step 3: Cache disabled or bypassed - direct DB fetch
+        return await self._fetch_assessment_from_db(assessment_id)
+    
+    async def _fetch_assessment_from_db(self, assessment_id: str) -> Assessment:
+        """
+        Internal helper to fetch assessment from database.
+        Separated for reuse in stampede protection flow.
+        """
+        with self.get_session() as session:
+            assessment = session.query(Assessment).filter(
+                Assessment.assessment_id == assessment_id
+            ).first()
+            
+            if not assessment:
+                raise AssessmentNotFoundException(f"Assessment {assessment_id} not found")
+            
+            # Make a copy before expunging
+            result = self._expunge_and_return(session, assessment)
+        
+        return result
+    # ==================== END PHASE 2: get_assessment() ====================
     
     def generate_assessment_id(self) -> str:
         """Generate a unique assessment ID"""
@@ -115,7 +322,7 @@ class DatabaseManager:
         progress: AssessmentProgress, 
         metadata: Dict[str, Any] = None
     ) -> Assessment:
-        """Create assessment from shared progress model"""
+        """Create assessment from shared progress model WITH cache invalidation"""
         with self.get_session() as session:
             assessment = Assessment.from_progress_model(progress)
             if metadata:
@@ -124,19 +331,13 @@ class DatabaseManager:
             session.add(assessment)
             session.flush()
             
-            return self._expunge_and_return(session, assessment)
-    
-    def get_assessment(self, assessment_id: str) -> Assessment:
-        """Get assessment by ID"""
-        with self.get_session() as session:
-            assessment = session.query(Assessment).filter(
-                Assessment.assessment_id == assessment_id
-            ).first()
-            
-            if not assessment:
-                raise AssessmentNotFoundException(f"Assessment {assessment_id} not found")
-            
-            return self._expunge_and_return(session, assessment)
+            result = self._expunge_and_return(session, assessment)
+        
+        # Invalidate user's assessment list cache immediately
+        if progress.user_id:
+            asyncio.create_task(self._invalidate_user_assessments_cache(progress.user_id))
+        
+        return result
     
     def _update_assessment_fields(
         self, 
@@ -227,14 +428,76 @@ class DatabaseManager:
             session.flush()
             
             return self._expunge_and_return(session, assessment)
-    
-    def get_user_assessments(
+        
+    async def get_user_assessments(
         self, 
         user_id: str, 
         limit: int = 10, 
-        status_filter: Optional[str] = None
+        status_filter: Optional[str] = None,
+        bypass_cache: bool = False
     ) -> List[Assessment]:
-        """Get assessments for a user"""
+        """
+        Get user assessments with caching.
+        
+        Cache key includes user_id, limit, and status_filter for proper segmentation.
+        """
+        # Generate cache key with query parameters
+        cache_key = f"user_assessments:{user_id}:{limit}:{status_filter or 'all'}"
+        
+        # Try cache first
+        if not bypass_cache and await self._ensure_redis_connected():
+            try:
+                cached_data = await self.redis_service.redis.get(cache_key)
+                if cached_data:
+                    logger.debug(f"✅ Cache HIT for user assessments: {user_id}")
+                    # Deserialize list of assessments
+                    assessments = [
+                        self._cache_dict_to_assessment(item) 
+                        for item in json.loads(cached_data)
+                    ]
+                    return assessments
+            except Exception as e:
+                logger.warning(f"Cache read failed for user assessments: {e}")
+        
+        # Cache miss - fetch from DB with stampede protection
+        if not bypass_cache and await self._ensure_redis_connected():
+            lock_token = await self.redis_service.acquire_cache_lock(cache_key)
+            
+            if lock_token:
+                try:
+                    assessments = self._fetch_user_assessments_from_db(
+                        user_id, limit, status_filter
+                    )
+                    
+                    # Cache the list
+                    cache_data = [
+                        self._assessment_to_cache_dict(a) for a in assessments
+                    ]
+                    await self.redis_service.redis.setex(cache_key, 300, json.dumps(cache_data))
+                    
+                    return assessments
+                finally:
+                    await self.redis_service.release_cache_lock(cache_key, lock_token)
+            else:
+                # Wait for lock holder
+                await self.redis_service.wait_for_cache_lock(cache_key)
+                cached_data = await self.redis_service.redis.get(cache_key)
+                if cached_data:
+                    return [
+                        self._cache_dict_to_assessment(item) 
+                        for item in json.loads(cached_data)
+                    ]
+        
+        # Fallback: direct DB fetch
+        return self._fetch_user_assessments_from_db(user_id, limit, status_filter)
+
+    def _fetch_user_assessments_from_db(
+        self, 
+        user_id: str, 
+        limit: int, 
+        status_filter: Optional[str]
+    ) -> List[Assessment]:
+        """Internal helper to fetch from database."""
         with self.get_session() as session:
             query = session.query(Assessment).filter(Assessment.user_id == user_id)
             
@@ -294,21 +557,7 @@ class DatabaseManager:
         cutoff_date: datetime = None, 
         limit: int = 1000
     ) -> List[Assessment]:
-        """
-        Get completed assessments for weight calculation from database
-        
-        Parameters:
-        -----------
-        cutoff_date : datetime, optional
-            Only fetch assessments completed after this date
-        limit : int, default=1000
-            Maximum number of assessments to fetch
-            
-        Returns:
-        --------
-        List[Assessment]
-            List of completed assessments with domain scores
-        """
+        """Get completed assessments for weight calculation from database"""
         with self.get_session() as session:
             query = session.query(Assessment).filter(
                 Assessment.status == "completed",
@@ -380,12 +629,7 @@ class DatabaseManager:
         kafka_key: Optional[str] = None,
         aggregate_type: str = 'assessment'
     ) -> int:
-        """
-        Create outbox event within an existing transaction.
-        
-        Returns:
-            outbox_event_id: The ID of the created outbox event
-        """
+        """Create outbox event within an existing transaction"""
         outbox_event = OutboxEvent(
             aggregate_id=aggregate_id,
             aggregate_type=aggregate_type,
@@ -413,11 +657,7 @@ class DatabaseManager:
         domain: Optional[str] = None,
         score_value: Optional[float] = None
     ) -> List[int]:
-        """
-        Internal helper to create appropriate outbox events based on progress changes.
-        
-        Returns list of created outbox event IDs.
-        """
+        """Internal helper to create appropriate outbox events based on progress changes"""
         outbox_ids = []
         timestamp = datetime.utcnow().isoformat()
         
@@ -479,7 +719,7 @@ class DatabaseManager:
         
         return outbox_ids
 
-    def update_assessment_with_outbox(
+    async def update_assessment_with_outbox(
         self,
         progress: AssessmentProgress,
         domain: Optional[str] = None,
@@ -487,9 +727,7 @@ class DatabaseManager:
     ) -> Assessment:
         """
         Update assessment AND create outbox events in a SINGLE TRANSACTION.
-        
-        This replaces direct Kafka publishing with transactional outbox pattern,
-        guaranteeing no event loss.
+        PHASE 2: Aggressive cache invalidation BEFORE returning.
         """
         with self.get_session() as session:
             # Get assessment
@@ -504,10 +742,10 @@ class DatabaseManager:
             
             previous_status = assessment.status
             
-            # Reuse the existing field update logic
+            # Update assessment fields
             self._update_assessment_fields(assessment, progress)
             
-            # Create outbox events using helper
+            # Create outbox events
             outbox_ids = self._create_outbox_events_for_progress(
                 session=session,
                 progress=progress,
@@ -524,7 +762,75 @@ class DatabaseManager:
                 f"{len(outbox_ids)} outbox events"
             )
             
-            return self._expunge_and_return(session, assessment)
+            result = self._expunge_and_return(session, assessment)
+        
+        # CRITICAL: Invalidate ALL caches IMMEDIATELY after database commit
+        if await self._ensure_redis_connected():
+            invalidation_tasks = []
+            
+            # 1. Invalidate the specific assessment cache
+            try:
+                await self.redis_service.invalidate_assessment_cache(progress.assessment_id)
+                logger.debug(f"🗑️ Invalidated cache for assessment {progress.assessment_id}")
+            except Exception as e:
+                logger.warning(f"Cache invalidation failed for {progress.assessment_id}: {e}")
+            
+            # 2. Invalidate user's assessment lists
+            if progress.user_id:
+                try:
+                    await self._invalidate_user_assessments_cache(progress.user_id)
+                except Exception as e:
+                    logger.warning(f"User list cache invalidation failed: {e}")
+            
+            # 3. If completed, warm the cache for fast subsequent reads
+            if progress.status == AssessmentStatus.COMPLETED:
+                try:
+                    await asyncio.sleep(0.1)  # Small delay to ensure consistency
+                    await self.warm_assessment_cache(progress.assessment_id)
+                    if progress.user_id:
+                        await self.warm_user_assessments_cache(progress.user_id, limit=10)
+                except Exception as e:
+                    logger.warning(f"Cache warming failed (non-critical): {e}")
+        
+        return result
+    
+    async def _invalidate_user_assessments_cache(self, user_id: str):
+        """Aggressively invalidate ALL cached user assessment lists."""
+        if await self._ensure_redis_connected():
+            try:
+                # Pattern: user_assessments:{user_id}:*
+                pattern = f"user_assessments:{user_id}:*"
+                
+                # Scan and delete matching keys
+                keys_deleted = 0
+                cursor = 0
+                while True:
+                    cursor, keys = await self.redis_service.redis.scan(
+                        cursor, match=pattern, count=100
+                    )
+                    if keys:
+                        await self.redis_service.redis.delete(*keys)
+                        keys_deleted += len(keys)
+                    if cursor == 0:
+                        break
+                
+                # ALSO invalidate the generic assessments list cache if it exists
+                generic_pattern = f"assessments:list:user:{user_id}:*"
+                cursor = 0
+                while True:
+                    cursor, keys = await self.redis_service.redis.scan(
+                        cursor, match=generic_pattern, count=100
+                    )
+                    if keys:
+                        await self.redis_service.redis.delete(*keys)
+                        keys_deleted += len(keys)
+                    if cursor == 0:
+                        break
+                        
+                logger.info(f"🗑️ Invalidated {keys_deleted} user assessment cache keys for {user_id}")
+            except Exception as e:
+                logger.warning(f"Failed to invalidate user list cache: {e}")
+
 
     def get_pending_outbox_events(self, batch_size: int = 100) -> List[OutboxEvent]:
         """Fetch pending outbox events for publishing to Kafka"""
@@ -604,3 +910,101 @@ class DatabaseManager:
                 'failed': stats_dict.get('FAILED', 0),
                 'oldest_pending': oldest_pending.isoformat() if oldest_pending else None
             }
+        
+    async def warm_assessment_cache(self, assessment_id: str) -> bool:
+        """
+        Warm cache for a single assessment.
+        Only warms if not already cached.
+        """
+        if not await self._ensure_redis_connected():
+            return False
+        
+        try:
+            # Skip if already cached
+            cached = await self.redis_service.get_cached_assessment(assessment_id)
+            if cached:
+                return True
+            
+            # Fetch and cache
+            assessment = await self._fetch_assessment_from_db(assessment_id)
+            cache_data = self._assessment_to_cache_dict(assessment)
+            await self.redis_service.cache_assessment(
+                assessment_id, 
+                cache_data,
+                ttl=getattr(settings, 'cache_ttl_seconds', 300)
+            )
+            
+            logger.info(f"🔥 Warmed cache for assessment {assessment_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to warm cache: {e}")
+            return False
+        
+    async def warm_user_assessments_cache(
+        self,
+        user_id: str,
+        limit: int = 10,
+        status_filter: Optional[str] = None
+    ) -> bool:
+        """
+        Warm cache for user's assessment list.
+        Only warms if not already cached.
+        """
+        if not await self._ensure_redis_connected():
+            return False
+        
+        try:
+            cache_key = f"user_assessments:{user_id}:{limit}:{status_filter or 'all'}"
+            
+            # Skip if already cached
+            cached = await self.redis_service.redis.get(cache_key)
+            if cached:
+                return True
+            
+            # Fetch and cache
+            assessments = self._fetch_user_assessments_from_db(user_id, limit, status_filter)
+            
+            cache_data = [
+                self._assessment_to_cache_dict(a) for a in assessments
+            ]
+            await self.redis_service.redis.setex(
+                cache_key,
+                300,  # 5 minute TTL
+                json.dumps(cache_data)
+            )
+            
+            logger.info(f"🔥 Warmed user assessments cache for {user_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to warm user assessments cache: {e}")
+            return False
+    
+    async def warm_user_dashboard(self, user_id: str, limit: int = 5) -> bool:
+        """
+        Warm cache for user's recent assessments.
+        Call this after login.
+        """
+        if not await self._ensure_redis_connected():
+            return False
+        
+        try:
+            # Warm the list (now this method exists!)
+            await self.warm_user_assessments_cache(user_id, limit)
+            
+            # Warm individual assessments
+            assessments = self._fetch_user_assessments_from_db(user_id, limit, None)
+            
+            for assessment in assessments[:limit]:  # Limit to avoid overload
+                try:
+                    await self.warm_assessment_cache(assessment.assessment_id)
+                except Exception as e:
+                    logger.warning(f"Failed to warm {assessment.assessment_id}: {e}")
+            
+            logger.info(f"🔥 Warmed dashboard for user {user_id}")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to warm dashboard: {e}")
+            return False

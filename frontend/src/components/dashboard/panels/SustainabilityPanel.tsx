@@ -1,42 +1,32 @@
 import React from 'react'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Progress } from '@/components/ui/progress'
+import { Card, CardContent, CardHeader } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useLanguage } from '@/contexts/LanguageContext'
-import { Leaf, Zap, Factory, Globe, TrendingUp, Sparkles } from 'lucide-react'
+import { Leaf, Globe, TrendingUp, Sparkles } from 'lucide-react'
 
 interface SustainabilityPanelProps {
-  data?: {
-    scores?: {
-      overall_score?: number
-      dimension_scores?: {
-        environmental?: number
-        social?: number
-        economic?: number
-      }
-      sustainability_metrics?: {
-        selected_domains?: string[]
-        domain_count?: number
-        dimension_weights?: Record<string, number>
-        detailed_metrics?: {
-          environmental?: Record<string, any>
-          social?: Record<string, any>
-          economic?: Record<string, any>
-        }
-        score_distribution?: {
-          min?: number
-          max?: number
-          std?: number
-        }
-        recommendations?: string[]
-      }
-    }
-  }
+  data?: any
 }
 
 export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }) => {
   const { t } = useLanguage()
-  if (!data?.scores) {
+  
+  // Try multiple paths to extract sustainability_metrics
+  const sustainability_metrics = data?.sustainability_metrics || 
+                                data?.scores?.sustainability_metrics ||
+                                data?.detailed_metrics?.sustainability_metrics
+
+  // Extract dimension_scores from multiple possible locations
+  const dimension_scores = data?.dimension_scores || 
+                          data?.scores?.dimension_scores || 
+                          data?.domain_scores || 
+                          data?.scores?.domain_scores
+
+  console.log('🔍 SustainabilityPanel received data:', JSON.stringify(data, null, 2))
+  console.log('🔍 Extracted dimension_scores:', dimension_scores)
+  console.log('🔍 Extracted sustainability_metrics:', sustainability_metrics)
+
+  if (!dimension_scores && !sustainability_metrics) {
     return (
       <Card className="border-0 shadow-sm">
         <CardContent className="pt-0">
@@ -57,8 +47,6 @@ export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }
     )
   }
 
-  const { overall_score, dimension_scores, sustainability_metrics } = data.scores
-  
   const dimensions = [
     { key: 'environmental', label: t('domain.sustainability.environmental'), icon: Leaf, color: '#10b981' },
     { key: 'social', label: t('domain.sustainability.social'), icon: Globe, color: '#3b82f6' },
@@ -77,9 +65,9 @@ export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }
     return 'bg-red-500'
   }
 
-  // Extract key insights from sustainability metrics - now using ENV_* keys
+  // Extract key insights from sustainability metrics
   const getKeyInsights = () => {
-    const insights = []
+    const insights: Array<{label: string, value: string, type: string}> = []
     
     // Selected domains count
     if (sustainability_metrics?.selected_domains?.length) {
@@ -90,34 +78,35 @@ export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }
       })
     }
 
-    // Environmental metrics if available - look for ENV_* keys
-    if (sustainability_metrics?.detailed_metrics?.environmental) {
-      const envMetrics = sustainability_metrics.detailed_metrics.environmental
+    // Extract detailed metrics from all selected domains
+    if (sustainability_metrics?.detailed_metrics && typeof sustainability_metrics.detailed_metrics === 'object') {
+      const detailedMetrics = sustainability_metrics.detailed_metrics as Record<string, any>
       
-      // Find the first valid ENV_* criterion with description
-      const envCriteria = Object.entries(envMetrics).filter(([key]) => key.startsWith('ENV_'))
-      
-      if (envCriteria.length > 0) {
-        // Get the first criterion (typically ENV_01 - Digital Twin Realism)
-        const [firstKey, firstValue] = envCriteria[0]
-        if (firstValue?.description && firstValue.description !== 'None') {
-          insights.push({
-            label: t('sustainability.dtRealism'),
-            value: firstValue.description,
-            type: 'level'
-          })
-        }
+      // Process each selected domain
+      Object.entries(detailedMetrics).forEach(([domainKey, metrics]) => {
+        if (!metrics || typeof metrics !== 'object') return
         
-        // Get energy tracking info (typically ENV_03)
-        const energyKey = envCriteria.find(([key]) => key === 'ENV_03')
-        if (energyKey && energyKey[1]?.description && energyKey[1].description !== 'None') {
-          insights.push({
-            label: t('sustainability.energyTracking'),
-            value: energyKey[1].description,
-            type: 'level'
-          })
+        const metricsObj = metrics as Record<string, any>
+        
+        // Find criteria entries (e.g., ENV_01, SOC_01, etc.)
+        const criteria = Object.entries(metricsObj)
+          .filter(([key]) => /^[A-Z]{3}_\d{2}/.test(key))
+        
+        if (criteria.length > 0) {
+          // Get the first criterion
+          const [firstKey, firstValue] = criteria[0]
+          const criterionData = firstValue as any
+          
+          if (criterionData?.description && criterionData.description !== 'None') {
+            const domainLabel = domainKey.charAt(0).toUpperCase() + domainKey.slice(1)
+            insights.push({
+              label: `${domainLabel} - ${firstKey}`,
+              value: criterionData.description || criterionData.level,
+              type: 'level'
+            })
+          }
         }
-      }
+      })
     }
 
     return insights.slice(0, 2) // Only show top 2 insights
@@ -164,7 +153,7 @@ export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }
                             style={{ width: `${score}%` }}
                           />
                         </div>
-                        <span className="text-sm font-semibold text-slate-900 w-8 text-right">
+                        <span className={`text-sm font-semibold w-8 text-right ${getScoreColor(score)}`}>
                           {score.toFixed(0)}
                         </span>
                       </>
@@ -208,7 +197,7 @@ export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }
               {t('sustainability.recommendations')}
             </div>
             <div className="space-y-2">
-              {sustainability_metrics.recommendations.map((recommendation, index) => (
+              {sustainability_metrics.recommendations.map((recommendation: string, index: number) => (
                 <div key={index} className="text-xs text-slate-600 bg-blue-50 p-2 rounded-lg border-l-2 border-blue-200">
                   {recommendation}
                 </div>

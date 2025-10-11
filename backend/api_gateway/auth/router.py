@@ -1,3 +1,4 @@
+import asyncio
 from fastapi import APIRouter, Depends, HTTPException, status, Request, Body
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from typing import Optional, Dict, Any
@@ -14,6 +15,7 @@ from ..dependencies import (
     get_current_user_optional,  
     get_current_user_required   
 )
+from ..database import DatabaseManager
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 security = HTTPBearer()
@@ -47,26 +49,19 @@ async def register(
         )
 
 @router.post("/login", response_model=Token)
-async def login(
-    user_credentials: UserLogin,
-    request: Request,
-    auth_service: AuthService = Depends(get_auth_service)
-):
-    """Login user and return tokens"""
-    user = auth_service.authenticate_user(
-        user_credentials.username, 
-        user_credentials.password
-    )
+async def login(user_credentials: UserLogin, request: Request, db_manager: DatabaseManager = Depends(get_db_manager), auth_service: AuthService = Depends(get_auth_service)):
+    user = auth_service.authenticate_user(user_credentials.username, user_credentials.password)
     
     if not user:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Incorrect username or password",
-            headers={"WWW-Authenticate": "Bearer"},
-        )
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Incorrect username or password")
     
     request_info = get_request_info(request)
     tokens = auth_service.create_tokens(user, **request_info)
+    
+    user_uuid = user.user_id if hasattr(user, 'user_id') else str(user.id)
+    
+    # Pre-warm dashboard
+    asyncio.create_task(db_manager.warm_user_dashboard(user_uuid, limit=5))
     
     return Token(**tokens)
 

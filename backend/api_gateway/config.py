@@ -26,6 +26,75 @@ class Settings(BaseSettings):
     weight_calculation_batch_size: int = 100  # Batch size for processing large numbers of assessments
     enable_weight_calculation_caching: bool = True  # Cache weight calculations for performance
     
+   # ==================== REDIS CACHE SETTINGS ====================
+    # Redis connection
+    redis_url: str = Field(
+        default="redis://localhost:6379/0",
+        env="REDIS_URL"
+    )
+    
+    # Cache-aside configuration
+    enable_assessment_caching: bool = Field(
+        default=True,
+        env="ENABLE_ASSESSMENT_CACHING"
+    )
+    
+    cache_ttl_seconds: int = Field(
+        default=300,  # 5 minutes default
+        env="CACHE_TTL_SECONDS"
+    )
+    
+    # Cache freshness check - compare updated_at timestamps
+    cache_freshness_check: bool = Field(
+        default=True,
+        env="CACHE_FRESHNESS_CHECK"
+    )
+    
+    # Session management (used by RedisService)
+    session_ttl_seconds: int = Field(
+        default=1800,  # 30 minutes default
+        env="SESSION_TTL_SECONDS"
+    )
+    
+    # Message deduplication TTL
+    message_dedup_ttl_seconds: int = Field(
+        default=300,  # 5 minutes
+        env="MESSAGE_DEDUP_TTL_SECONDS"
+    )
+    
+    # Cache statistics logging interval
+    cache_stats_log_interval_seconds: int = Field(
+        default=300,  # Log cache stats every 5 minutes
+        env="CACHE_STATS_LOG_INTERVAL"
+    )
+    
+    # Distributed lock timeout (max time a lock can be held)
+    cache_lock_timeout_seconds: int = Field(
+        default=10,  # 10 seconds max
+        env="CACHE_LOCK_TIMEOUT_SECONDS"
+    )
+    
+    # Delay between lock acquisition retries
+    cache_lock_retry_delay_ms: int = Field(
+        default=50,  # 50ms between checks
+        env="CACHE_LOCK_RETRY_DELAY_MS"
+    )
+    
+    # Maximum number of lock acquisition retries (total wait = retries * delay)
+    cache_lock_max_retries: int = Field(
+        default=100,  # 100 * 50ms = 5 seconds max wait
+        env="CACHE_LOCK_MAX_RETRIES"
+    )
+    
+    # Enable stampede protection (can be disabled for debugging)
+    enable_cache_stampede_protection: bool = Field(
+        default=True,
+        env="ENABLE_CACHE_STAMPEDE_PROTECTION"
+    )
+    # ==================== END PHASE 2 ====================
+    
+    # ==================== END REDIS CACHE SETTINGS ====================
+    
     # Microservice URLs
     resilience_service_url: str = "http://resilience-service:8001"
     sustainability_service_url: str = "http://sustainability-service:8006" 
