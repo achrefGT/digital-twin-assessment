@@ -61,8 +61,8 @@ class RecommendationSettings(BaseSettings):
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s"
     
     # AI Configuration
-    groq_api_key: str = ""
-    nvidia_api_key: Optional[str] = None
+    groq_api_key: str = os.getenv("GROQ_API_KEY")
+    nvidia_api_key: Optional[str] = os.getenv("NVIDIA_API_KEY")
     groq_model: str = "llama-3.3-70b-versatile"
     nvidia_model: str = "meta/llama-3.1-70b-instruct"
     

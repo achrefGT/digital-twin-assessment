@@ -14,6 +14,7 @@ from openai import AsyncOpenAI
 
 from shared.models.events import Recommendation, CustomCriteriaInfo
 from .knowledge_base import KnowledgeBase
+from .config import settings
 
 logger = logging.getLogger(__name__)
 
@@ -32,14 +33,14 @@ class AIRecommendationEngine:
         self.current_model = None
         
         # Groq setup
-        groq_api_key = os.getenv("GROQ_API_KEY")
+        groq_api_key = settings.groq_api_key
         if groq_api_key:
             self.groq_client = AsyncGroq(api_key=groq_api_key)
             self.groq_model = os.getenv("GROQ_MODEL", "llama-3.3-70b-versatile")
             logger.info(f"✓ Groq client initialized (model: {self.groq_model})")
         
         # NVIDIA NIM setup (backup)
-        nvidia_api_key = os.getenv("NVIDIA_API_KEY")
+        nvidia_api_key = settings.nvidia_api_key
         if nvidia_api_key:
             self.nvidia_client = AsyncOpenAI(
                 base_url="https://integrate.api.nvidia.com/v1",
