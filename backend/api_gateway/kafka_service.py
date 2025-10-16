@@ -93,15 +93,23 @@ class KafkaService:
             "sustainability": settings.sustainability_submission_topic,  
             "human_centricity": settings.human_centricity_submission_topic,
         }
+
+        # Recommendation topics
+        self.recommendation_request_topic = getattr(settings, 'recommendation_request_topic', 'recommendation-request')
+        self.recommendation_completed_topic = getattr(settings, 'recommendation_completed_topic', 'recommendation-completed')
         
-        # Topics to consume score updates from - UPDATED to remove elca, slca, lcc
+        
+        
+        # Topics to consume score updates from 
         self.score_topics = [
             settings.resilience_scores_topic,
             settings.sustainability_scores_topic, 
             settings.human_centricity_scores_topic,
-            settings.final_results_topic,
         ]
-        
+
+        # Add recommendation completed topic to consumer topics
+        self.score_topics.append(self.recommendation_completed_topic)
+
         # Initialize weighting service with configurable alpha
         alpha = getattr(settings, 'weighting_alpha', 0.8)
         self.weighting_service = WeightingService(alpha=alpha, use_sfs_hesitation=True, pi_constant=0.1)
@@ -116,6 +124,8 @@ class KafkaService:
         
         # Background task management
         self._weight_update_task = None
+
+        self._assessment_score_messages: Dict[str, Dict[str, Dict[str, Any]]] = {}  # {assessment_id: {domain: message_data}}
         
     @backoff.on_exception(
         backoff.expo,
@@ -639,6 +649,140 @@ class KafkaService:
         
         self._message_cache[message_key] = current_time
         return False
+    
+    async def publish_recommendation_request(self, progress: AssessmentProgress, 
+                                            score_messages: Dict[str, Dict[str, Any]]) -> bool:
+        """
+        Publish recommendation request when assessment completes.
+        
+        Called from: process_score_message() when is_complete=True
+        Sends to: recommendation service via Kafka
+        
+        Args:
+            progress: AssessmentProgress model with completed assessment data
+            score_messages: Dict of score update messages from each domain {domain: message_data}
+        
+        Returns:
+            bool: True if published successfully
+        """
+        try:
+            assessment_id = progress.assessment_id
+            
+            if not assessment_id:
+                logger.warning("Cannot publish recommendation request without assessment_id")
+                return False
+            
+            # Aggregate detailed_metrics from all domain score messages
+            detailed_metrics = {}
+            for domain, message_data in score_messages.items():
+                scores = message_data.get('scores', {})
+                if scores:
+                    detailed_metrics[domain] = scores
+            
+            logger.info(f"Aggregated detailed_metrics from {len(detailed_metrics)} domains")
+            
+            # Build recommendation request event
+            event = EventFactory.create_recommendation_request_event(
+                assessment_id=assessment_id,
+                user_id=progress.user_id,
+                system_name=progress.system_name if hasattr(progress, 'system_name') else None,
+                overall_score=progress.overall_score or 0.0,
+                domain_scores=progress.domain_scores or {},
+                detailed_metrics=detailed_metrics,  # Now includes scores from all domains
+                custom_criteria=None  # Will be auto-detected by recommendation service
+            )
+            
+            # Publish to recommendation service
+            await self._publish_event(
+                self.recommendation_request_topic,
+                event,
+                key=assessment_id
+            )
+            
+            logger.info(f"Published recommendation request for assessment {assessment_id} with {len(detailed_metrics)} domains")
+            return True
+            
+        except Exception as e:
+            logger.error(f"Failed to publish recommendation request: {e}")
+            self.metrics.record_error("recommendation_request_publish_failed")
+            return False
+        
+    
+    async def process_recommendation_message(self, message_data: Dict[str, Any]):
+        """
+        Process recommendation completed message from recommendation service.
+        
+        Source: recommendation-completed topic
+        Action: Send recommendations to clients via WebSocket
+        
+        Args:
+            message_data: Message from Kafka with recommendations
+        """
+        assessment_id = message_data.get('assessment_id')
+        
+        logger.info(f"[RECOMMENDATIONS_DEBUG] Processing recommendations for assessment {assessment_id}")
+        
+        if not assessment_id:
+            logger.warning("Missing assessment_id in recommendation message")
+            return
+        
+        try:
+            # Extract recommendation data
+            recommendations = message_data.get('recommendations', [])
+            source = message_data.get('source', 'ai')
+            generation_time_ms = message_data.get('generation_time_ms')
+            model_used = message_data.get('model_used')
+            
+            logger.info(f"Received {len(recommendations)} recommendations from {source}")
+            
+            # Build WebSocket message for frontend
+            websocket_message = {
+                "type": "recommendations_ready",
+                "timestamp": datetime.utcnow().isoformat(),
+                "assessment_id": assessment_id,
+                "recommendations": [
+                    {
+                        "domain": rec.get("domain"),
+                        "category": rec.get("category"),
+                        "title": rec.get("title"),
+                        "description": rec.get("description"),
+                        "priority": rec.get("priority"),
+                        "estimated_impact": rec.get("estimated_impact"),
+                        "implementation_effort": rec.get("implementation_effort"),
+                        "source": rec.get("source"),
+                        "criterion_id": rec.get("criterion_id"),
+                        "confidence_score": rec.get("confidence_score")
+                    }
+                    for rec in recommendations
+                ],
+                "source": source,
+                "generation_time_ms": generation_time_ms,
+                "model_used": model_used,
+                "data_source": "kafka"
+            }
+            
+            # Send to all connected clients for this assessment
+            await connection_manager.send_to_assessment(assessment_id, websocket_message)
+            
+            logger.info(
+                f"Sent {len(recommendations)} recommendations to clients for assessment {assessment_id}"
+            )
+            
+        except Exception as e:
+            logger.error(f"Error processing recommendation message: {e}")
+            self.metrics.record_error("recommendation_processing_error")
+            
+            # Attempt to send error notification
+            try:
+                assessment_id = message_data.get('assessment_id', 'unknown')
+                await self._send_error_websocket_notification(
+                    assessment_id,
+                    "recommendations",
+                    f"Failed to process recommendations: {str(e)}"
+                )
+            except:
+                pass
+
 
     async def consume_score_updates(self):
         """Consumer loop for score updates with event-based processing"""
@@ -694,17 +838,26 @@ class KafkaService:
                 await self.consumer.commit({topic_partition: message.offset + 1})
                 return
             
-            await self.process_score_message(message.topic, message.value)
+            # Route message based on topic type
+            topic = message.topic
+            
+            if topic == self.recommendation_completed_topic:
+                # Handle recommendation completed messages
+                await self.process_recommendation_message(message.value)
+            else:
+                # Handle score update messages (original behavior)
+                await self.process_score_message(topic, message.value)
+            
             await self.consumer.commit({topic_partition: message.offset + 1})
             
             processing_time = time.time() - start_time
-            self.metrics.record_consume(message.topic, processing_time)
+            self.metrics.record_consume(topic, processing_time)
             
         except Exception as e:
             logger.error(f"Error processing message from {message.topic}: {e}")
             self.metrics.record_error("message_processing_error")
             
-            # Try to extract assessment_id for error reporting
+            # Extract assessment_id for error event
             assessment_id = "unknown"
             try:
                 if isinstance(message.value, dict):
@@ -806,15 +959,34 @@ class KafkaService:
                 score_value=score_value
             )
 
+           # Store score message for recommendation request aggregation
+            if assessment_id not in self._assessment_score_messages:
+                self._assessment_score_messages[assessment_id] = {}
+            self._assessment_score_messages[assessment_id][domain] = message_data
+            
+            # If assessment is complete, trigger recommendations with all collected scores
             if is_complete and overall_score is not None:
+                # Get all collected score messages for this assessment
+                score_messages = self._assessment_score_messages.get(assessment_id, {})
+                
                 # Warm cache for user's dashboard view
                 try:
                     await self.db_manager.warm_assessment_cache(assessment_id)
-                    # FIX: Also warm user's assessment list
                     if progress.user_id:
                         await self.db_manager.warm_user_assessments_cache(progress.user_id, limit=10)
                 except Exception as e:
                     logger.warning(f"Cache warming failed (non-critical): {e}")
+                
+                # Trigger recommendation generation with all detailed metrics
+                try:
+                    await self.publish_recommendation_request(progress, score_messages)
+                    
+                    # Clean up stored messages for this assessment
+                    self._assessment_score_messages.pop(assessment_id, None)
+                    
+                except Exception as e:
+                    logger.error(f"Failed to trigger recommendations for {assessment_id}: {e}")
+                    # Don't fail the entire assessment - recommendations are optional
             
             # Send WebSocket updates
             await self._send_websocket_updates(
@@ -1041,11 +1213,13 @@ class KafkaService:
             "producer_failures": self._producer_failures,
             "configured_submission_topics": len(self.submission_topic_mapping),
             "configured_score_topics": len(self.score_topics),
+            "recommendation_request_topic": self.recommendation_request_topic,
+            "recommendation_completed_topic": self.recommendation_completed_topic,
             "processing_assessments_count": len(self._processing_assessments),
             "message_cache_size": len(self._message_cache),
             "health_check": await self.health_check(),
             "weighting_info": await self.get_weighting_info(),
-            "data_source": "database"  # Indicate using database
+            "data_source": "database"
         }
         
         # Add detailed metrics

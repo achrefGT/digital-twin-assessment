@@ -104,6 +104,7 @@ services:
       - VITE_SLCA_SERVICE_URL=http://slca-service:8003
       - VITE_LCC_SERVICE_URL=http://lcc-service:8004
       - VITE_ELCA_SERVICE_URL=http://elca-service:8005
+      - VITE_RECOMMENDATION_SERVICE_URL=http://recommendation-service:8007
     depends_on:
       - api-gateway
     networks:
@@ -152,6 +153,85 @@ services:
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 60s
+
+  # AI Recommendation Service
+  recommendation-service:
+    build:
+      context: .
+      dockerfile: backend/services/recommendation/Dockerfile
+    container_name: recommendation-service
+    image: "${DOCKERHUB_PREFIX:-achrefgataa}/digital-twin-recommendation:${IMAGE_TAG:-latest}"
+    ports:
+      - "${RECOMMENDATION_SERVICE_PORT:-8007}:8007"
+    env_file:
+      - ./backend/.env
+    environment:
+      - GROQ_API_KEY=${GROQ_API_KEY:-}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
+      
+      # Service Configuration
+      - PORT=8007
+      - RECOMMENDATION_API_HOST=0.0.0.0
+      - RECOMMENDATION_API_PORT=8007
+      - RECOMMENDATION_LOG_LEVEL=${LOG_LEVEL:-INFO}
+      
+      # Database Connection
+      - DATABASE_HOST=postgres
+      - DATABASE_PORT=5432
+      
+      # Kafka
+      - KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      
+      # Redis (for caching)
+      - REDIS_URL=redis://redis:6379/1
+      
+      # AI Configuration
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      - DEBUG=${DEBUG:-true}
+      - ENABLE_AI_RECOMMENDATIONS=true
+      - ENABLE_GROQ=true
+      - ENABLE_NVIDIA=true
+      - ENABLE_GEMINI=${ENABLE_GEMINI:-false}
+      - ENABLE_CACHING=${ENABLE_CACHING:-false}
+      - ENABLE_CUSTOM_CRITERIA_TIPS=${ENABLE_CUSTOM_CRITERIA_TIPS:-false}
+      - USE_RULE_BASED_FALLBACK=true
+      - MERGE_AI_AND_RULES=true
+      
+      # AI Performance Settings
+      - AI_MAX_RETRIES=3
+      - AI_TIMEOUT_SECONDS=10
+      - AI_RATE_LIMIT_DELAY=2.0
+      - AI_TEMPERATURE=0.7
+      - AI_MAX_TOKENS=1000
+      
+      # Logging
+      - LOG_API_REQUESTS=true
+      - LOG_API_RESPONSES=${LOG_API_RESPONSES:-false}
+    
+    volumes:
+      # Persist AI-generated data and cache
+      - recommendation_data:/app/data
+      - recommendation_logs:/app/logs
+    
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    
+    networks:
+      - digital-twin-network
+    
+    restart: unless-stopped
+    
+    healthcheck:
+      test: ["CMD", "python", "-c", "from ai_api_client import AIClient; print('OK')"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -286,6 +366,10 @@ volumes:
   postgres_data:
     driver: local
   redis_data:
+    driver: local
+  recommendation_data:
+    driver: local
+  recommendation_logs:
     driver: local
 
 networks:

@@ -19,6 +19,7 @@ class KafkaConfig:
     LCC_SUBMISSION_TOPIC                = os.getenv("LCC_SUBMISSION_TOPIC", "lcc-submissions")
     SLCA_SUBMISSION_TOPIC               = os.getenv("SLCA_SUBMISSION_TOPIC", "slca-submissions")
     HUMAN_CENTRICITY_SUBMISSION_TOPIC   = os.getenv("HUMAN_CENTRICITY_SUBMISSION_TOPIC", "human-centricity-submissions")
+    RECOMMENDATION_REQUEST_TOPIC        = os.getenv("RECOMMENDATION_REQUEST_TOPIC", "recommendation-requests")
 
     # Score Topics (Services produce to these)
     RESILIENCE_SCORES_TOPIC             = os.getenv("RESILIENCE_SCORES_TOPIC", "resilience-scores")
@@ -27,7 +28,7 @@ class KafkaConfig:
     LCC_SCORES_TOPIC                    = os.getenv("LCC_SCORES_TOPIC", "lcc-scores")
     SLCA_SCORES_TOPIC                   = os.getenv("SLCA_SCORES_TOPIC", "slca-scores")
     HUMAN_CENTRICITY_SCORES_TOPIC       = os.getenv("HUMAN_CENTRICITY_SCORES_TOPIC", "human-centricity-scores")
-    FINAL_RESULT_TOPIC                  = os.getenv("FINAL_RESULT_TOPIC", "final-assessment-results")
+    RECOMMENDATION_COMPLETED_TOPIC      = os.getenv("RECOMMENDATION_COMPLETED_TOPIC", "recommendations-completed")
 
     ERROR_EVENTS_TOPIC                  = os.getenv("ERROR_EVENTS_TOPIC", "error-events-topic")
     ASSESSEMENT_STATUS_TOPIC            = os.getenv("ASSESSEMENT_STATUS_TOPIC", "assessment-status")

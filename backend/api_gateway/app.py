@@ -12,7 +12,7 @@ from .config import settings
 from .database import DatabaseManager
 from .kafka_service import KafkaService
 from .outbox_relayer import OutboxRelayer 
-from .routers import assessments, health, websockets, admin
+from .routers import assessments, health, websockets, admin, recommendations
 from .auth.router import router as auth_router
 from .exceptions import create_http_exception
 from shared.models.exceptions import DigitalTwinAssessmentException
@@ -322,6 +322,7 @@ app.include_router(health.router)
 app.include_router(websockets.router, prefix="/api")
 app.include_router(auth_router)
 app.include_router(admin.router)
+app.include_router(recommendations.router, prefix="/api")
 
 @app.get("/")
 async def root():

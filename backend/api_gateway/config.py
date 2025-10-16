@@ -123,6 +123,7 @@ class Settings(BaseSettings):
     slca_service_url: str = "http://slca-service:8003"
     elca_service_url: str = "http://elca-service:8005"
     lcc_service_url: str = "http://lcc-service:8004"
+    recommendation_service_url: str = "http://recommendation-service:8007"
 
     # Database - Use shared database config utility
     database_pool_size: int = 10
@@ -141,7 +142,7 @@ class Settings(BaseSettings):
     lcc_scores_topic: str = KafkaConfig.LCC_SCORES_TOPIC
     slca_scores_topic: str = KafkaConfig.SLCA_SCORES_TOPIC
     human_centricity_scores_topic: str = KafkaConfig.HUMAN_CENTRICITY_SCORES_TOPIC
-    final_results_topic: str = KafkaConfig.FINAL_RESULT_TOPIC
+    recommendation_completed_topic: str = KafkaConfig.RECOMMENDATION_COMPLETED_TOPIC
     
     # Producer topics
     resilience_submission_topic: str = KafkaConfig.RESILIENCE_SUBMISSION_TOPIC
@@ -152,6 +153,7 @@ class Settings(BaseSettings):
     human_centricity_submission_topic: str = KafkaConfig.HUMAN_CENTRICITY_SUBMISSION_TOPIC
     assessment_status_topic: str = KafkaConfig.ASSESSEMENT_STATUS_TOPIC
     error_events_topic: str = KafkaConfig.ERROR_EVENTS_TOPIC
+    recommendation_request_topic: str = KafkaConfig.ERROR_EVENTS_TOPIC
 
     # API
     api_host: str = "0.0.0.0"

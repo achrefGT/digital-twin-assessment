@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Dict, Any, Optional
+from typing import Dict, Any, Optional, List
 from pydantic import BaseModel, Field
 from enum import Enum
 
@@ -13,6 +13,8 @@ class EventType(str, Enum):
     ASSESSMENT_COMPLETED = "assessment_completed"
     ASSESSMENT_STATUS_UPDATED = "assessment_status_updated"
     ERROR_OCCURRED = "error_occurred"
+    RECOMMENDATION_REQUESTED = "recommendation_requested"
+    RECOMMENDATION_COMPLETED = "recommendation_completed"
 
 
 class BaseEvent(BaseModel):
@@ -33,7 +35,6 @@ class FormSubmissionEvent(BaseEvent):
     submission: FormSubmissionRequest
     
     def __init__(self, submission: FormSubmissionRequest, **kwargs):
-        # Auto-populate fields from submission
         super().__init__(
             assessment_id=submission.assessment_id,
             user_id=submission.user_id,
@@ -67,7 +68,6 @@ class AssessmentStatusUpdatedEvent(BaseEvent):
     previous_status: Optional[str] = None
     
     def __init__(self, progress: AssessmentProgress, previous_status: Optional[str] = None, **kwargs):
-        # Auto-populate fields from progress
         super().__init__(
             assessment_id=progress.assessment_id,
             user_id=progress.user_id,
@@ -86,7 +86,87 @@ class ErrorEvent(BaseEvent):
     domain: Optional[str] = None
 
 
-# Event factory for easy creation
+
+class CustomCriteriaInfo(BaseModel):
+    """Information about custom criteria in an assessment"""
+    domain: str  # sustainability, resilience, human_centricity
+    criterion_id: str
+    criterion_name: str
+    is_custom: bool = True
+
+
+class RecommendationRequestEvent(BaseEvent):
+    """
+    Event requesting AI-generated recommendations for a completed assessment.
+    Contains all context needed for the recommendation service.
+    """
+    event_type: EventType = EventType.RECOMMENDATION_REQUESTED
+    
+    # Core assessment data
+    system_name: Optional[str] = None
+    overall_score: float
+    domain_scores: Dict[str, float]  # e.g., {"sustainability": 56.5, "resilience": 66.7}
+    
+    # Detailed metrics from each domain scorer
+    detailed_metrics: Dict[str, Any]  # Full output from each domain
+    
+    # Custom criteria detection
+    has_custom_criteria: bool = False
+    custom_criteria: List[CustomCriteriaInfo] = Field(default_factory=list)
+    
+    # Priority areas for focused recommendations
+    low_scoring_domains: List[str] = Field(default_factory=list)  # Domains < 60
+    priority_areas: Dict[str, List[str]] = Field(default_factory=dict)
+    
+    # Assessment configuration
+    domains_assessed: List[str] = Field(default_factory=list)
+    assessment_type: str = "full"  # full, quick, custom
+    
+    # Weighting information (if applicable)
+    domain_weights: Optional[Dict[str, float]] = None
+
+
+class Recommendation(BaseModel):
+    """Single recommendation item"""
+    domain: str  # sustainability, resilience, human_centricity
+    category: str  # e.g., "economic", "Adaptability", "Core_Usability"
+    title: str
+    description: str
+    priority: str = "medium"  # low, medium, high, critical
+    estimated_impact: Optional[str] = None  # Expected score improvement
+    implementation_effort: Optional[str] = None  # low, medium, high
+    
+    # Source tracking
+    source: str = "ai"  # ai, rule_based, hybrid
+    criterion_id: Optional[str] = None  # Reference to specific criterion
+    
+    # Metadata
+    confidence_score: Optional[float] = None  # AI confidence 0-1
+
+
+class RecommendationCompletedEvent(BaseEvent):
+    """Event when recommendations have been generated"""
+    event_type: EventType = EventType.RECOMMENDATION_COMPLETED
+    
+    recommendations: List[Recommendation]
+    
+    # Generation metadata
+    source: str = "ai"  # ai, cache, fallback
+    generation_time_ms: Optional[float] = None
+    model_used: Optional[str] = None  # e.g., "groq-llama3-70b"
+    
+    # Cache info
+    cache_hit: bool = False
+    cache_key: Optional[str] = None
+    
+    # Feedback tracking
+    feedback_id: Optional[str] = None  # For user feedback collection
+
+
+# ============================================================================
+# Event Factory Extensions
+# ============================================================================
+
 class EventFactory:
     """Factory for creating events from shared models"""
     
@@ -136,3 +216,107 @@ class EventFactory:
             domain=domain,
             **kwargs
         )
+    
+    @staticmethod
+    def create_recommendation_request_event(
+        assessment_id: str,
+        user_id: Optional[str],
+        system_name: Optional[str],
+        overall_score: float,
+        domain_scores: Dict[str, float],
+        detailed_metrics: Dict[str, Any],
+        custom_criteria: List[CustomCriteriaInfo] = None,
+        **kwargs
+    ) -> RecommendationRequestEvent:
+        """
+        Create recommendation request from assessment completion data.
+        Automatically detects low-scoring areas and priority domains.
+        """
+        # Detect low scoring domains (< 60)
+        low_scoring = [domain for domain, score in domain_scores.items() if score < 60]
+        
+        # Extract priority areas from detailed metrics
+        priority_areas = EventFactory._extract_priority_areas(detailed_metrics)
+        
+        return RecommendationRequestEvent(
+            assessment_id=assessment_id,
+            user_id=user_id,
+            system_name=system_name,
+            overall_score=overall_score,
+            domain_scores=domain_scores,
+            detailed_metrics=detailed_metrics,
+            has_custom_criteria=bool(custom_criteria),
+            custom_criteria=custom_criteria or [],
+            low_scoring_domains=low_scoring,
+            priority_areas=priority_areas,
+            domains_assessed=list(domain_scores.keys()),
+            **kwargs
+        )
+    
+    @staticmethod
+    def create_recommendation_completed_event(
+        assessment_id: str,
+        user_id: Optional[str],
+        recommendations: List[Recommendation],
+        source: str = "ai",
+        generation_time_ms: Optional[float] = None,
+        **kwargs
+    ) -> RecommendationCompletedEvent:
+        return RecommendationCompletedEvent(
+            assessment_id=assessment_id,
+            user_id=user_id,
+            recommendations=recommendations,
+            source=source,
+            generation_time_ms=generation_time_ms,
+            **kwargs
+        )
+    
+    @staticmethod
+    def _extract_priority_areas(detailed_metrics: Dict[str, Any]) -> Dict[str, List[str]]:
+        """
+        Extract specific low-performing criteria from detailed metrics.
+        Returns dict of {domain: [list of low-scoring criterion names]}
+        """
+        priority_areas = {}
+        
+        # Sustainability
+        if "sustainability" in detailed_metrics:
+            sus_metrics = detailed_metrics["sustainability"]
+            low_criteria = []
+            
+            if "detailed_metrics" in sus_metrics:
+                for dimension, criteria in sus_metrics["detailed_metrics"].items():
+                    for crit_id, crit_data in criteria.items():
+                        if crit_data.get("level_index", 5) <= 2:  # Level 1-2 out of 5
+                            low_criteria.append(crit_data.get("criterion_name", crit_id))
+            
+            if low_criteria:
+                priority_areas["sustainability"] = low_criteria
+        
+        # Resilience - high risk scenarios
+        if "resilience" in detailed_metrics:
+            res_metrics = detailed_metrics["resilience"]
+            high_risk_scenarios = []
+            
+            if "risk_metrics" in res_metrics and "detailed_metrics" in res_metrics["risk_metrics"]:
+                for domain, data in res_metrics["risk_metrics"]["detailed_metrics"].items():
+                    if data.get("mean_risk_score", 0) > 10:  # High risk
+                        high_risk_scenarios.append(domain)
+            
+            if high_risk_scenarios:
+                priority_areas["resilience"] = high_risk_scenarios
+        
+        # Human Centricity - low scoring domains
+        if "human_centricity" in detailed_metrics:
+            hc_metrics = detailed_metrics["human_centricity"]
+            low_domains = []
+            
+            if "domain_scores" in hc_metrics:
+                for domain, score in hc_metrics["domain_scores"].items():
+                    if score < 55:  # Below average
+                        low_domains.append(domain)
+            
+            if low_domains:
+                priority_areas["human_centricity"] = low_domains
+        
+        return priority_areas

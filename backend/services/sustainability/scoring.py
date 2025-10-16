@@ -285,33 +285,60 @@ class DynamicSustainabilityScorer:
     
     def _get_domain_specific_recommendations(self, domain: str, score: float, 
                                            metrics: Dict[str, Any]) -> List[str]:
-        """Generate domain-specific recommendations"""
+        """Generate domain-specific recommendations based on actual criterion performance"""
         recommendations = []
         
         if score >= 70:
             return recommendations
         
+        # Analyze each criterion's performance
         low_performing_criteria = []
         
         for criterion_key, criterion_data in metrics.items():
-            if isinstance(criterion_data, dict) and 'level' in criterion_data:
-                level = criterion_data['level']
-                if any(keyword in level.lower() for keyword in ['no', 'nothing', 'basic', 'simple', 'minimal']):
-                    low_performing_criteria.append(criterion_key.replace('_', ' ').title())
+            if not isinstance(criterion_data, dict):
+                continue
+                
+            # Get level index and max level for this criterion
+            level_index = criterion_data.get('level_index', 0)
+            max_level = criterion_data.get('max_level', 5)
+            criterion_name = criterion_data.get('criterion_name', criterion_key)
+            
+            # Consider criterion low-performing if it's in bottom 40% of range
+            if level_index < max_level * 0.4:
+                low_performing_criteria.append({
+                    'key': criterion_key,
+                    'name': criterion_name,
+                    'level_index': level_index,
+                    'max_level': max_level,
+                    'description': criterion_data.get('level_description', '')
+                })
         
-        if low_performing_criteria and domain == 'environmental':
+        if not low_performing_criteria:
+            return recommendations
+        
+        # Sort by relative performance (worst first)
+        low_performing_criteria.sort(key=lambda x: x['level_index'] / max(x['max_level'], 1))
+        
+        # Domain-specific recommendations
+        if domain == 'environmental':
+            top_issues = low_performing_criteria[:2]
+            issue_names = [c['name'] for c in top_issues]
             recommendations.append(
-                f"Environmental: Prioritize improvements in {', '.join(low_performing_criteria[:2])}. "
+                f"Environmental: Prioritize improvements in {' and '.join(issue_names)}. "
                 f"Consider investing in better monitoring systems and expanding measurement scope."
             )
-        elif low_performing_criteria and domain == 'economic':
+        elif domain == 'economic':
+            top_issues = low_performing_criteria[:2]
+            issue_names = [c['name'] for c in top_issues]
             recommendations.append(
-                f"Economic: Address {', '.join(low_performing_criteria[:2])} to improve financial sustainability. "
+                f"Economic: Address {' and '.join(issue_names)} to improve financial sustainability. "
                 f"Focus on demonstrating clear ROI and quantifying benefits."
             )
-        elif low_performing_criteria and domain == 'social':
+        elif domain == 'social':
+            top_issues = low_performing_criteria[:2]
+            issue_names = [c['name'] for c in top_issues]
             recommendations.append(
-                f"Social: Enhance {', '.join(low_performing_criteria[:2])} through stakeholder engagement. "
+                f"Social: Enhance {' and '.join(issue_names)} through stakeholder engagement. "
                 f"Develop comprehensive workforce and community benefit programs."
             )
         
@@ -343,6 +370,7 @@ def calculate_sustainability_score(
                 score = scorer.calculate_dimension_score(domain_name, assessment_data)
                 dimension_scores[domain_name] = round(score, 1)
                 
+                # Get detailed metrics with actual level descriptions
                 detailed_metrics[domain_name] = _get_assessment_details(domain_name, assessment)
                 
                 print(f"Domain {domain_name}: score={score:.1f}")
@@ -434,9 +462,14 @@ def _get_applied_weights(selected_domains) -> Dict[str, float]:
 
 
 def _get_assessment_details(domain: str, assessment: Any) -> Dict[str, Any]:
-    """Get detailed assessment information"""
+    """Get detailed assessment information with actual level descriptions from current configuration"""
     details = {}
     
+    # Get current domain configuration
+    domain_config = SUSTAINABILITY_SCENARIOS.get(domain, {})
+    criteria_config = domain_config.get('criteria', {})
+    
+    # Extract assessment data
     if hasattr(assessment, 'dict'):
         assessment_data = assessment.dict(exclude_none=True)
     elif hasattr(assessment, '__dict__'):
@@ -444,16 +477,47 @@ def _get_assessment_details(domain: str, assessment: Any) -> Dict[str, Any]:
     else:
         assessment_data = dict(assessment)
     
-    for field_name, field_value in assessment_data.items():
-        if hasattr(field_value, 'value'):
-            details[field_name] = {
-                'level': field_value.value,
-                'description': field_value.value.replace('_', ' ').title()
-            }
+    # Process each criterion in the assessment
+    for criterion_key, criterion_value in assessment_data.items():
+        # Skip if criterion not in current configuration (may have been deleted)
+        if criterion_key not in criteria_config:
+            logger.warning(f"Criterion {criterion_key} not found in current {domain} configuration")
+            continue
+        
+        criterion_info = criteria_config[criterion_key]
+        levels = criterion_info.get('levels', [])
+        criterion_name = criterion_info.get('name', criterion_key)
+        
+        if not levels:
+            logger.warning(f"No levels defined for criterion {criterion_key}")
+            continue
+        
+        # Parse the level index from criterion_value
+        if isinstance(criterion_value, int):
+            level_index = criterion_value
         else:
-            details[field_name] = {
-                'level': str(field_value),
-                'description': str(field_value).replace('_', ' ').title()
-            }
+            # Try to parse as integer
+            try:
+                level_index = int(str(criterion_value))
+            except (ValueError, TypeError):
+                logger.warning(f"Could not parse level index from value: {criterion_value}")
+                level_index = 0
+        
+        # Ensure level_index is within bounds
+        level_index = max(0, min(level_index, len(levels) - 1))
+        max_level = len(levels) - 1
+        
+        # Get the actual level description
+        level_description = levels[level_index] if level_index < len(levels) else "Unknown"
+        
+        # Create detailed metrics entry
+        details[criterion_key] = {
+            'criterion_name': criterion_name,
+            'level_index': level_index,
+            'max_level': max_level,
+            'level_description': level_description,
+            'level_label': f"Level {level_index}/{max_level}",
+            'is_custom': not criterion_info.get('is_default', True)  # Track if this is a custom criterion
+        }
     
     return details

@@ -9,9 +9,11 @@ CREATE DATABASE lcc_db;
 CREATE DATABASE slca_db;
 CREATE DATABASE human_centricity_db;
 CREATE DATABASE sustainability_db;
+CREATE DATABASE recommendation_db;
 
 -- Create users for each service with appropriate permissions
 CREATE USER api_gateway_user WITH PASSWORD 'api_gateway_password';
+CREATE USER recommendation_user WITH PASSWORD 'recommendation_password';
 CREATE USER resilience_user WITH PASSWORD 'resilience_password';
 CREATE USER sustainability_user WITH PASSWORD 'sustainability_password';
 CREATE USER elca_user WITH PASSWORD 'elca_password';
@@ -20,6 +22,7 @@ CREATE USER slca_user WITH PASSWORD 'slca_password';
 CREATE USER human_centricity_user WITH PASSWORD 'human_centricity_password';
 
 -- Grant all privileges on respective databases to users
+GRANT ALL PRIVILEGES ON DATABASE recommendation_db TO recommendation_user;
 GRANT ALL PRIVILEGES ON DATABASE api_gateway_db TO api_gateway_user;
 GRANT ALL PRIVILEGES ON DATABASE resilience_db TO resilience_user;
 GRANT ALL PRIVILEGES ON DATABASE sustainability_db TO sustainability_user;
@@ -77,3 +80,10 @@ GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO sustainability_user;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO sustainability_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO sustainability_user;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO sustainability_user;
+
+\c recommendation_db;
+GRANT ALL ON SCHEMA public TO recommendation_user;
+GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA public TO recommendation_user;
+GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA public TO recommendation_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO recommendation_user;
+ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO recommendation_user;
