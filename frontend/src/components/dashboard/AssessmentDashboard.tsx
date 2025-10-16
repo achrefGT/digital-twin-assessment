@@ -173,12 +173,9 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
   }
 
   const extractDomainData = (domainResults: Record<string, any>): Record<string, any> => {
-    console.log('🔍 extractDomainData - Raw domainResults:', JSON.stringify(domainResults, null, 2))
     
     const data: Record<string, any> = {}
     Object.entries(domainResults).forEach(([domain, result]) => {
-      console.log(`🔍 Processing domain: ${domain}`)
-      console.log(`🔍 Raw result for ${domain}:`, JSON.stringify(result, null, 2))
       
       // Extract all nested data structures
       const extractedData = {
@@ -210,17 +207,14 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
       
       data[domain] = extractedData
       
-      console.log(`🔍 Extracted data for ${domain}:`, JSON.stringify(data[domain], null, 2))
     })
     
-    console.log('🔍 Final extracted domain_data:', JSON.stringify(data, null, 2))
     return data
   }
 
   // Convert domain scores response to assessment data
   useEffect(() => {
     if (domainScoresData) {
-      console.log('🔍 Received domainScoresData from backend:', JSON.stringify(domainScoresData, null, 2))
       
       const assessmentData: AssessmentData = {
         assessment_id: assessmentId,
@@ -233,8 +227,6 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
         summary_statistics: domainScoresData.summary_statistics
       }
       
-      console.log('🔍 Constructed assessmentData:', JSON.stringify(assessmentData, null, 2))
-      console.log('🔍 Specifically domain_data:', JSON.stringify(assessmentData.domain_data, null, 2))
       
       setLocalAssessmentData(assessmentData)
     }
@@ -354,13 +346,13 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
     }
 
     if (latestMessage.type === 'score_update') {
-      console.log('🔍 WebSocket score_update received:', JSON.stringify(latestMessage, null, 2))
+      console.log('📊 WebSocket score_update received:', JSON.stringify(latestMessage, null, 2))
       
       const progressUpdate: any = {}
       
       if (latestMessage.domain) {
-        console.log(`🔍 Processing domain update for: ${latestMessage.domain}`)
-        console.log('🔍 latestMessage.scores:', JSON.stringify(latestMessage.scores, null, 2))
+        console.log(`📊 Processing domain update for: ${latestMessage.domain}`)
+        console.log('📊 latestMessage.scores:', JSON.stringify(latestMessage.scores, null, 2))
         
         // Mark this domain as processing
         setProcessingDomains(prev => new Set(prev).add(latestMessage.domain!))
@@ -399,14 +391,14 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
           risk_metrics: (scoresData as Record<string, any>).risk_metrics,
         }
         
-        console.log(`🔍 Constructed domainUpdate for ${latestMessage.domain}:`, JSON.stringify(domainUpdate, null, 2))
+        console.log(`📊 Constructed domainUpdate for ${latestMessage.domain}:`, JSON.stringify(domainUpdate, null, 2))
         
         progressUpdate.domain_data = {
           ...assessmentData.domain_data,
           [latestMessage.domain]: domainUpdate
         }
         
-        console.log('🔍 Full progressUpdate.domain_data:', JSON.stringify(progressUpdate.domain_data, null, 2))
+        console.log('📊 Full progressUpdate.domain_data:', JSON.stringify(progressUpdate.domain_data, null, 2))
         
         if (latestMessage.score_value !== undefined) {
           progressUpdate.domain_scores = {
@@ -438,7 +430,7 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
       // Optimistic update WITH snapshot
       updateProgressWithSnapshot(progressUpdate, true)
       
-      console.log('🔍 After updateProgressWithSnapshot, progressUpdate:', JSON.stringify(progressUpdate, null, 2))
+      console.log('📊 After updateProgressWithSnapshot, progressUpdate:', JSON.stringify(progressUpdate, null, 2))
       
       // Update local state for immediate UI refresh
       setLocalAssessmentData(prev => {
@@ -451,7 +443,7 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
           }
         } : null
         
-        console.log('🔍 Updated localAssessmentData:', JSON.stringify(updated, null, 2))
+        console.log('📊 Updated localAssessmentData:', JSON.stringify(updated, null, 2))
         return updated
       })
       
@@ -772,19 +764,16 @@ export const AssessmentDashboard: React.FC<AssessmentDashboardProps> = ({
                         <div className="pt-4 border-t border-border/30">
                           {moduleKey === 'human_centricity' && (
                             <>
-                              {console.log('🔍 Passing to HumanCentricityPanel:', JSON.stringify(assessmentData.domain_data.human_centricity, null, 2))}
                               <HumanCentricityPanel data={assessmentData.domain_data.human_centricity} />
                             </>
                           )}
                           {moduleKey === 'resilience' && (
                             <>
-                              {console.log('🔍 Passing to ResiliencePanel:', JSON.stringify(assessmentData.domain_data.resilience, null, 2))}
                               <ResiliencePanel data={assessmentData.domain_data.resilience} />
                             </>
                           )}
                           {moduleKey === 'sustainability' && (
                             <>
-                              {console.log('🔍 Passing to SustainabilityPanel:', JSON.stringify(assessmentData.domain_data.sustainability, null, 2))}
                               <SustainabilityPanel data={assessmentData.domain_data.sustainability} />
                             </>
                           )}

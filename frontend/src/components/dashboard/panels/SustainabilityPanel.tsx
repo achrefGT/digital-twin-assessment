@@ -22,9 +22,6 @@ export const SustainabilityPanel: React.FC<SustainabilityPanelProps> = ({ data }
                           data?.domain_scores || 
                           data?.scores?.domain_scores
 
-  console.log('🔍 SustainabilityPanel received data:', JSON.stringify(data, null, 2))
-  console.log('🔍 Extracted dimension_scores:', dimension_scores)
-  console.log('🔍 Extracted sustainability_metrics:', sustainability_metrics)
 
   if (!dimension_scores && !sustainability_metrics) {
     return (

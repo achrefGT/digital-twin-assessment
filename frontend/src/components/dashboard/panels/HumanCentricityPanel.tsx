@@ -11,16 +11,13 @@ interface HumanCentricityPanelProps {
 
 export const HumanCentricityPanel: React.FC<HumanCentricityPanelProps> = ({ data }) => {
   const { t } = useLanguage()
-  console.log('🔍 HumanCentricityPanel received data:', JSON.stringify(data, null, 2))
+
 
   // Try all possible paths to extract metrics
   const detailed_metrics = data?.detailed_metrics || data?.scores?.detailed_metrics
   const domain_scores = data?.domain_scores || data?.scores?.domain_scores
   const overall_score = data?.overall_score || data?.score_value || data?.scores?.overall_score
 
-  console.log('🔍 Extracted detailed_metrics:', detailed_metrics)
-  console.log('🔍 Extracted domain_scores:', domain_scores)
-  console.log('🔍 Extracted overall_score:', overall_score)
 
   // Show loading/empty state if no data exists (domain not yet submitted)
   if (!detailed_metrics && !domain_scores) {

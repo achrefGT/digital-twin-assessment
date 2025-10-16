@@ -96,6 +96,8 @@ services:
     image: "${DOCKERHUB_PREFIX:-achrefgataa}/digital-twin-frontend:${IMAGE_TAG:-latest}"
     ports:
       - "${FRONTEND_PORT:-3000}:3000"
+    env_file:
+      - ./frontend/.env
     environment:
       # For container-to-container communication, use service names
       - VITE_API_BASE_URL=http://api-gateway:8000
@@ -170,8 +172,8 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      - GROQ_API_KEY=${GROQ_API_KEY:-}
-      - NVIDIA_API_KEY=${NVIDIA_API_KEY:-}
+      - GROQ_API_KEY=${GROQ_API_KEY}
+      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
       
       # Service Configuration
       - PORT=8007

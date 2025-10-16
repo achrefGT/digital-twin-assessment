@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react'
 
 export interface WebSocketMessage {
   // Core fields
-  type: 'score_update' | 'assessment_completed' | 'error' | 'connected' | 'ping' | 'pong' | 'test_message' | 'shutdown'
+  type: 'score_update' | 'assessment_completed' | 'recommendations_ready' | 'error' | 'connected' | 'ping' | 'pong' | 'test_message' | 'shutdown'
   assessment_id: string
   timestamp: string
   
@@ -27,6 +27,27 @@ export interface WebSocketMessage {
   weights_type?: 'equal' | 'objective' | 'subjective'
   final_weights_used?: Record<string, number>
   weights_info?: any
+  
+  // Recommendation fields
+  recommendations?: Array<{
+    recommendation_id: string
+    domain: string
+    category: string
+    title: string
+    description: string
+    priority: 'high' | 'medium' | 'low'
+    estimated_impact?: string
+    implementation_effort?: string
+    source: string
+    criterion_id?: string
+    confidence_score?: number
+    status?: 'pending' | 'in_progress' | 'completed' | 'rejected'
+    notes?: string
+  }>
+  recommendation_set_id?: string
+  source?: string
+  generation_time_ms?: number
+  model_used?: string
   
   // Error fields
   error_type?: string
@@ -93,17 +114,53 @@ class WebSocketManager {
 
   /**
    * Get WebSocket URL with environment-aware protocol and host
+   * 
+   * Priority:
+   * 1. VITE_WS_URL (explicit WebSocket URL)
+   * 2. VITE_API_BASE_URL (derive from API base)
+   * 3. window.location (fallback)
    */
   private getWebSocketUrl(assessmentId: string): string {
-    // Use environment variable if available, otherwise derive from window.location
-    const apiHost = process.env.NEXT_PUBLIC_API_HOST || 
-                    process.env.REACT_APP_API_HOST || 
-                    window.location.host
-
-    // Use secure WebSocket if page is served over HTTPS
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    let wsUrl = ''
     
-    return `${protocol}//${apiHost}/api/ws/${assessmentId}`
+    try {
+      // Check for explicit WebSocket URL
+      const explicitWsUrl = import.meta.env?.VITE_WS_URL
+      if (explicitWsUrl) {
+        return `${explicitWsUrl}/ws/${assessmentId}`
+      }
+      
+      // Derive from API base URL
+      const apiBaseUrl = import.meta.env?.VITE_API_BASE_URL
+      if (apiBaseUrl) {
+        // Remove http/https and replace with ws/wss
+        const cleanUrl = apiBaseUrl.replace(/^https?:\/\//, '')
+        const protocol = apiBaseUrl.startsWith('https') ? 'wss:' : 'ws:'
+        return `${protocol}//${cleanUrl}/api/ws/${assessmentId}`
+      }
+    } catch (e) {
+      console.warn('[WebSocket] Environment variable access failed, using fallback')
+    }
+    
+    // Fallback: derive from current location
+    // In development: ws://localhost:8000 (API Gateway)
+    // In production: Use current host
+    const isDevelopment = window.location.hostname === 'localhost' || 
+                        window.location.hostname === '127.0.0.1'
+    
+    if (isDevelopment) {
+      // Connect to local API Gateway on port 8000
+      return `ws://localhost:8000/api/ws/${assessmentId}`
+    }
+    
+    // Production: use current host with appropriate protocol
+    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:'
+    const host = window.location.host
+    
+    wsUrl = `${protocol}//${host}/api/ws/${assessmentId}`
+    console.log(`[WebSocket] Connecting to: ${wsUrl}`)
+    
+    return wsUrl
   }
 
   /**

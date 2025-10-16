@@ -1,12 +1,13 @@
-import React from 'react'
+import React, { useState, useMemo } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { X, Brain, Shield, Leaf, CheckCircle, Clock, Sparkles } from 'lucide-react'
+import { X, Brain, Shield, Leaf, CheckCircle, Clock, Sparkles, Lightbulb, AlertCircle, TrendingUp, Target, Star, ChevronDown, ChevronUp, Zap } from 'lucide-react'
 import { HumanCentricityPanel } from './panels/HumanCentricityPanel'
 import { ResiliencePanel } from './panels/ResiliencePanel'
 import { SustainabilityPanel } from './panels/SustainabilityPanel'
 import { useLanguage } from '@/contexts/LanguageContext'
+import { useRecommendations } from '@/hooks/useRecommendations'
 
 interface DetailedModuleViewProps {
   module: string
@@ -19,6 +20,7 @@ interface DetailedModuleViewProps {
     domain_data: Record<string, any>
     domain_scores?: Record<string, number>
     overall_score?: number
+    assessment_id?: string
   }
   onClose: () => void
 }
@@ -30,6 +32,54 @@ export const DetailedModuleView: React.FC<DetailedModuleViewProps> = ({
   onClose
 }) => {
   const { t } = useLanguage()
+  const [expandedRecommendations, setExpandedRecommendations] = useState<Set<string>>(new Set())
+  
+  // Fetch recommendations for this assessment
+  const {
+    recommendations,
+    isLoading: isLoadingRecommendations,
+    hasRecommendations
+  } = useRecommendations(assessmentData.assessment_id || '')
+
+  // Filter recommendations for current module's domains
+  const moduleRecommendations = useMemo(() => {
+    if (!recommendations?.recommendations) return []
+    
+    return recommendations.recommendations.filter(rec => 
+      moduleData.domains.includes(rec.domain)
+    )
+  }, [recommendations, moduleData.domains])
+
+  // Group recommendations by priority
+  const recommendationsByPriority = useMemo(() => {
+    const grouped: Record<string, typeof moduleRecommendations> = {
+      critical: [],
+      high: [],
+      medium: [],
+      low: []
+    }
+    
+    moduleRecommendations.forEach(rec => {
+      const priority = rec.priority || 'low'
+      if (grouped[priority]) {
+        grouped[priority].push(rec)
+      }
+    })
+    
+    return grouped
+  }, [moduleRecommendations])
+
+  const toggleRecommendation = (id: string) => {
+    setExpandedRecommendations(prev => {
+      const newSet = new Set(prev)
+      if (newSet.has(id)) {
+        newSet.delete(id)
+      } else {
+        newSet.add(id)
+      }
+      return newSet
+    })
+  }
 
   const getModuleIcon = (moduleKey: string) => {
     switch (moduleKey) {
@@ -65,6 +115,43 @@ export const DetailedModuleView: React.FC<DetailedModuleViewProps> = ({
     if (score >= 80) return 'text-green-600'
     if (score >= 60) return 'text-yellow-600'
     return 'text-red-600'
+  }
+
+  const getPriorityConfig = (priority: 'critical' | 'high' | 'medium' | 'low') => {
+    switch (priority) {
+      case 'critical':
+        return {
+          icon: AlertCircle,
+          color: 'text-red-700',
+          bgColor: 'bg-red-100',
+          borderColor: 'border-red-300',
+          label: t('recommendations.critical') || 'Critical'
+        }
+      case 'high':
+        return {
+          icon: AlertCircle,
+          color: 'text-red-600',
+          bgColor: 'bg-red-50',
+          borderColor: 'border-red-200',
+          label: t('recommendations.high') || 'High Priority'
+        }
+      case 'medium':
+        return {
+          icon: TrendingUp,
+          color: 'text-yellow-600',
+          bgColor: 'bg-yellow-50',
+          borderColor: 'border-yellow-200',
+          label: t('recommendations.medium') || 'Medium'
+        }
+      case 'low':
+        return {
+          icon: Target,
+          color: 'text-blue-600',
+          bgColor: 'bg-blue-50',
+          borderColor: 'border-blue-200',
+          label: t('recommendations.low') || 'Low'
+        }
+    }
   }
 
   const ModuleIcon = getModuleIcon(module)
@@ -216,6 +303,357 @@ export const DetailedModuleView: React.FC<DetailedModuleViewProps> = ({
           <div className="space-y-6">
             {renderModuleContent()}
           </div>
+
+          {/* AI Recommendations Section */}
+          {hasRecommendations && moduleRecommendations.length > 0 && (
+            <div className="mt-6">
+              <Card className="border-0 shadow-lg bg-gradient-to-br from-purple-50/50 via-pink-50/30 to-background">
+                <CardHeader className="border-b bg-gradient-to-r from-purple-50 via-pink-50 to-background">
+                  <CardTitle className="flex items-center justify-between">
+                    <div className="flex items-center gap-3">
+                      <div className="p-2 bg-purple-100 rounded-lg">
+                        <Lightbulb className="w-5 h-5 text-purple-600" />
+                      </div>
+                      <div>
+                        <span className="text-lg">{t('recommendations.title')}</span>
+                        <p className="text-sm text-muted-foreground font-normal mt-1">
+                          {moduleRecommendations.length} {t('recommendations.items')} {t('recommendations.aiGenerated').toLowerCase()}
+                        </p>
+                      </div>
+                    </div>
+                    
+                    {/* Priority Summary */}
+                    <div className="flex items-center gap-3 text-sm">
+                      {recommendationsByPriority.critical.length > 0 && (
+                        <div className="flex items-center gap-1">
+                          <AlertCircle className="w-4 h-4 text-red-700" />
+                          <span className="font-medium">{recommendationsByPriority.critical.length}</span>
+                        </div>
+                      )}
+                      {recommendationsByPriority.high.length > 0 && (
+                        <div className="flex items-center gap-1">
+                          <AlertCircle className="w-4 h-4 text-red-600" />
+                          <span className="font-medium">{recommendationsByPriority.high.length}</span>
+                        </div>
+                      )}
+                      {recommendationsByPriority.medium.length > 0 && (
+                        <div className="flex items-center gap-1">
+                          <TrendingUp className="w-4 h-4 text-yellow-600" />
+                          <span className="font-medium">{recommendationsByPriority.medium.length}</span>
+                        </div>
+                      )}
+                      {recommendationsByPriority.low.length > 0 && (
+                        <div className="flex items-center gap-1">
+                          <Target className="w-4 h-4 text-blue-600" />
+                          <span className="font-medium">{recommendationsByPriority.low.length}</span>
+                        </div>
+                      )}
+                    </div>
+                  </CardTitle>
+                </CardHeader>
+                
+                <CardContent className="p-6">
+                  <div className="space-y-4">
+                    {/* Critical Priority */}
+                    {recommendationsByPriority.critical.length > 0 && (
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-semibold text-red-700 flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4" />
+                          {t('recommendations.critical')} ({recommendationsByPriority.critical.length})
+                        </h4>
+                        {recommendationsByPriority.critical.map((rec) => {
+                          const priorityConfig = getPriorityConfig('critical')
+                          const isExpanded = expandedRecommendations.has(rec.recommendation_id)
+                          
+                          return (
+                            <div
+                              key={rec.recommendation_id}
+                              className={`border-2 ${priorityConfig.borderColor} rounded-lg overflow-hidden bg-white`}
+                            >
+                              <button
+                                onClick={() => toggleRecommendation(rec.recommendation_id)}
+                                className="w-full p-4 flex items-center justify-between hover:bg-red-50/50 transition-colors"
+                              >
+                                <div className="flex items-center gap-3 flex-1 text-left">
+                                  <div className={`p-2 rounded-lg ${priorityConfig.bgColor}`}>
+                                    <AlertCircle className={`w-4 h-4 ${priorityConfig.color}`} />
+                                  </div>
+                                  <div className="flex-1">
+                                    <h5 className="font-semibold text-foreground">{rec.title}</h5>
+                                    {rec.category && (
+                                      <Badge variant="outline" className="text-xs mt-1">
+                                        {rec.category}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                                {isExpanded ? (
+                                  <ChevronUp className="w-5 h-5 text-muted-foreground" />
+                                ) : (
+                                  <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                                )}
+                              </button>
+                              
+                              {isExpanded && (
+                                <div className="px-4 pb-4 space-y-3 border-t bg-red-50/30">
+                                  <p className="text-sm text-muted-foreground pt-3">
+                                    {rec.description}
+                                  </p>
+                                  
+                                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                    {rec.estimated_impact && (
+                                      <div className="flex items-center gap-1">
+                                        <TrendingUp className="w-3 h-3" />
+                                        <span>{t('recommendations.impact')}: {rec.estimated_impact}</span>
+                                      </div>
+                                    )}
+                                    {rec.implementation_effort && (
+                                      <div className="flex items-center gap-1">
+                                        <Clock className="w-3 h-3" />
+                                        <span>{t('recommendations.effort')}: {rec.implementation_effort}</span>
+                                      </div>
+                                    )}
+                                    {rec.confidence_score && (
+                                      <div className="flex items-center gap-1">
+                                        <Star className="w-3 h-3" />
+                                        <span>{t('recommendations.confidence')}: {(rec.confidence_score * 100).toFixed(0)}%</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {/* High Priority */}
+                    {recommendationsByPriority.high.length > 0 && (
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-semibold text-red-600 flex items-center gap-2">
+                          <AlertCircle className="w-4 h-4" />
+                          {t('recommendations.high')} ({recommendationsByPriority.high.length})
+                        </h4>
+                        {recommendationsByPriority.high.map((rec) => {
+                          const priorityConfig = getPriorityConfig('high')
+                          const isExpanded = expandedRecommendations.has(rec.recommendation_id)
+                          
+                          return (
+                            <div
+                              key={rec.recommendation_id}
+                              className={`border ${priorityConfig.borderColor} rounded-lg overflow-hidden bg-white`}
+                            >
+                              <button
+                                onClick={() => toggleRecommendation(rec.recommendation_id)}
+                                className="w-full p-4 flex items-center justify-between hover:bg-red-50/30 transition-colors"
+                              >
+                                <div className="flex items-center gap-3 flex-1 text-left">
+                                  <div className={`p-2 rounded-lg ${priorityConfig.bgColor}`}>
+                                    <AlertCircle className={`w-4 h-4 ${priorityConfig.color}`} />
+                                  </div>
+                                  <div className="flex-1">
+                                    <h5 className="font-semibold text-foreground">{rec.title}</h5>
+                                    {rec.category && (
+                                      <Badge variant="outline" className="text-xs mt-1">
+                                        {rec.category}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                                {isExpanded ? (
+                                  <ChevronUp className="w-5 h-5 text-muted-foreground" />
+                                ) : (
+                                  <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                                )}
+                              </button>
+                              
+                              {isExpanded && (
+                                <div className="px-4 pb-4 space-y-3 border-t">
+                                  <p className="text-sm text-muted-foreground pt-3">
+                                    {rec.description}
+                                  </p>
+                                  
+                                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                    {rec.estimated_impact && (
+                                      <div className="flex items-center gap-1">
+                                        <TrendingUp className="w-3 h-3" />
+                                        <span>{t('recommendations.impact')}: {rec.estimated_impact}</span>
+                                      </div>
+                                    )}
+                                    {rec.implementation_effort && (
+                                      <div className="flex items-center gap-1">
+                                        <Clock className="w-3 h-3" />
+                                        <span>{t('recommendations.effort')}: {rec.implementation_effort}</span>
+                                      </div>
+                                    )}
+                                    {rec.confidence_score && (
+                                      <div className="flex items-center gap-1">
+                                        <Star className="w-3 h-3" />
+                                        <span>{t('recommendations.confidence')}: {(rec.confidence_score * 100).toFixed(0)}%</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {/* Medium Priority */}
+                    {recommendationsByPriority.medium.length > 0 && (
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-semibold text-yellow-600 flex items-center gap-2">
+                          <TrendingUp className="w-4 h-4" />
+                          {t('recommendations.medium')} ({recommendationsByPriority.medium.length})
+                        </h4>
+                        {recommendationsByPriority.medium.map((rec) => {
+                          const priorityConfig = getPriorityConfig('medium')
+                          const isExpanded = expandedRecommendations.has(rec.recommendation_id)
+                          
+                          return (
+                            <div
+                              key={rec.recommendation_id}
+                              className={`border ${priorityConfig.borderColor} rounded-lg overflow-hidden bg-white`}
+                            >
+                              <button
+                                onClick={() => toggleRecommendation(rec.recommendation_id)}
+                                className="w-full p-4 flex items-center justify-between hover:bg-yellow-50/30 transition-colors"
+                              >
+                                <div className="flex items-center gap-3 flex-1 text-left">
+                                  <div className={`p-2 rounded-lg ${priorityConfig.bgColor}`}>
+                                    <TrendingUp className={`w-4 h-4 ${priorityConfig.color}`} />
+                                  </div>
+                                  <div className="flex-1">
+                                    <h5 className="font-semibold text-foreground">{rec.title}</h5>
+                                    {rec.category && (
+                                      <Badge variant="outline" className="text-xs mt-1">
+                                        {rec.category}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                                {isExpanded ? (
+                                  <ChevronUp className="w-5 h-5 text-muted-foreground" />
+                                ) : (
+                                  <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                                )}
+                              </button>
+                              
+                              {isExpanded && (
+                                <div className="px-4 pb-4 space-y-3 border-t">
+                                  <p className="text-sm text-muted-foreground pt-3">
+                                    {rec.description}
+                                  </p>
+                                  
+                                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                    {rec.estimated_impact && (
+                                      <div className="flex items-center gap-1">
+                                        <TrendingUp className="w-3 h-3" />
+                                        <span>{t('recommendations.impact')}: {rec.estimated_impact}</span>
+                                      </div>
+                                    )}
+                                    {rec.implementation_effort && (
+                                      <div className="flex items-center gap-1">
+                                        <Clock className="w-3 h-3" />
+                                        <span>{t('recommendations.effort')}: {rec.implementation_effort}</span>
+                                      </div>
+                                    )}
+                                    {rec.confidence_score && (
+                                      <div className="flex items-center gap-1">
+                                        <Star className="w-3 h-3" />
+                                        <span>{t('recommendations.confidence')}: {(rec.confidence_score * 100).toFixed(0)}%</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+
+                    {/* Low Priority */}
+                    {recommendationsByPriority.low.length > 0 && (
+                      <div className="space-y-3">
+                        <h4 className="text-sm font-semibold text-blue-600 flex items-center gap-2">
+                          <Target className="w-4 h-4" />
+                          {t('recommendations.low')} ({recommendationsByPriority.low.length})
+                        </h4>
+                        {recommendationsByPriority.low.map((rec) => {
+                          const priorityConfig = getPriorityConfig('low')
+                          const isExpanded = expandedRecommendations.has(rec.recommendation_id)
+                          
+                          return (
+                            <div
+                              key={rec.recommendation_id}
+                              className={`border ${priorityConfig.borderColor} rounded-lg overflow-hidden bg-white`}
+                            >
+                              <button
+                                onClick={() => toggleRecommendation(rec.recommendation_id)}
+                                className="w-full p-4 flex items-center justify-between hover:bg-blue-50/30 transition-colors"
+                              >
+                                <div className="flex items-center gap-3 flex-1 text-left">
+                                  <div className={`p-2 rounded-lg ${priorityConfig.bgColor}`}>
+                                    <Target className={`w-4 h-4 ${priorityConfig.color}`} />
+                                  </div>
+                                  <div className="flex-1">
+                                    <h5 className="font-semibold text-foreground">{rec.title}</h5>
+                                    {rec.category && (
+                                      <Badge variant="outline" className="text-xs mt-1">
+                                        {rec.category}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                </div>
+                                {isExpanded ? (
+                                  <ChevronUp className="w-5 h-5 text-muted-foreground" />
+                                ) : (
+                                  <ChevronDown className="w-5 h-5 text-muted-foreground" />
+                                )}
+                              </button>
+                              
+                              {isExpanded && (
+                                <div className="px-4 pb-4 space-y-3 border-t">
+                                  <p className="text-sm text-muted-foreground pt-3">
+                                    {rec.description}
+                                  </p>
+                                  
+                                  <div className="flex items-center gap-4 text-xs text-muted-foreground">
+                                    {rec.estimated_impact && (
+                                      <div className="flex items-center gap-1">
+                                        <TrendingUp className="w-3 h-3" />
+                                        <span>{t('recommendations.impact')}: {rec.estimated_impact}</span>
+                                      </div>
+                                    )}
+                                    {rec.implementation_effort && (
+                                      <div className="flex items-center gap-1">
+                                        <Clock className="w-3 h-3" />
+                                        <span>{t('recommendations.effort')}: {rec.implementation_effort}</span>
+                                      </div>
+                                    )}
+                                    {rec.confidence_score && (
+                                      <div className="flex items-center gap-1">
+                                        <Star className="w-3 h-3" />
+                                        <span>{t('recommendations.confidence')}: {(rec.confidence_score * 100).toFixed(0)}%</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          )
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          )}
 
           {/* Module Summary */}
           {moduleScore && status.percentage === 100 && (

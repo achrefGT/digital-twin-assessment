@@ -16,9 +16,6 @@ export const ResiliencePanel: React.FC<ResiliencePanelProps> = ({ data }) => {
   const domain_scores = data?.domain_scores || data?.scores?.domain_scores || data?.scores
   const risk_metrics = data?.risk_metrics || data?.scores?.risk_metrics
 
-  console.log('🔍 ResiliencePanel received data:', JSON.stringify(data, null, 2))
-  console.log('🔍 Extracted domain_scores:', domain_scores)
-  console.log('🔍 Extracted risk_metrics:', risk_metrics)
 
   if (!domain_scores && !risk_metrics) {
     return (
