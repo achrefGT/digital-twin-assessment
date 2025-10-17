@@ -7,7 +7,7 @@ from enum import Enum
 from uuid import uuid4
 
 # Import your existing Base from models.py
-from ..models import Base
+from ..database.models import Base
 
 class UserRole(str, Enum):
     SUPER_ADMIN = "super_admin"

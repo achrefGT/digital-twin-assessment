@@ -11,13 +11,13 @@ from .models import (
     RefreshTokenRequest, PasswordChange, TokenData, ProfileUpdate
 )
 from .service import AuthService, AuthenticationException, InvalidCredentialsException
-from ..dependencies import (
+from ..utils.dependencies import (
     get_db_manager, 
     handle_exceptions, 
     get_current_user_optional,  
     get_current_user_required   
 )
-from ..database import DatabaseManager
+from ..database.database_manager import DatabaseManager
 
 router = APIRouter(prefix="/auth", tags=["authentication"])
 security = HTTPBearer()

@@ -4,17 +4,19 @@ from functools import wraps
 from typing import Optional
 import logging
 
-from .database import DatabaseManager
-from .kafka_service import KafkaService
-from .outbox_relayer import OutboxRelayer  
+from ..database.database_manager import DatabaseManager
+from ..services.kafka_service import KafkaService
+from ..services.outbox_relayer import OutboxRelayer  
 from .exceptions import create_http_exception
 from shared.models.exceptions import DigitalTwinAssessmentException
-from .redis_service import get_redis_service as _get_redis_service
+from ..services.redis_base_service import get_redis_base_service as _get_redis_service
+from ..cache.assessment_cache_service import get_assessment_cache_service
+from ..cache.recommendation_cache_service import get_recommendation_cache_service
 
 
 # Import auth components
-from .auth.service import AuthService
-from .auth.models import TokenData
+from ..auth.service import AuthService
+from ..auth.models import TokenData
 
 logger = logging.getLogger(__name__)
 
@@ -22,7 +24,9 @@ logger = logging.getLogger(__name__)
 _db_manager: Optional[DatabaseManager] = None
 _kafka_service: Optional[KafkaService] = None
 _auth_service: Optional[AuthService] = None
-_outbox_relayer: Optional[OutboxRelayer] = None  
+_outbox_relayer: Optional[OutboxRelayer] = None
+_assessment_cache_service = None
+_recommendation_cache_service = None
 
 # Security scheme for token extraction
 security = HTTPBearer(auto_error=False)
@@ -54,6 +58,50 @@ def get_outbox_relayer() -> OutboxRelayer:
     if _outbox_relayer is None:
         _outbox_relayer = OutboxRelayer(get_db_manager())
     return _outbox_relayer
+
+def get_redis_service():
+    """Get Redis base service instance."""
+    return _get_redis_service()
+
+def get_assessment_cache():
+    """
+    Get assessment cache service instance.
+    
+    Returns:
+        AssessmentCacheService or None if unavailable
+    """
+    global _assessment_cache_service
+    
+    if _assessment_cache_service is None:
+        try:
+            redis_service = get_redis_service()
+            _assessment_cache_service = get_assessment_cache_service(redis_service)
+            logger.info("✅ Assessment cache service initialized")
+        except Exception as e:
+            logger.warning(f"Assessment cache service unavailable: {e}")
+            return None
+    
+    return _assessment_cache_service
+
+def get_recommendation_cache():
+    """
+    Get recommendation cache service instance.
+    
+    Returns:
+        RecommendationCacheService or None if unavailable
+    """
+    global _recommendation_cache_service
+    
+    if _recommendation_cache_service is None:
+        try:
+            redis_service = get_redis_service()
+            _recommendation_cache_service = get_recommendation_cache_service(redis_service)
+            logger.info("✅ Recommendation cache service initialized")
+        except Exception as e:
+            logger.warning(f"Recommendation cache service unavailable: {e}")
+            return None
+    
+    return _recommendation_cache_service
 
 async def get_current_user_optional(
     credentials: HTTPAuthorizationCredentials = Depends(security),
@@ -149,6 +197,75 @@ def handle_exceptions(func):
             )
     return wrapper
 
-def get_redis_service():
-    """Get Redis service instance."""
-    return _get_redis_service()
+async def init_cache_services():
+    """
+    Initialize all cache services at application startup.
+    
+    Should be called in app startup event.
+    
+    Returns:
+        dict: Dictionary containing initialized service instances
+              Format: {
+                  "redis": RedisBaseService instance,
+                  "assessment_cache": AssessmentCacheService instance,
+                  "recommendation_cache": RecommendationCacheService instance,
+                  "status": dict with boolean success flags
+              }
+    """
+    results = {
+        "redis": None,
+        "assessment_cache": None,
+        "recommendation_cache": None,
+        "status": {
+            "redis_connected": False,
+            "assessment_cache_ready": False,
+            "recommendation_cache_ready": False
+        }
+    }
+    
+    try:
+        # Initialize Redis first
+        redis_service = get_redis_service()
+        
+        if not redis_service.connected:
+            await redis_service.connect()
+        
+        results["redis"] = redis_service
+        results["status"]["redis_connected"] = redis_service.connected
+        logger.info("✅ Redis connected")
+        
+        # Initialize assessment cache
+        assessment_cache = get_assessment_cache()
+        if assessment_cache:
+            results["assessment_cache"] = assessment_cache
+            results["status"]["assessment_cache_ready"] = True
+            logger.info("✅ Assessment cache ready")
+        
+        # Initialize recommendation cache
+        recommendation_cache = get_recommendation_cache()
+        if recommendation_cache:
+            results["recommendation_cache"] = recommendation_cache
+            results["status"]["recommendation_cache_ready"] = True
+            logger.info("✅ Recommendation cache ready")
+        
+    except Exception as e:
+        logger.error(f"Error initializing cache services: {e}")
+        # Ensure we still return the structure even on error
+        if results["redis"] is None:
+            results["redis"] = get_redis_service()  # Return unconnected instance
+    
+    return results
+
+async def shutdown_cache_services():
+    """
+    Shutdown all cache services gracefully.
+    
+    Should be called in app shutdown event.
+    """
+    try:
+        redis_service = get_redis_service()
+        if redis_service and redis_service.connected:
+            await redis_service.disconnect()
+            logger.info("✅ Redis disconnected")
+    except Exception as e:
+        logger.error(f"Error shutting down cache services: {e}")

@@ -12,11 +12,11 @@ from shared.models.assessment import (
 )
 from shared.models.events import EventFactory
 
-from ..database import DatabaseManager
-from ..kafka_service import KafkaService
+from ..database.database_manager import DatabaseManager
+from ..services.kafka_service import KafkaService
 from ..config import settings
-from ..models import AssessmentCreate, AssessmentResponse, FormSubmission
-from ..dependencies import (
+from ..database.models import AssessmentCreate, AssessmentResponse, FormSubmission
+from ..utils.dependencies import (
     get_db_manager, 
     get_kafka_service, 
     get_current_user_optional,

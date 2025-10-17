@@ -51,7 +51,7 @@ class Settings(BaseSettings):
         env="CACHE_FRESHNESS_CHECK"
     )
     
-    # Session management (used by RedisService)
+    # Session management (used by RedisBaseService)
     session_ttl_seconds: int = Field(
         default=1800,  # 30 minutes default
         env="SESSION_TTL_SECONDS"

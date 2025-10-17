@@ -21,7 +21,7 @@ from typing import Dict, Set, Optional
 from fastapi import WebSocket
 from datetime import datetime, timedelta
 from dataclasses import dataclass
-from .config import settings
+from ..config import settings
 from collections import defaultdict, deque
 
 logger = logging.getLogger(__name__)
@@ -95,7 +95,7 @@ class ConnectionManager:
     def redis_service(self):
         """Lazy-load Redis service to avoid circular imports."""
         if self._redis_service is None:
-            from .redis_service import get_redis_service
+            from .redis_base_service import get_redis_service
             self._redis_service = get_redis_service()
         return self._redis_service
     
@@ -233,14 +233,26 @@ class ConnectionManager:
         await self._send_to_local_connections(assessment_id, message)
         
         # Step 2: Publish to Redis for other instances (if enabled)
-        # Other instances will receive via _handle_redis_message and deliver locally
-        if self.redis_service.enable_pubsub:
-            success = await self.redis_service.publish_to_assessment(assessment_id, message)
-            if not success:
-                logger.warning(
-                    f"Failed to publish to Redis for assessment {assessment_id}. "
-                    f"Remote instances may not receive this message."
-                )
+        if self.redis_service.enable_pubsub and self.redis_service.pubsub:
+            try:
+                channel = f"ws:assessment:{assessment_id}"
+                
+                # Add metadata
+                message_with_meta = {
+                    **message,
+                    "redis_published_at": datetime.utcnow().isoformat(),
+                    "gateway_instance": getattr(settings, 'gateway_instance_id', 'unknown')
+                }
+                
+                success = await self.redis_service.pubsub.publish(channel, message_with_meta)
+                
+                if not success:
+                    logger.warning(
+                        f"Failed to publish to Redis for assessment {assessment_id}. "
+                        f"Remote instances may not receive this message."
+                    )
+            except Exception as e:
+                logger.error(f"Error publishing to Redis: {e}")
     
     async def _send_to_local_connections(
         self,
@@ -309,7 +321,8 @@ class ConnectionManager:
         Args:
             assessment_id: Assessment identifier
         """
-        if not self.redis_service.enable_pubsub:
+        if not self.redis_service.enable_pubsub or not self.redis_service.pubsub:
+            logger.debug("Pub/Sub not enabled, skipping subscription")
             return
         
         try:
@@ -320,8 +333,9 @@ class ConnectionManager:
                 
                 # Subscribe only on first connection
                 if self._subscription_refcount[assessment_id] == 1:
-                    success = await self.redis_service.subscribe_to_assessment(
-                        assessment_id,
+                    channel = f"ws:assessment:{assessment_id}"
+                    success = await self.redis_service.pubsub.subscribe(
+                        channel,
                         self._handle_redis_message
                     )
                     
@@ -342,7 +356,8 @@ class ConnectionManager:
                     )
         except Exception as e:
             logger.error(f"Error subscribing to assessment {assessment_id}: {e}", exc_info=True)
-    
+
+
     async def _unsubscribe_from_assessment_channel(self, assessment_id: str):
         """
         Unsubscribe from Redis channel for an assessment with proper locking.
@@ -353,7 +368,7 @@ class ConnectionManager:
         Args:
             assessment_id: Assessment identifier
         """
-        if not self.redis_service.enable_pubsub:
+        if not self.redis_service.enable_pubsub or not self.redis_service.pubsub:
             return
         
         try:
@@ -364,13 +379,19 @@ class ConnectionManager:
                 
                 # Unsubscribe only when count reaches 0
                 if self._subscription_refcount[assessment_id] <= 0:
-                    success = await self.redis_service.unsubscribe_from_assessment(assessment_id)
+                    channel = f"ws:assessment:{assessment_id}"
                     
-                    if success:
+                    # Remove handlers for this channel
+                    if channel in self.redis_service.pubsub._message_handlers:
+                        del self.redis_service.pubsub._message_handlers[channel]
+                    
+                    # Unsubscribe from Redis
+                    try:
+                        await self.redis_service.pubsub.pubsub.unsubscribe(channel)
                         self._subscribed_assessments.discard(assessment_id)
-                        logger.info(
-                            f"🔕 Unsubscribed from Redis channel for assessment {assessment_id}"
-                        )
+                        logger.info(f"🔕 Unsubscribed from Redis channel for assessment {assessment_id}")
+                    except Exception as e:
+                        logger.error(f"Failed to unsubscribe from {channel}: {e}")
                     
                     # Clean up refcount tracking
                     if assessment_id in self._subscription_refcount:

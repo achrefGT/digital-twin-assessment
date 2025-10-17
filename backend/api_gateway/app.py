@@ -9,17 +9,16 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from .config import settings
-from .database import DatabaseManager
-from .kafka_service import KafkaService
-from .outbox_relayer import OutboxRelayer 
+from .database.database_manager import DatabaseManager
+from .services.kafka_service import KafkaService
+from .services.outbox_relayer import OutboxRelayer 
 from .routers import assessments, health, websockets, admin, recommendations
 from .auth.router import router as auth_router
-from .exceptions import create_http_exception
+from .utils.exceptions import create_http_exception
 from shared.models.exceptions import DigitalTwinAssessmentException
-from .dependencies import get_db_manager, get_kafka_service, get_outbox_relayer  
-from .websocket_service import connection_manager
-from .weighting_service import WeightingService
-from .redis_service import init_redis_service
+from .utils.dependencies import get_db_manager, get_kafka_service, get_outbox_relayer, init_cache_services
+from .services.websocket_service import connection_manager
+from .services.weighting_service import WeightingService
 
 
 import os
@@ -60,7 +59,7 @@ async def ensure_admin_user():
         # Generate proper bcrypt hash
         password_hash = pwd_context.hash(admin_password)
         
-        # Create or update admin user using the function from SQL script
+        # Create or update admin user
         result = await conn.fetchrow(
             "SELECT * FROM create_admin_with_hash($1, $2, $3, $4, $5)",
             admin_email, admin_username, password_hash, "System", "Administrator"
@@ -69,16 +68,21 @@ async def ensure_admin_user():
         if result and result['success']:
             logger.info(f"🔐 Admin user: {result['message']}")
             
-            # Verify the password works
+            # Verify the password works - NOW USING PYTHON VERIFICATION
             user_check = await conn.fetchrow(
-                "SELECT hashed_password FROM users WHERE username = $1 AND role = 'admin'",
+                "SELECT hashed_password FROM users WHERE username = $1 AND role = 'super_admin'",
                 admin_username
             )
             
-            if user_check and pwd_context.verify(admin_password, user_check['hashed_password']):
-                logger.info("✅ Admin login verification: SUCCESS")
+            if user_check:
+                # Verify using Python's pwd_context, NOT PostgreSQL
+                is_valid = pwd_context.verify(admin_password, user_check['hashed_password'])
+                if is_valid:
+                    logger.info("✅ Admin login verification: SUCCESS")
+                else:
+                    logger.warning("⚠️ Admin login verification: FAILED - Password hash mismatch")
             else:
-                logger.warning("⚠️  Admin login verification: FAILED")
+                logger.warning("⚠️ Admin user not found after creation")
                 
         else:
             logger.error(f"❌ Failed to create admin: {result['message'] if result else 'Unknown error'}")
@@ -105,12 +109,17 @@ async def lifespan(app: FastAPI):
         outbox_relayer = get_outbox_relayer()
         
         # ===== STEP 1: Initialize Redis service =====
-        redis_service = await init_redis_service()
+        redis_services = await init_cache_services()
+        redis_service = redis_services["redis"]  
         app.state.redis_service = redis_service
         logger.info("✅ Redis service initialized with Pub/Sub support")
         logger.info(f"   - Gateway instance: {settings.gateway_instance_id}")
-        logger.info(f"   - Pub/Sub enabled: {redis_service.enable_pubsub}")
-        
+
+        # Check if pubsub is enabled safely
+        pubsub_enabled = getattr(settings, 'enable_redis_pubsub', True)
+        logger.info(f"   - Pub/Sub configured: {pubsub_enabled}")
+        logger.info(f"   - Pub/Sub initialized: {redis_service.pubsub is not None}")
+                
         # Create database tables
         db_manager.create_tables()
         logger.info("Database tables initialized")
@@ -138,7 +147,7 @@ async def lifespan(app: FastAPI):
         logger.info("Kafka consumer started")
 
         # FIX: Initialize WebSocket connection manager with Redis service
-        from .websocket_service import connection_manager
+        from .services.websocket_service import connection_manager
         connection_manager._redis_service = redis_service
         app.state.connection_manager = connection_manager
         

@@ -17,8 +17,8 @@ from shared.models.events import (
     AssessmentStatusUpdatedEvent, ErrorEvent, EventFactory, EventType
 )
 
-from .config import settings
-from .database import DatabaseManager
+from ..config import settings
+from ..database.database_manager import DatabaseManager
 from shared.models.exceptions import KafkaConnectionException
 # Import shared utilities
 from shared.kafka_utils import create_kafka_producer, create_kafka_consumer, KafkaConfig
@@ -127,6 +127,10 @@ class KafkaService:
 
         self._assessment_score_messages: Dict[str, Dict[str, Dict[str, Any]]] = {}  # {assessment_id: {domain: message_data}}
         
+        # Cache services (lazy initialization via dependencies)
+        self._cache_warm_success = 0
+        self._cache_warm_failures = 0
+
     @backoff.on_exception(
         backoff.expo,
         (KafkaConnectionError, KafkaError),
@@ -218,6 +222,16 @@ class KafkaService:
                 logger.error(f"Error stopping producer: {e}")
         
         logger.info("Kafka service stopped")
+
+    async def _get_recommendation_cache(self):
+        """Get cache service via dependency injection"""
+        try:
+            from ..utils.dependencies import get_recommendation_cache 
+            return get_recommendation_cache()
+        except Exception as e:
+            logger.warning(f"Failed to get recommendation cache service: {e}")
+            return None
+
 
     async def _periodic_weight_update(self):
         """Background task to periodically update weights based on completed assessments"""
@@ -713,7 +727,9 @@ class KafkaService:
         Process recommendation completed message from recommendation service.
         
         Source: recommendation-completed topic
-        Action: Send recommendations to clients via WebSocket
+        Action: 
+            1. Send recommendations to clients via WebSocket
+            2. Warm cache for future requests
         
         Args:
             message_data: Message from Kafka with recommendations
@@ -732,10 +748,49 @@ class KafkaService:
             source = message_data.get('source', 'ai')
             generation_time_ms = message_data.get('generation_time_ms')
             model_used = message_data.get('model_used')
+            user_id = message_data.get('user_id')
+            recommendation_set_id = message_data.get('recommendation_set_id')
             
             logger.info(f"Received {len(recommendations)} recommendations from {source}")
             
-            # Build WebSocket message for frontend
+            # ✅ CACHE WARMING: Get cache service via dependency
+            cache_service = await self._get_recommendation_cache()
+            
+            if cache_service:
+                try:
+                    # Warm cache for assessment lookup
+                    await cache_service.warm_assessment_cache(
+                        assessment_id=assessment_id,
+                        recommendations=message_data,  # Cache the full message
+                        latest_only=True,
+                        ttl=3600  # 1 hour
+                    )
+                    
+                    # Warm cache for recommendation set ID lookup
+                    if recommendation_set_id:
+                        await cache_service.warm_recommendation_set_cache(
+                            recommendation_set_id=recommendation_set_id,
+                            recommendation_set=message_data,
+                            ttl=3600
+                        )
+                    
+                    # Invalidate user's recommendation list to force refresh
+                    if user_id:
+                        await cache_service.invalidate_user_list(
+                            user_id=user_id,
+                            all_limits=True
+                        )
+                    
+                    self._cache_warm_success += 1
+                    logger.info(f"✅ Warmed recommendation cache for assessment {assessment_id}")
+                    
+                except Exception as e:
+                    self._cache_warm_failures += 1
+                    logger.warning(f"Cache warming failed (non-critical): {e}")
+            else:
+                logger.debug("Recommendation cache service not available, skipping cache warming")
+            
+            # Build WebSocket message for frontend (existing code)
             websocket_message = {
                 "type": "recommendations_ready",
                 "timestamp": datetime.utcnow().isoformat(),
@@ -782,6 +837,7 @@ class KafkaService:
                 )
             except:
                 pass
+
 
 
     async def consume_score_updates(self):
@@ -1219,11 +1275,25 @@ class KafkaService:
             "message_cache_size": len(self._message_cache),
             "health_check": await self.health_check(),
             "weighting_info": await self.get_weighting_info(),
-            "data_source": "database"
+            "data_source": "database",
+            "cache_warm_success": self._cache_warm_success,
+            "cache_warm_failures": self._cache_warm_failures,
         }
         
         # Add detailed metrics
         base_metrics.update(self.metrics.get_stats())
+        
+        # Add cache statistics if available
+        cache_service = await self._get_recommendation_cache()
+        if cache_service:
+            try:
+                cache_stats = cache_service.get_stats()
+                base_metrics["recommendation_cache_stats"] = cache_stats
+            except Exception as e:
+                logger.warning(f"Could not retrieve cache stats: {e}")
+                base_metrics["recommendation_cache_stats"] = {"error": str(e)}
+        else:
+            base_metrics["recommendation_cache_stats"] = {"status": "unavailable"}
         
         return base_metrics
     

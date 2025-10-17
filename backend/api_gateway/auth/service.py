@@ -7,8 +7,8 @@ from sqlalchemy import or_
 
 from .models import User, RefreshToken, UserCreate, UserLogin, TokenData, UserRole, ProfileUpdate
 from .security import security_manager
-from ..database import DatabaseManager
-from ..exceptions import DatabaseConnectionException
+from ..database.database_manager import DatabaseManager
+from ..utils.exceptions import DatabaseConnectionException
 from shared.models.exceptions import DigitalTwinAssessmentException
 
 logger = logging.getLogger(__name__)

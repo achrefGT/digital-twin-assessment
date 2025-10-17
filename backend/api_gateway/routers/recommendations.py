@@ -12,8 +12,9 @@ from fastapi import APIRouter, HTTPException, status, Path, Query, Depends
 import httpx
 
 from ..config import settings
-from ..dependencies import get_current_user_optional, get_current_user_required, handle_exceptions
+from ..utils.dependencies import get_current_user_optional, get_current_user_required, handle_exceptions
 from ..auth.models import TokenData
+from ..utils.dependencies import get_recommendation_cache
 
 router = APIRouter(prefix="/recommendations", tags=["recommendations"])
 logger = logging.getLogger(__name__)
@@ -25,6 +26,14 @@ RECOMMENDATION_SERVICE_URL = getattr(
     'http://localhost:8007'
 )
 
+async def _get_recommendation_cache(self):
+    """Get cache service via dependency injection"""
+    try:
+        return get_recommendation_cache()
+    except Exception as e:
+        logger.warning(f"Failed to get recommendation cache service: {e}")
+        return None
+
 
 # ============================================================================
 # GET RECOMMENDATIONS BY ASSESSMENT
@@ -35,17 +44,22 @@ RECOMMENDATION_SERVICE_URL = getattr(
 async def get_recommendations_by_assessment(
     assessment_id: str = Path(..., description="Assessment ID"),
     latest_only: bool = Query(True, description="Return only the latest recommendation set"),
-    current_user: Optional[TokenData] = Depends(get_current_user_optional)
+    bypass_cache: bool = Query(False, description="Force fetch from source (admin testing)"),
+    current_user: Optional[TokenData] = Depends(get_current_user_optional),
+    cache_service = Depends(_get_recommendation_cache)
 ):
     """
-    Get recommendations for a specific assessment from database.
+    Get recommendations for a specific assessment from database with caching.
     
-    This endpoint fetches recommendations from the recommendation service database,
-    allowing frontend to recover recommendations after page refresh.
+    This endpoint uses cache-aside pattern:
+    1. Check cache first (if not bypassed)
+    2. On cache miss, fetch from recommendation service
+    3. Cache the result for future requests
     
     Args:
         assessment_id: Assessment ID
         latest_only: If True, return only the most recent recommendation set
+        bypass_cache: Force fetch from source (for testing/admin)
         
     Returns:
         Recommendation set(s) with all recommendations
@@ -56,62 +70,75 @@ async def get_recommendations_by_assessment(
         - Admins can access any assessment
     """
     try:
-        logger.info(f"Fetching recommendations for assessment {assessment_id}")
+        logger.info(f"Fetching recommendations for assessment {assessment_id} (cache: {cache_service is not None})")
         
-        # Make request to recommendation service
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(
-                f"{RECOMMENDATION_SERVICE_URL}/api/recommendations/assessment/{assessment_id}",
-                params={"latest_only": latest_only}
+        # Authorization check: verify user owns this assessment if authenticated
+        if current_user:
+            try:
+                from ..database.database_manager import DatabaseManager
+                from ..utils.dependencies import get_db_manager
+                
+                db_manager = get_db_manager()
+                assessment = await db_manager.get_assessment(assessment_id)
+                
+                # Check if user owns this assessment (unless admin)
+                if (assessment.user_id and 
+                    assessment.user_id != current_user.user_id and 
+                    current_user.role not in ["admin", "super_admin"]):
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Access denied"
+                    )
+            except HTTPException:
+                raise
+            except Exception as e:
+                logger.warning(f"Could not verify assessment ownership: {e}")
+        
+        # Define fetch callback for cache-aside pattern
+        async def fetch_from_service(assessment_id: str, latest_only: bool):
+            """Fetch recommendations from recommendation service"""
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    f"{RECOMMENDATION_SERVICE_URL}/api/recommendations/assessment/{assessment_id}",
+                    params={"latest_only": latest_only}
+                )
+                
+                if response.status_code == 404:
+                    raise HTTPException(
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"No recommendations found for assessment {assessment_id}"
+                    )
+                
+                if response.status_code != 200:
+                    logger.error(
+                        f"Recommendation service error: {response.status_code} - {response.text}"
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail="Failed to fetch recommendations from recommendation service"
+                    )
+                
+                return response.json()
+        
+        # ✅ CACHE-ASIDE PATTERN: Try cache first, fetch on miss
+        if cache_service:
+            recommendations_data = await cache_service.get_or_fetch_by_assessment(
+                assessment_id=assessment_id,
+                fetch_callback=lambda aid, lo: fetch_from_service(aid, lo),
+                latest_only=latest_only,
+                bypass_cache=bypass_cache
             )
-            
-            if response.status_code == 404:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"No recommendations found for assessment {assessment_id}"
-                )
-            
-            if response.status_code != 200:
-                logger.error(
-                    f"Recommendation service error: {response.status_code} - {response.text}"
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail="Failed to fetch recommendations from recommendation service"
-                )
-            
-            recommendations_data = response.json()
-            
-            # Authorization check: verify user owns this assessment if authenticated
-            if current_user:
-                # Fetch assessment to verify ownership
-                try:
-                    from ..database import DatabaseManager
-                    from ..dependencies import get_db_manager
-                    
-                    db_manager = get_db_manager()
-                    assessment = await db_manager.get_assessment(assessment_id)
-                    
-                    # Check if user owns this assessment (unless admin)
-                    if (assessment.user_id and 
-                        assessment.user_id != current_user.user_id and 
-                        current_user.role not in ["admin", "super_admin"]):
-                        raise HTTPException(
-                            status_code=status.HTTP_403_FORBIDDEN,
-                            detail="Access denied"
-                        )
-                except HTTPException:
-                    raise
-                except Exception as e:
-                    logger.warning(f"Could not verify assessment ownership: {e}")
-                    # Continue anyway - let recommendation service handle it
-            
-            logger.info(
-                f"Successfully fetched recommendations for assessment {assessment_id}"
-            )
-            
-            return recommendations_data
-            
+        else:
+            # Fallback: Direct fetch if cache unavailable
+            logger.warning("Cache service unavailable, fetching directly")
+            recommendations_data = await fetch_from_service(assessment_id, latest_only)
+        
+        logger.info(
+            f"Successfully fetched recommendations for assessment {assessment_id}"
+        )
+        
+        return recommendations_data
+        
     except HTTPException:
         raise
     except httpx.TimeoutException:
@@ -128,6 +155,7 @@ async def get_recommendations_by_assessment(
         )
 
 
+
 # ============================================================================
 # GET RECOMMENDATIONS BY USER
 # ============================================================================
@@ -136,10 +164,11 @@ async def get_recommendations_by_assessment(
 @handle_exceptions
 async def get_my_recommendations(
     limit: int = Query(10, ge=1, le=100, description="Maximum recommendation sets to return"),
-    current_user: TokenData = Depends(get_current_user_required)
+    current_user: TokenData = Depends(get_current_user_required),
+    cache_service = Depends(_get_recommendation_cache)
 ):
     """
-    Get recent recommendation sets for the current user.
+    Get recent recommendation sets for the current user with caching.
     
     Returns a list of recommendation sets (summaries) for all assessments
     belonging to the authenticated user.
@@ -153,23 +182,37 @@ async def get_my_recommendations(
     try:
         logger.info(f"Fetching recommendations for user {current_user.user_id}")
         
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(
-                f"{RECOMMENDATION_SERVICE_URL}/api/recommendations/user/{current_user.user_id}",
-                params={"limit": limit}
+        # Define fetch callback
+        async def fetch_from_service(user_id: str, limit: int):
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    f"{RECOMMENDATION_SERVICE_URL}/api/recommendations/user/{user_id}",
+                    params={"limit": limit}
+                )
+                
+                if response.status_code != 200:
+                    logger.error(
+                        f"Recommendation service error: {response.status_code} - {response.text}"
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail="Failed to fetch user recommendations"
+                    )
+                
+                return response.json()
+        
+        # ✅ CACHE-ASIDE PATTERN for user list
+        if cache_service:
+            recommendations = await cache_service.get_or_fetch_user_list(
+                user_id=current_user.user_id,
+                fetch_callback=fetch_from_service,
+                limit=limit
             )
-            
-            if response.status_code != 200:
-                logger.error(
-                    f"Recommendation service error: {response.status_code} - {response.text}"
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail="Failed to fetch user recommendations"
-                )
-            
-            return response.json()
-            
+        else:
+            recommendations = await fetch_from_service(current_user.user_id, limit)
+        
+        return recommendations
+        
     except HTTPException:
         raise
     except httpx.TimeoutException:
@@ -194,10 +237,11 @@ async def get_my_recommendations(
 @handle_exceptions
 async def get_recommendation_set(
     recommendation_set_id: str = Path(..., description="Recommendation Set ID"),
-    current_user: Optional[TokenData] = Depends(get_current_user_optional)
+    current_user: Optional[TokenData] = Depends(get_current_user_optional),
+    cache_service = Depends(_get_recommendation_cache)
 ):
     """
-    Get a specific recommendation set by ID with full details.
+    Get a specific recommendation set by ID with full details and caching.
     
     Returns complete details including all individual recommendations,
     metadata, and statistics.
@@ -211,42 +255,52 @@ async def get_recommendation_set(
     try:
         logger.info(f"Fetching recommendation set {recommendation_set_id}")
         
-        async with httpx.AsyncClient(timeout=10.0) as client:
-            response = await client.get(
-                f"{RECOMMENDATION_SERVICE_URL}/api/recommendations/{recommendation_set_id}"
-            )
-            
-            if response.status_code == 404:
-                raise HTTPException(
-                    status_code=status.HTTP_404_NOT_FOUND,
-                    detail=f"Recommendation set {recommendation_set_id} not found"
+        # Define fetch callback
+        async def fetch_from_service(set_id: str):
+            async with httpx.AsyncClient(timeout=10.0) as client:
+                response = await client.get(
+                    f"{RECOMMENDATION_SERVICE_URL}/api/recommendations/{set_id}"
                 )
-            
-            if response.status_code != 200:
-                logger.error(
-                    f"Recommendation service error: {response.status_code} - {response.text}"
-                )
-                raise HTTPException(
-                    status_code=status.HTTP_502_BAD_GATEWAY,
-                    detail="Failed to fetch recommendation set"
-                )
-            
-            recommendation_set = response.json()
-            
-            # Authorization check if authenticated
-            if current_user:
-                # Check if user owns this recommendation set (unless admin)
-                rec_user_id = recommendation_set.get('user_id')
-                if (rec_user_id and 
-                    rec_user_id != current_user.user_id and 
-                    current_user.role not in ["admin", "super_admin"]):
+                
+                if response.status_code == 404:
                     raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN,
-                        detail="Access denied"
+                        status_code=status.HTTP_404_NOT_FOUND,
+                        detail=f"Recommendation set {set_id} not found"
                     )
-            
-            return recommendation_set
-            
+                
+                if response.status_code != 200:
+                    logger.error(
+                        f"Recommendation service error: {response.status_code} - {response.text}"
+                    )
+                    raise HTTPException(
+                        status_code=status.HTTP_502_BAD_GATEWAY,
+                        detail="Failed to fetch recommendation set"
+                    )
+                
+                return response.json()
+        
+        # ✅ CACHE-ASIDE PATTERN for recommendation set
+        if cache_service:
+            recommendation_set = await cache_service.get_or_fetch_by_set_id(
+                recommendation_set_id=recommendation_set_id,
+                fetch_callback=fetch_from_service
+            )
+        else:
+            recommendation_set = await fetch_from_service(recommendation_set_id)
+        
+        # Authorization check if authenticated
+        if current_user:
+            rec_user_id = recommendation_set.get('user_id')
+            if (rec_user_id and 
+                rec_user_id != current_user.user_id and 
+                current_user.role not in ["admin", "super_admin"]):
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Access denied"
+                )
+        
+        return recommendation_set
+        
     except HTTPException:
         raise
     except httpx.TimeoutException:
@@ -263,6 +317,7 @@ async def get_recommendation_set(
         )
 
 
+
 # ============================================================================
 # UPDATE RECOMMENDATION STATUS
 # ============================================================================
@@ -272,22 +327,13 @@ async def get_recommendation_set(
 async def update_recommendation_status(
     recommendation_id: str = Path(..., description="Recommendation ID"),
     status_update: Dict[str, Any] = ...,
-    current_user: TokenData = Depends(get_current_user_required)
+    current_user: TokenData = Depends(get_current_user_required),
+    cache_service = Depends(_get_recommendation_cache)
 ):
     """
     Update the implementation status of a recommendation.
     
-    Allows users to track progress on implementing recommendations.
-    
-    Args:
-        recommendation_id: Unique recommendation identifier
-        status_update: Dict containing 'status' and optional 'notes'
-        
-    Body example:
-        {
-            "status": "in_progress",  # pending, in_progress, completed, rejected
-            "notes": "Started implementing this recommendation"
-        }
+    Invalidates relevant caches after update.
     """
     try:
         logger.info(f"Updating status for recommendation {recommendation_id}")
@@ -319,7 +365,17 @@ async def update_recommendation_status(
                     detail="Failed to update recommendation status"
                 )
             
-            return response.json()
+            result = response.json()
+            
+            # ✅ CACHE INVALIDATION: Individual recommendation cache
+            if cache_service:
+                try:
+                    await cache_service.invalidate_individual(recommendation_id)
+                    logger.info(f"✅ Invalidated cache for recommendation {recommendation_id}")
+                except Exception as e:
+                    logger.warning(f"Cache invalidation failed (non-critical): {e}")
+            
+            return result
             
     except HTTPException:
         raise
@@ -335,8 +391,7 @@ async def update_recommendation_status(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Failed to update recommendation status"
         )
-
-
+    
 # ============================================================================
 # ADD RECOMMENDATION RATING
 # ============================================================================
@@ -583,3 +638,91 @@ async def recommendation_service_health():
             "service": "recommendation-service",
             "error": str(e)
         }
+    
+# ============================================================================
+# Management and testing
+# ============================================================================
+
+# Cache management (admin only)
+@router.delete("/cache/assessment/{assessment_id}")
+@handle_exceptions
+async def invalidate_assessment_cache(
+    assessment_id: str = Path(..., description="Assessment ID"),
+    current_user: TokenData = Depends(get_current_user_required),
+    cache_service = Depends(_get_recommendation_cache)
+):
+    """
+    Invalidate recommendation cache for a specific assessment.
+    
+    Admin/testing endpoint to force cache refresh.
+    
+    Requires: admin or super_admin role
+    """
+    if current_user.role not in ["admin", "super_admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    if not cache_service:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Cache service unavailable"
+        )
+    
+    try:
+        success = await cache_service.invalidate_assessment_recommendations(
+            assessment_id=assessment_id,
+            invalidate_all=True
+        )
+        
+        return {
+            "success": success,
+            "message": f"Cache invalidated for assessment {assessment_id}" if success else "Failed to invalidate cache",
+            "assessment_id": assessment_id
+        }
+        
+    except Exception as e:
+        logger.error(f"Error invalidating cache: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to invalidate cache"
+        )
+
+
+# Add cache statistics endpoint
+@router.get("/cache/statistics")
+@handle_exceptions
+async def get_cache_statistics(
+    current_user: TokenData = Depends(get_current_user_required),
+    cache_service = Depends(_get_recommendation_cache)
+):
+    """
+    Get recommendation cache performance statistics.
+    
+    Shows hit rates, compression savings, and other metrics.
+    
+    Requires: admin or super_admin role
+    """
+    if current_user.role not in ["admin", "super_admin"]:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Admin access required"
+        )
+    
+    if not cache_service:
+        return {
+            "status": "unavailable",
+            "message": "Cache service not initialized"
+        }
+    
+    try:
+        stats = cache_service.get_stats()
+        return stats
+        
+    except Exception as e:
+        logger.error(f"Error fetching cache stats: {e}")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to fetch cache statistics"
+        )

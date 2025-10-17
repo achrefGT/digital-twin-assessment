@@ -7,7 +7,7 @@ import json
 import asyncio
 
 # Adjust import based on your actual project structure
-from ..websocket_service import connection_manager
+from ..services.websocket_service import connection_manager
 
 logger = logging.getLogger(__name__)
 

@@ -22,13 +22,13 @@ import asyncio
 # Import shared models
 from shared.models.assessment import AssessmentProgress, AssessmentStatus
 
-from .config import settings
+from ..config import settings
 from .models import Base, Assessment, UserSession, OutboxEvent
-from .auth.models import User, RefreshToken
-from .exceptions import DatabaseConnectionException, AssessmentNotFoundException
+from ..auth.models import User, RefreshToken
+from ..utils.exceptions import DatabaseConnectionException, AssessmentNotFoundException
 
 # Import Redis service
-from .redis_service import RedisService
+from ..cache.assessment_cache_service import AssessmentCacheService
 
 logger = logging.getLogger(__name__)
 
@@ -49,32 +49,39 @@ class DatabaseManager:
             expire_on_commit=False
         )
         
-        # Redis Integration
-        self.redis_service: Optional[RedisService] = None
+        # Redis Integration 
+        self.redis_service: Optional[AssessmentCacheService] = None
         self.cache_enabled = getattr(settings, 'enable_assessment_caching', True)
         
         if self.cache_enabled:
-            try:
-                self.redis_service = RedisService()
-                logger.info("✅ Redis service initialized for assessment caching")
-            except Exception as e:
-                logger.warning(f"⚠️ Redis initialization failed, caching disabled: {e}")
-                self.cache_enabled = False
+            logger.info("ℹ️  Assessment caching enabled (will initialize on first use)")
         else:
-            logger.info("ℹ️ Assessment caching is disabled in settings")
-        
+            logger.info("ℹ️  Assessment caching is disabled in settings")
+
+
     async def _ensure_redis_connected(self) -> bool:
         """Ensure Redis connection is established (lazy connection)"""
-        if not self.cache_enabled or not self.redis_service:
+        if not self.cache_enabled:
             return False
         
         try:
-            if not self.redis_service.connected:
-                await self.redis_service.connect()
-            return True
+            if self.redis_service is None:
+                # ✅ Lazy initialization with dependency injection
+                from ..utils.dependencies import get_assessment_cache
+                self.redis_service = get_assessment_cache()
+                
+                if self.redis_service:
+                    logger.info("✅ Assessment cache service connected")
+            
+            if self.redis_service and not self.redis_service.redis_service.connected:
+                await self.redis_service.redis_service.connect()
+            
+            return self.redis_service is not None
+            
         except Exception as e:
             logger.warning(f"Redis connection failed: {e}")
             return False
+        
     
     def create_tables(self):
         """Create database tables including auth tables"""

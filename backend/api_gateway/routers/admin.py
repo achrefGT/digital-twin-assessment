@@ -5,7 +5,7 @@ import httpx
 import logging
 from datetime import datetime, timedelta
 
-from ..dependencies import get_current_user_required
+from ..utils.dependencies import get_current_user_required
 from ..auth.models import TokenData, UserRole
 from ..config import settings
 
@@ -461,7 +461,7 @@ async def get_all_users(
 ):
     """Admin: Get all users with pagination and filtering"""
     from ..auth.service import AuthService
-    from ..database import DatabaseManager
+    from ..database.database_manager import DatabaseManager
     from sqlalchemy import or_, and_
     from ..auth.models import User
     
@@ -529,7 +529,7 @@ async def update_user_role(
 ):
     """Admin: Update user role (promote/demote)"""
     from ..auth.service import AuthService
-    from ..database import DatabaseManager
+    from ..database.database_manager import DatabaseManager
     from ..auth.models import User, UserRole
     
     # Validate role
@@ -582,7 +582,7 @@ async def update_user_status(
 ):
     """Admin: Update user active status (enable/disable)"""
     from ..auth.service import AuthService
-    from ..database import DatabaseManager
+    from ..database.database_manager import DatabaseManager
     from ..auth.models import User
     
     is_active = status_data.get("is_active")
@@ -634,7 +634,7 @@ async def update_user_status(
 async def get_user_statistics(current_user: TokenData = Depends(require_admin)):
     """Admin: Get user statistics"""
     from ..auth.models import User, UserRole
-    from ..database import DatabaseManager
+    from ..database.database_manager import DatabaseManager
     from sqlalchemy import func
     
     db_manager = DatabaseManager()

@@ -10,9 +10,9 @@ import logging
 from datetime import datetime
 from typing import Optional
 
-from .database import DatabaseManager
+from ..database.database_manager import DatabaseManager
 from shared.kafka_utils import create_kafka_producer
-from .config import settings
+from ..config import settings
 
 logger = logging.getLogger(__name__)
 

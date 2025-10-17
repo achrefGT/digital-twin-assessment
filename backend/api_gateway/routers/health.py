@@ -2,9 +2,9 @@ from datetime import datetime
 from fastapi import APIRouter, Depends
 from typing import Dict, Any
 
-from ..database import DatabaseManager
-from ..kafka_service import KafkaService
-from ..dependencies import get_db_manager, get_kafka_service
+from ..database.database_manager import DatabaseManager
+from ..services.kafka_service import KafkaService
+from ..utils.dependencies import get_db_manager, get_kafka_service
 
 router = APIRouter(tags=["health"])
 
