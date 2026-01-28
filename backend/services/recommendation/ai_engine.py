@@ -470,7 +470,7 @@ You MUST use ONLY these categories for each domain:
 
 # YOUR TASK:
 
-Generate 8-12 prioritized recommendations with actionable exemples to improve this digital twin system.
+Generate 8-12 prioritized recommendations in french with actionable exemples to improve this digital twin system.
 
 CRITICAL CONSTRAINTS:
 1. Generate recommendations ONLY for these domains: {', '.join(sorted(assessed_domains))}

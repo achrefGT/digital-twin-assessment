@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from "@/auth"
 import { useQueryClient } from '@tanstack/react-query'
 import useWebSocket, { WebSocketMessage } from './useWebSocket'
+import { recommendationKeys } from '@/services/recommendationsApi'
 
 interface Recommendation {
   recommendation_id: string
@@ -39,7 +40,14 @@ interface RecommendationSet {
 
 const STORAGE_KEYS = {
   RECOMMENDATIONS: 'assessmentRecommendations',
-  LAST_RECOMMENDATION_SET_ID: 'lastRecommendationSetId'
+  LAST_RECOMMENDATION_SET_ID: 'lastRecommendationSetId',
+  CACHE_TIMESTAMP: 'recommendationsCacheTimestamp',
+  CACHE_SOURCE: 'recommendationsCacheSource'
+}
+
+const CACHE_CONFIG = {
+  TTL_MS: 60 * 60 * 1000, // 1 hour cache TTL
+  PREFER_CACHE_THRESHOLD: 5 * 60 * 1000 // Prefer cache if less than 5 minutes old
 }
 
 const API_BASE_URL = 'http://localhost:8000'
@@ -49,16 +57,35 @@ const debugLog = (message: string, data?: any) => {
   console.log(`[DEBUG useRecommendations] ${message}`, data || '')
 }
 
-// Persist recommendations to localStorage
+// ==================== CACHE MANAGEMENT ====================
+
+interface CacheMetadata {
+  timestamp: number
+  source: 'api' | 'websocket' | 'localStorage'
+  assessmentId: string
+}
+
+// Persist recommendations with cache metadata
 const persistRecommendations = (
   assessmentId: string, 
-  recommendationSet: RecommendationSet
+  recommendationSet: RecommendationSet,
+  source: 'api' | 'websocket' = 'api'
 ) => {
   try {
     const key = `${STORAGE_KEYS.RECOMMENDATIONS}_${assessmentId}`
+    const timestampKey = `${STORAGE_KEYS.CACHE_TIMESTAMP}_${assessmentId}`
+    const sourceKey = `${STORAGE_KEYS.CACHE_SOURCE}_${assessmentId}`
+    
     localStorage.setItem(key, JSON.stringify(recommendationSet))
+    localStorage.setItem(timestampKey, Date.now().toString())
+    localStorage.setItem(sourceKey, source)
     localStorage.setItem(STORAGE_KEYS.LAST_RECOMMENDATION_SET_ID, recommendationSet.recommendation_set_id)
-    debugLog('✅ Persisted recommendations', { assessmentId, count: recommendationSet.recommendations.length })
+    
+    debugLog('✅ Persisted recommendations to cache', { 
+      assessmentId, 
+      count: recommendationSet.recommendations.length,
+      source 
+    })
     return true
   } catch (error) {
     debugLog('❌ Failed to persist recommendations', error)
@@ -66,55 +93,91 @@ const persistRecommendations = (
   }
 }
 
-// Load recommendations from localStorage
-const loadStoredRecommendations = (assessmentId: string): RecommendationSet | null => {
+// Load recommendations with cache validation
+const loadStoredRecommendations = (assessmentId: string): {
+  data: RecommendationSet | null
+  metadata: CacheMetadata | null
+  isExpired: boolean
+} => {
   try {
     const key = `${STORAGE_KEYS.RECOMMENDATIONS}_${assessmentId}`
-    const stored = localStorage.getItem(key)
+    const timestampKey = `${STORAGE_KEYS.CACHE_TIMESTAMP}_${assessmentId}`
+    const sourceKey = `${STORAGE_KEYS.CACHE_SOURCE}_${assessmentId}`
     
-    if (!stored) {
-      debugLog('No stored recommendations found', assessmentId)
-      return null
+    const stored = localStorage.getItem(key)
+    const timestamp = localStorage.getItem(timestampKey)
+    const source = localStorage.getItem(sourceKey)
+    
+    if (!stored || !timestamp) {
+      debugLog('No cached recommendations found', assessmentId)
+      return { data: null, metadata: null, isExpired: true }
     }
     
     const recommendationSet = JSON.parse(stored)
-    debugLog('📦 Loaded recommendations from storage', {
+    const cacheAge = Date.now() - parseInt(timestamp)
+    const isExpired = cacheAge > CACHE_CONFIG.TTL_MS
+    
+    const metadata: CacheMetadata = {
+      timestamp: parseInt(timestamp),
+      source: (source as 'api' | 'websocket' | 'localStorage') || 'localStorage',
+      assessmentId
+    }
+    
+    debugLog('📦 Loaded recommendations from cache', {
       assessmentId,
       count: recommendationSet.recommendations.length,
-      created_at: recommendationSet.created_at
+      cacheAge: `${Math.round(cacheAge / 1000)}s`,
+      isExpired,
+      source: metadata.source
     })
     
-    return recommendationSet
+    return { data: recommendationSet, metadata, isExpired }
+    
   } catch (error) {
-    debugLog('❌ Failed to load recommendations', error)
-    return null
+    debugLog('❌ Failed to load cached recommendations', error)
+    return { data: null, metadata: null, isExpired: true }
   }
 }
 
-// Clear recommendations from localStorage
+// Check if cache is fresh enough to use
+const isCacheFresh = (metadata: CacheMetadata | null): boolean => {
+  if (!metadata) return false
+  const cacheAge = Date.now() - metadata.timestamp
+  return cacheAge < CACHE_CONFIG.PREFER_CACHE_THRESHOLD
+}
+
+// Clear recommendations cache
 const clearStoredRecommendations = (assessmentId?: string) => {
   try {
     if (assessmentId) {
       const key = `${STORAGE_KEYS.RECOMMENDATIONS}_${assessmentId}`
+      const timestampKey = `${STORAGE_KEYS.CACHE_TIMESTAMP}_${assessmentId}`
+      const sourceKey = `${STORAGE_KEYS.CACHE_SOURCE}_${assessmentId}`
+      
       localStorage.removeItem(key)
-      debugLog('🗑️ Cleared recommendations for assessment', assessmentId)
+      localStorage.removeItem(timestampKey)
+      localStorage.removeItem(sourceKey)
+      debugLog('🗑️ Cleared recommendations cache for assessment', assessmentId)
     } else {
       // Clear all recommendation data
       const keys = Object.keys(localStorage)
       keys.forEach(key => {
-        if (key.startsWith(STORAGE_KEYS.RECOMMENDATIONS)) {
+        if (key.startsWith(STORAGE_KEYS.RECOMMENDATIONS) ||
+            key.startsWith(STORAGE_KEYS.CACHE_TIMESTAMP) ||
+            key.startsWith(STORAGE_KEYS.CACHE_SOURCE)) {
           localStorage.removeItem(key)
         }
       })
       localStorage.removeItem(STORAGE_KEYS.LAST_RECOMMENDATION_SET_ID)
-      debugLog('🗑️ Cleared all recommendations')
+      debugLog('🗑️ Cleared all recommendations cache')
     }
   } catch (error) {
-    debugLog('❌ Failed to clear recommendations', error)
+    debugLog('❌ Failed to clear recommendations cache', error)
   }
 }
 
-// Convert WebSocket message to RecommendationSet format
+// ==================== WEBSOCKET CONVERSION ====================
+
 const convertWebSocketToRecommendationSet = (
   message: WebSocketMessage
 ): RecommendationSet | null => {
@@ -156,23 +219,43 @@ const convertWebSocketToRecommendationSet = (
   }
 }
 
+// ==================== MAIN HOOK ====================
+
 export const useRecommendations = (assessmentId?: string) => {
   const [recommendations, setRecommendations] = useState<RecommendationSet | null>(null)
+  const [cacheMetadata, setCacheMetadata] = useState<CacheMetadata | null>(null)
   const [isLoading, setIsLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const { token, isAuthenticated } = useAuth()
   const queryClient = useQueryClient()
 
-  // 🔥 CRITICAL FIX: Connect to WebSocket for real-time recommendations
+  // 🔥 Connect to WebSocket for real-time recommendations
   const { messages, isConnected } = useWebSocket(assessmentId || '', !!assessmentId)
 
-  // Fetch recommendations from API
+  // Invalidate React Query cache
+  const invalidateQueries = useCallback(() => {
+    if (!assessmentId) return
+    
+    debugLog('🔄 Invalidating React Query cache', assessmentId)
+    queryClient.invalidateQueries({ 
+      queryKey: recommendationKeys.byAssessment(assessmentId) 
+    })
+    queryClient.invalidateQueries({ 
+      queryKey: recommendationKeys.all 
+    })
+  }, [assessmentId, queryClient])
+
+  // Fetch recommendations from API with Redis caching
   const fetchRecommendations = useCallback(async (
     targetAssessmentId: string,
-    latestOnly: boolean = true
+    latestOnly: boolean = true,
+    bypassCache: boolean = false
   ): Promise<RecommendationSet | null> => {
     try {
-      debugLog('🌐 Fetching recommendations from API', targetAssessmentId)
+      debugLog('🌐 Fetching recommendations from API', { 
+        targetAssessmentId, 
+        bypassCache 
+      })
       
       const headers: Record<string, string> = {
         'Content-Type': 'application/json'
@@ -182,10 +265,16 @@ export const useRecommendations = (assessmentId?: string) => {
         headers['Authorization'] = `Bearer ${token}`
       }
       
-      const response = await fetch(
-        `${API_BASE_URL}/api/recommendations/assessment/${targetAssessmentId}?latest_only=${latestOnly}`,
-        { headers }
+      // Add cache bypass parameter
+      const url = new URL(
+        `${API_BASE_URL}/api/recommendations/assessment/${targetAssessmentId}`
       )
+      url.searchParams.set('latest_only', latestOnly.toString())
+      if (bypassCache) {
+        url.searchParams.set('bypass_cache', 'true')
+      }
+      
+      const response = await fetch(url.toString(), { headers })
       
       if (!response.ok) {
         if (response.status === 404) {
@@ -196,9 +285,13 @@ export const useRecommendations = (assessmentId?: string) => {
       }
       
       const data = await response.json()
+      
+      // Check if data came from Redis cache
+      const cacheHit = response.headers.get('X-Cache-Hit') === 'true'
       debugLog('✅ Fetched recommendations from API', {
         assessmentId: targetAssessmentId,
-        count: data.recommendations?.length || 0
+        count: data.recommendations?.length || 0,
+        cacheHit
       })
       
       return data
@@ -208,13 +301,12 @@ export const useRecommendations = (assessmentId?: string) => {
     }
   }, [token, isAuthenticated])
 
-  // 🔥 CRITICAL FIX: Listen to WebSocket messages for real-time recommendations
+  // 🔥 Listen to WebSocket messages for real-time recommendations
   useEffect(() => {
     if (!assessmentId || !messages || messages.length === 0) {
       return
     }
 
-    // Process the latest message
     const latestMessage = messages[messages.length - 1]
     
     debugLog('📨 Processing WebSocket message', {
@@ -222,7 +314,6 @@ export const useRecommendations = (assessmentId?: string) => {
       hasRecommendations: !!latestMessage.recommendations
     })
 
-    // Handle recommendations_ready message
     if (latestMessage.type === 'recommendations_ready') {
       debugLog('🎯 Received recommendations via WebSocket', {
         count: latestMessage.recommendations?.length || 0,
@@ -233,18 +324,24 @@ export const useRecommendations = (assessmentId?: string) => {
       
       if (recommendationSet) {
         setRecommendations(recommendationSet)
-        persistRecommendations(assessmentId, recommendationSet)
+        persistRecommendations(assessmentId, recommendationSet, 'websocket')
+        setCacheMetadata({
+          timestamp: Date.now(),
+          source: 'websocket',
+          assessmentId
+        })
         setError(null)
+        invalidateQueries()
         
-        debugLog('✅ Recommendations received and persisted', {
+        debugLog('✅ Recommendations received and cached from WebSocket', {
           count: recommendationSet.recommendations.length,
           assessment_id: recommendationSet.assessment_id
         })
       }
     }
-  }, [messages, assessmentId])
+  }, [messages, assessmentId, invalidateQueries])
 
-  // Load recommendations on mount (from cache or API)
+  // Load recommendations on mount (Cache-First Strategy)
   useEffect(() => {
     const loadRecommendations = async () => {
       if (!assessmentId) {
@@ -256,54 +353,86 @@ export const useRecommendations = (assessmentId?: string) => {
       setError(null)
 
       try {
-        // Step 1: Try to load from localStorage first (instant)
-        const cachedData = loadStoredRecommendations(assessmentId)
-        if (cachedData) {
+        // Step 1: Check localStorage cache first (instant)
+        const { data: cachedData, metadata, isExpired } = loadStoredRecommendations(assessmentId)
+        
+        if (cachedData && !isExpired) {
+          // Cache hit - use immediately
           setRecommendations(cachedData)
-          debugLog('📦 Loaded recommendations from cache (instant)')
+          setCacheMetadata(metadata)
+          debugLog('⚡ Using fresh cache (instant)', {
+            cacheAge: `${Math.round((Date.now() - (metadata?.timestamp || 0)) / 1000)}s`
+          })
           setIsLoading(false)
           
-          // Still try to fetch fresh data in background if authenticated
-          if (isAuthenticated && token) {
+          // Still fetch fresh data in background if authenticated
+          if (isAuthenticated && token && !isCacheFresh(metadata)) {
+            debugLog('🔄 Refreshing cache in background')
             try {
               const apiData = await fetchRecommendations(assessmentId)
               if (apiData && apiData.created_at > cachedData.created_at) {
-                debugLog('🔄 Updating with fresher API data')
+                debugLog('📝 Updating with fresher API data')
                 setRecommendations(apiData)
-                persistRecommendations(assessmentId, apiData)
+                persistRecommendations(assessmentId, apiData, 'api')
+                setCacheMetadata({
+                  timestamp: Date.now(),
+                  source: 'api',
+                  assessmentId
+                })
+                invalidateQueries()
               }
             } catch (apiError) {
-              debugLog('⚠️ Background API fetch failed, using cache', apiError)
-              // Cache is good enough, ignore API error
+              debugLog('⚠️ Background refresh failed, cache still valid', apiError)
             }
           }
           
           return
         }
+        
+        if (cachedData && isExpired) {
+          // Expired cache - use as stale-while-revalidate
+          setRecommendations(cachedData)
+          setCacheMetadata(metadata)
+          debugLog('⏰ Using expired cache while revalidating')
+        }
 
-        // Step 2: No cache, fetch from API if authenticated
+        // Step 2: Fetch from API if authenticated (goes through Redis cache)
         if (isAuthenticated && token) {
           try {
             const apiData = await fetchRecommendations(assessmentId)
             
             if (apiData) {
               setRecommendations(apiData)
-              persistRecommendations(assessmentId, apiData)
-              debugLog('✅ Loaded recommendations from API')
+              persistRecommendations(assessmentId, apiData, 'api')
+              setCacheMetadata({
+                timestamp: Date.now(),
+                source: 'api',
+                assessmentId
+              })
+              invalidateQueries()
+              debugLog('✅ Loaded recommendations from API (via Redis)')
               setIsLoading(false)
               return
             }
           } catch (apiError) {
             debugLog('⚠️ API fetch failed', apiError)
-            // Fall through to waiting for WebSocket
+            // If we have stale cache, keep using it
+            if (cachedData) {
+              debugLog('📦 Falling back to stale cache')
+              setError('Using cached data (unable to refresh)')
+              setIsLoading(false)
+              return
+            }
           }
         }
 
         // Step 3: No cache, no API data - wait for WebSocket
-        debugLog('⏳ Waiting for recommendations via WebSocket...', {
-          isConnected,
-          assessmentId
-        })
+        if (!cachedData) {
+          debugLog('⏳ Waiting for recommendations via WebSocket...', {
+            isConnected,
+            assessmentId
+          })
+        }
         
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Failed to load recommendations'
@@ -315,22 +444,32 @@ export const useRecommendations = (assessmentId?: string) => {
     }
 
     loadRecommendations()
-  }, [assessmentId, token, isAuthenticated, fetchRecommendations, isConnected])
+  }, [assessmentId, token, isAuthenticated, fetchRecommendations, isConnected, invalidateQueries])
 
-  // Update recommendations (from WebSocket or manual refresh)
-  const updateRecommendations = useCallback((newRecommendationSet: RecommendationSet) => {
-    debugLog('🔄 Updating recommendations', {
+  // Update recommendations
+  const updateRecommendations = useCallback((
+    newRecommendationSet: RecommendationSet,
+    source: 'api' | 'websocket' | 'localStorage' = 'api'
+  ) => {
+    debugLog('📝 Updating recommendations', {
       assessmentId: newRecommendationSet.assessment_id,
-      count: newRecommendationSet.recommendations.length
+      count: newRecommendationSet.recommendations.length,
+      source
     })
     
     setRecommendations(newRecommendationSet)
-    persistRecommendations(newRecommendationSet.assessment_id, newRecommendationSet)
+    persistRecommendations(newRecommendationSet.assessment_id, newRecommendationSet, source === 'localStorage' ? 'api' : source)
+    setCacheMetadata({
+      timestamp: Date.now(),
+      source,
+      assessmentId: newRecommendationSet.assessment_id
+    })
     setError(null)
-  }, [])
+    invalidateQueries()
+  }, [invalidateQueries])
 
-  // Refresh recommendations from API
-  const refreshRecommendations = useCallback(async () => {
+  // Refresh recommendations from API (bypass cache)
+  const refreshRecommendations = useCallback(async (bypassCache: boolean = false) => {
     if (!assessmentId) {
       debugLog('❌ Cannot refresh - no assessment ID')
       return null
@@ -340,12 +479,18 @@ export const useRecommendations = (assessmentId?: string) => {
     setError(null)
 
     try {
-      debugLog('🔄 Refreshing recommendations', assessmentId)
-      const data = await fetchRecommendations(assessmentId)
+      debugLog('🔄 Refreshing recommendations', { assessmentId, bypassCache })
+      const data = await fetchRecommendations(assessmentId, true, bypassCache)
       
       if (data) {
         setRecommendations(data)
-        persistRecommendations(assessmentId, data)
+        persistRecommendations(assessmentId, data, 'api')
+        setCacheMetadata({
+          timestamp: Date.now(),
+          source: 'api',
+          assessmentId
+        })
+        invalidateQueries()
         debugLog('✅ Successfully refreshed recommendations')
         return data
       } else {
@@ -360,7 +505,7 @@ export const useRecommendations = (assessmentId?: string) => {
     } finally {
       setIsLoading(false)
     }
-  }, [assessmentId, fetchRecommendations])
+  }, [assessmentId, fetchRecommendations, invalidateQueries])
 
   // Update recommendation status
   const updateRecommendationStatus = useCallback(async (
@@ -373,10 +518,10 @@ export const useRecommendations = (assessmentId?: string) => {
     }
 
     try {
-      debugLog('🔄 Updating recommendation status', { recommendationId, status })
+      debugLog('📝 Updating recommendation status', { recommendationId, status })
       
       const response = await fetch(
-        `${API_BASE_URL}/recommendations/${recommendationId}/status`,
+        `${API_BASE_URL}/api/recommendations/${recommendationId}/status`,
         {
           method: 'PATCH',
           headers: {
@@ -393,7 +538,7 @@ export const useRecommendations = (assessmentId?: string) => {
 
       const updatedRecommendation = await response.json()
       
-      // Update local state
+      // Update local state and cache
       if (recommendations) {
         const updatedSet = {
           ...recommendations,
@@ -403,7 +548,7 @@ export const useRecommendations = (assessmentId?: string) => {
               : rec
           )
         }
-        updateRecommendations(updatedSet)
+        updateRecommendations(updatedSet, cacheMetadata?.source || 'api')
       }
 
       debugLog('✅ Successfully updated recommendation status')
@@ -412,7 +557,7 @@ export const useRecommendations = (assessmentId?: string) => {
       debugLog('❌ Error updating recommendation status', err)
       throw err
     }
-  }, [token, isAuthenticated, recommendations, updateRecommendations])
+  }, [token, isAuthenticated, recommendations, updateRecommendations, cacheMetadata])
 
   // Add recommendation rating
   const addRecommendationRating = useCallback(async (
@@ -428,7 +573,7 @@ export const useRecommendations = (assessmentId?: string) => {
       debugLog('⭐ Adding recommendation rating', { recommendationId, rating })
       
       const response = await fetch(
-        `${API_BASE_URL}/recommendations/${recommendationId}/rating`,
+        `${API_BASE_URL}/api/recommendations/${recommendationId}/rating`,
         {
           method: 'POST',
           headers: {
@@ -452,15 +597,17 @@ export const useRecommendations = (assessmentId?: string) => {
     }
   }, [token, isAuthenticated])
 
-  // Clear recommendations
+  // Clear recommendations and cache
   const clearRecommendations = useCallback(() => {
     debugLog('🗑️ Clearing recommendations', assessmentId)
     setRecommendations(null)
+    setCacheMetadata(null)
     setError(null)
     if (assessmentId) {
       clearStoredRecommendations(assessmentId)
     }
-  }, [assessmentId])
+    invalidateQueries()
+  }, [assessmentId, invalidateQueries])
 
   // Get recommendations by domain
   const getRecommendationsByDomain = useCallback((domain: string) => {
@@ -486,6 +633,8 @@ export const useRecommendations = (assessmentId?: string) => {
     error,
     hasRecommendations: recommendations !== null && recommendations.recommendations.length > 0,
     isWebSocketConnected: isConnected,
+    cacheMetadata,
+    isCacheFresh: cacheMetadata ? isCacheFresh(cacheMetadata) : false,
     
     // Actions
     updateRecommendations,
@@ -497,6 +646,9 @@ export const useRecommendations = (assessmentId?: string) => {
     // Getters
     getRecommendationsByDomain,
     getRecommendationsByPriority,
-    getHighPriorityRecommendations
+    getHighPriorityRecommendations,
+    
+    // Force refresh bypassing all caches
+    forceRefresh: () => refreshRecommendations(true)
   }
 }

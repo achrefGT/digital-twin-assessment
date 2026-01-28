@@ -172,9 +172,9 @@ services:
     env_file:
       - ./backend/.env
     environment:
-      - GROQ_API_KEY=${GROQ_API_KEY}
-      - NVIDIA_API_KEY=${NVIDIA_API_KEY}
-      
+      - GROQ_API_KEY=${RECOMMENDATION_GROQ_API_KEY}
+      - NVIDIA_API_KEY=${RECOMMENDATION_NVIDIA_API_KEY}
+        
       # Service Configuration
       - PORT=8007
       - RECOMMENDATION_API_HOST=0.0.0.0

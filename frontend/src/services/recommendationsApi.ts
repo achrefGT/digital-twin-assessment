@@ -67,16 +67,27 @@ export class RecommendationsAPI {
 
   /**
    * Fetch recommendations for a specific assessment
+   * This endpoint uses Redis cache-aside pattern on the backend
    */
   static async fetchByAssessment(
     assessmentId: string,
     token?: string,
-    latestOnly: boolean = true
+    latestOnly: boolean = true,
+    bypassCache: boolean = false
   ): Promise<RecommendationSet> {
-    const response = await fetch(
-      `${API_BASE_URL}/api/recommendations/assessment/${assessmentId}?latest_only=${latestOnly}`,
-      { headers: this.getHeaders(token) }
+    const url = new URL(
+      `${API_BASE_URL}/api/recommendations/assessment/${assessmentId}`
     )
+    url.searchParams.set('latest_only', latestOnly.toString())
+    
+    // Allow forcing cache bypass for admin testing
+    if (bypassCache) {
+      url.searchParams.set('bypass_cache', 'true')
+    }
+    
+    const response = await fetch(url.toString(), { 
+      headers: this.getHeaders(token) 
+    })
     
     if (!response.ok) {
       if (response.status === 404) {
@@ -88,7 +99,18 @@ export class RecommendationsAPI {
       throw new Error(`Failed to fetch recommendations: ${response.status}`)
     }
     
-    return response.json()
+    const data = await response.json()
+    
+    // Log cache hit information for debugging
+    const cacheHit = response.headers.get('X-Cache-Hit')
+    const cacheSource = response.headers.get('X-Cache-Source')
+    if (cacheHit === 'true') {
+      console.log(`✅ Cache hit from ${cacheSource || 'unknown'}`)
+    } else {
+      console.log(`❌ Cache miss - fetched from source`)
+    }
+    
+    return data
   }
 
   /**
@@ -140,6 +162,7 @@ export class RecommendationsAPI {
 
   /**
    * Update recommendation status
+   * This invalidates the cache on the backend
    */
   static async updateStatus(
     recommendationId: string,
@@ -197,6 +220,44 @@ export class RecommendationsAPI {
 
     return response.json()
   }
+
+  /**
+   * Invalidate recommendation cache (admin only)
+   */
+  static async invalidateCache(
+    assessmentId: string,
+    token: string
+  ): Promise<{ success: boolean; message: string }> {
+    const response = await fetch(
+      `${API_BASE_URL}/api/recommendations/cache/assessment/${assessmentId}`,
+      {
+        method: 'DELETE',
+        headers: this.getHeaders(token)
+      }
+    )
+
+    if (!response.ok) {
+      throw new Error(`Failed to invalidate cache: ${response.status}`)
+    }
+
+    return response.json()
+  }
+
+  /**
+   * Get cache statistics (admin only)
+   */
+  static async getCacheStats(token: string): Promise<any> {
+    const response = await fetch(
+      `${API_BASE_URL}/api/recommendations/cache/statistics`,
+      { headers: this.getHeaders(token) }
+    )
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch cache stats: ${response.status}`)
+    }
+
+    return response.json()
+  }
 }
 
 // ==================== QUERY KEYS ====================
@@ -214,14 +275,19 @@ export const recommendationKeys = {
 // ==================== REACT QUERY FUNCTIONS ====================
 
 export const recommendationQueries = {
-  byAssessment: (assessmentId: string, token?: string, latestOnly: boolean = true) => ({
+  byAssessment: (
+    assessmentId: string, 
+    token?: string, 
+    latestOnly: boolean = true,
+    bypassCache: boolean = false
+  ) => ({
     queryKey: recommendationKeys.byAssessment(assessmentId),
-    queryFn: () => RecommendationsAPI.fetchByAssessment(assessmentId, token, latestOnly),
-    staleTime: 5 * 60 * 1000, // 5 minutes (recommendations don't change often)
+    queryFn: () => RecommendationsAPI.fetchByAssessment(assessmentId, token, latestOnly, bypassCache),
+    staleTime: 0, // Always check for updates (relies on cache-aside pattern)
     gcTime: 30 * 60 * 1000, // 30 minutes
     enabled: !!assessmentId,
     refetchOnMount: true,
-    refetchOnWindowFocus: false, // Don't refetch on focus since recommendations are stable
+    refetchOnWindowFocus: false, // Rely on cache for performance
     retry: (failureCount, error: any) => {
       // Don't retry if not found or unauthorized
       if (error?.message?.includes('not found') || 
@@ -235,7 +301,7 @@ export const recommendationQueries = {
   userRecommendations: (token: string, limit: number = 10) => ({
     queryKey: recommendationKeys.userRecommendations(),
     queryFn: () => RecommendationsAPI.fetchUserRecommendations(token, limit),
-    staleTime: 5 * 60 * 1000, // 5 minutes
+    staleTime: 0, // Always check cache
     gcTime: 30 * 60 * 1000, // 30 minutes
     enabled: !!token,
     refetchOnMount: true,
@@ -289,6 +355,33 @@ export const recommendationMutations = {
       })
       
       console.log('✅ Invalidated recommendation queries after rating')
+    }
+  }),
+
+  invalidateCache: (token: string, queryClient: QueryClient) => ({
+    mutationFn: (assessmentId: string) => 
+      RecommendationsAPI.invalidateCache(assessmentId, token),
+    
+    onSuccess: (_data: any, assessmentId: string) => {
+      // Invalidate React Query cache
+      queryClient.invalidateQueries({ 
+        queryKey: recommendationKeys.byAssessment(assessmentId) 
+      })
+      
+      // Also clear localStorage cache
+      try {
+        const key = `assessmentRecommendations_${assessmentId}`
+        const timestampKey = `recommendationsCacheTimestamp_${assessmentId}`
+        const sourceKey = `recommendationsCacheSource_${assessmentId}`
+        
+        localStorage.removeItem(key)
+        localStorage.removeItem(timestampKey)
+        localStorage.removeItem(sourceKey)
+        
+        console.log('✅ Invalidated all caches for assessment', assessmentId)
+      } catch (error) {
+        console.warn('Failed to clear localStorage cache', error)
+      }
     }
   })
 }
@@ -370,6 +463,34 @@ export const RecommendationUtils = {
       byStatus,
       byPriority,
       completionPercentage: RecommendationUtils.getCompletionPercentage(recommendations)
+    }
+  },
+
+  /**
+   * Sort recommendations by priority
+   */
+  sortByPriority: (recommendations: Recommendation[]): Recommendation[] => {
+    const priorityOrder = { high: 1, medium: 2, low: 3 }
+    return [...recommendations].sort((a, b) => 
+      priorityOrder[a.priority] - priorityOrder[b.priority]
+    )
+  },
+
+  /**
+   * Format recommendation for display
+   */
+  formatRecommendation: (rec: Recommendation) => {
+    return {
+      id: rec.recommendation_id,
+      title: rec.title,
+      description: rec.description,
+      priority: rec.priority,
+      domain: rec.domain.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      category: rec.category.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase()),
+      status: rec.status || 'pending',
+      impact: rec.estimated_impact,
+      effort: rec.implementation_effort,
+      confidence: rec.confidence_score ? `${Math.round(rec.confidence_score * 100)}%` : null
     }
   }
 }

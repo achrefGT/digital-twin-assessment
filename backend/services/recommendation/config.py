@@ -61,8 +61,8 @@ class RecommendationSettings(BaseSettings):
     log_format: str = "%(asctime)s - %(name)s - %(levelname)s - [%(filename)s:%(lineno)d] - %(message)s"
     
     # AI Configuration
-    groq_api_key: str = os.getenv("GROQ_API_KEY")
-    nvidia_api_key: Optional[str] = os.getenv("NVIDIA_API_KEY")
+    groq_api_key: str = os.getenv("RECOMMENDATION_GROQ_API_KEY")
+    nvidia_api_key: Optional[str] = os.getenv("RECOMMENDATION_NVIDIA_API_KEY")
     groq_model: str = "llama-3.3-70b-versatile"
     nvidia_model: str = "meta/llama-3.1-70b-instruct"
     
@@ -169,13 +169,13 @@ class RecommendationSettings(BaseSettings):
     @classmethod
     def get_groq_key(cls, v):
         # Allow direct value or fetch from env
-        return v or os.getenv("GROQ_API_KEY", "")
+        return v or os.getenv("RECOMMENDATION_GROQ_API_KEY", "")
     
     @field_validator('nvidia_api_key', mode='before')
     @classmethod
     def get_nvidia_key(cls, v):
         # Allow direct value or fetch from env
-        return v or os.getenv("NVIDIA_API_KEY")
+        return v or os.getenv("RECOMMENDATION_NVIDIA_API_KEY")
     
     @property
     def database_url(self) -> str:
@@ -230,7 +230,7 @@ class RecommendationSettings(BaseSettings):
         if self.enable_ai_recommendations:
             if not self.groq_api_key and not self.nvidia_api_key:
                 raise ValueError(
-                    "At least one API key (GROQ_API_KEY or NVIDIA_API_KEY) is required "
+                    "At least one API key (RECOMMENDATION_GROQ_API_KEY or RECOMMENDATION_NVIDIA_API_KEY) is required "
                     "when AI recommendations are enabled"
                 )
         

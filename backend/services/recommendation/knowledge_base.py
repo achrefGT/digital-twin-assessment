@@ -150,7 +150,7 @@ async def generate_tips_with_ai(domain: str, criteria: List[Dict[str, Any]], out
     from groq import AsyncGroq
     import asyncio
     
-    groq_client = AsyncGroq(api_key=os.getenv("GROQ_API_KEY"))
+    groq_client = AsyncGroq(api_key=os.getenv("RECOMMENDATION_GROQ_API_KEY"))
     all_tips = []
     
     logger.info(f"Generating tips for {domain} ({len(criteria)} criteria)...")

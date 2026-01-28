@@ -95,7 +95,11 @@ export const ResiliencePanel: React.FC<ResiliencePanelProps> = ({ data }) => {
 
   return (
     <Card className="border-0 shadow-sm">
-      <CardHeader className="pb-1"></CardHeader>
+      <CardHeader className="pb-1">
+        <div className="text-xs font-medium text-slate-500 uppercase tracking-wide mb-3">
+          Performance
+        </div>
+      </CardHeader>
       
       <CardContent className="space-y-6">
         {/* Domain Scores Grid */}
